@@ -134,8 +134,8 @@
 									@if (@ViewBag.Committee_Type_Id == 1 || @ViewBag.Committee_Type_Id == 2)
 									{
 										// لو مساعد او مشرف
-										@if (int.Parse(@ViewBag.ISAdmin) == 0)
-										{
+
+
 										<div id="fahs">
 											<div class="row mb-4 align-items-center">
 												<!-- العدد -->
@@ -147,7 +147,8 @@
 															   name="Lot_Count_@itemlot.ID"
 															   value="@itemlot.Package_Count"
 															   data-max="@itemlot.Package_Count"
-															   oninput="validateCount(this)" readonly />
+															   oninput="validateCount(this)"
+														@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														<span class="input-group-text bg-primary text-white fw-bold">@itemlot.Package_Type_Name</span>
 													</div>
 												</div>
@@ -168,7 +169,8 @@
 																   value="@tons"
 																   id="ton_@itemlot.ID"
 																   min="0"
-																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 														<div class="col-md-4 mb-3">
 															<label class="form-label text-muted">كيلو</label>
@@ -179,7 +181,8 @@
 																   id="kilo_@itemlot.ID"
 																   min="0"
 																   max="999"
-																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 														<div class="col-md-4 mb-3">
 															<label class="form-label text-muted">جرام</label>
@@ -190,7 +193,8 @@
 																   id="gram_@itemlot.ID"
 																   min="0"
 																   max="999"
-																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 													</div>
 													<div class="text-danger fw-bold" id="weightWarning_@itemlot.ID"></div>
@@ -200,103 +204,26 @@
 											<!-- حالة القبول/الرفض -->
 											<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
 												<div class="form-check form-check-inline mb-0">
-														<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdAccept" value="accepted" onchange="handleRadioChange('@messageId', 'accepted')" readonly />
+													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdAccept" value="accepted" onchange="handleRadioChange('@messageId', 'accepted')" @(int.Parse(ViewBag.ISAdmin) == 0 ? "disabled" : "") />
 													<label class="form-check-label fw-semibold text-success" for="@radioIdAccept">مقبول</label>
 												</div>
 												<div class="form-check form-check-inline mb-0">
-														<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdReject" value="rejected" onchange="handleRadioChange('@messageId', 'rejected')" readonly />
+													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdReject" value="rejected" onchange="handleRadioChange('@messageId', 'rejected')" @(int.Parse(ViewBag.ISAdmin) == 0 ? "disabled" : "") />
 													<label class="form-check-label fw-semibold text-danger" for="@radioIdReject">مرفوض</label>
 												</div>
 												<div id="@messageId" class="fw-bold" style="min-width: 150px;"></div>
 											</div>
 
 										</div>
-										}
-										@if (int.Parse(@ViewBag.ISAdmin) == 1)
-										{
-										<div id="fahs">
-											<div class="row mb-4 align-items-center">
-												<!-- العدد -->
-												<div class="col-md-4 mb-3">
-													<label class="form-label fw-bold text-secondary">العدد</label>
-													<div class="input-group input-group-lg">
-														<input type="number"
-															   class="form-control"
-															   name="Lot_Count_@itemlot.ID"
-															   value="@itemlot.Package_Count"
-															   data-max="@itemlot.Package_Count"
-															   oninput="validateCount(this)" />
-														<span class="input-group-text bg-primary text-white fw-bold">@itemlot.Package_Type_Name</span>
-													</div>
-												</div>
 
-												<!-- الوزن القائم -->
-												<div class="col-md-8">
-													<input type="hidden" id="originalWeight_@itemlot.ID" value="@itemlot.Package_Based_Weight" />
 
-													<div class="row">
-														<label class="form-label fw-bold text-secondary mb-2">الوزن القائم</label>
-													</div>
-													<div class="row">
-														<div class="col-md-4 mb-3">
-															<label class="form-label text-muted">طن</label>
-															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Ton_@itemlot.ID"
-																   value="@tons"
-																   id="ton_@itemlot.ID"
-																   min="0"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
-														</div>
-														<div class="col-md-4 mb-3">
-															<label class="form-label text-muted">كيلو</label>
-															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Kilo_@itemlot.ID"
-																   value="@kilos"
-																   id="kilo_@itemlot.ID"
-																   min="0"
-																   max="999"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
-														</div>
-														<div class="col-md-4 mb-3">
-															<label class="form-label text-muted">جرام</label>
-															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Gram_@itemlot.ID"
-																   value="@grams"
-																   id="gram_@itemlot.ID"
-																   min="0"
-																   max="999"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
-														</div>
-													</div>
-													<div class="text-danger fw-bold" id="weightWarning_@itemlot.ID"></div>
-												</div>
-											</div>
-
-											<!-- حالة القبول/الرفض -->
-											<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
-												<div class="form-check form-check-inline mb-0">
-													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdAccept" value="accepted" onchange="handleRadioChange('@messageId', 'accepted')" />
-													<label class="form-check-label fw-semibold text-success" for="@radioIdAccept">مقبول</label>
-												</div>
-												<div class="form-check form-check-inline mb-0">
-													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdReject" value="rejected" onchange="handleRadioChange('@messageId', 'rejected')" />
-													<label class="form-check-label fw-semibold text-danger" for="@radioIdReject">مرفوض</label>
-												</div>
-												<div id="@messageId" class="fw-bold" style="min-width: 150px;"></div>
-											</div>
-
-										</div>
-										}
 									}
 									@* ////////////////////////rehab ///////////////////////////////// *@
 									@if (@ViewBag.Committee_Type_Id == 2)
 									{
 										<div id="gashni" class="col-md-4 mb-3">
 
-											<input id="gashniID" type="checkbox" asp-for="ExportAbroad" />
+											<input id="gashniID" type="checkbox" asp-for="ExportAbroad" disabled="@(ViewBag.ISAdmin != null && int.Parse(ViewBag.ISAdmin) == 0)" />
 											<label asp-for="ExportAbroad">يصرح بالتصدير للخارج</label>
 										</div>
 
@@ -306,7 +233,7 @@
 										<!-- الملاحظات -->
 										<div class="mb-3">
 											<label class="form-label fw-bold">ملاحظات</label>
-											<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..."></textarea>
+											<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..." @(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "")></textarea>
 										</div>
 									}
 									@if (@ViewBag.Committee_Type_Id == 3)
@@ -325,15 +252,15 @@
 													<label class="form-label">المعمل</label>
 													<input type="text" class="form-control" value="@itemSample_Data.AnalysisLab_Name" readonly />
 													<label class="form-label">حجم فوق العينة</label>
-													<input type="text" class="form-control" value="@itemSample_Data.SampleRatio" />
+													<input type="text" class="form-control" value="@itemSample_Data.SampleRatio" @(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 													كيلوجرام<label class="form-label">حجم العينة</label>
-													<input type="text" class="form-control" value="@itemSample_Data.SampleSize" />
+													<input type="text" class="form-control" value="@itemSample_Data.SampleSize" @(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 													كيلوجرام<label class="form-label">رقم الختامة</label>
-													<input type="text" class="form-control" value="@itemSample_Data.Sample_BarCode" />
+													<input type="text" class="form-control" value="@itemSample_Data.Sample_BarCode" @(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 													<!-- الملاحظات -->
 													<div class="mb-3">
 														<label class="form-label fw-bold">ملاحظات</label>
-														<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..."></textarea>
+														<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..." @(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "")></textarea>
 													</div>
 
 												</div>
@@ -343,15 +270,39 @@
 									}
 									@* ////////////////////////rehab ///////////////////////////////// *@
 
-
-									<button type="button" class="btn btn-success" onclick="saveLot(@itemlot.ID, this)">حفظ</button>
-
+									@if (int.Parse(ViewBag.ISAdmin) == 1)
+									{
+										<button type="button" class="btn btn-success" onclick="saveLot(@itemlot.ID, this)">حفظ</button>
+									}
 								</div>
 							</div>
 						}
 					</div>
 
+					@* /////////////////////جزء المساعد////////////////////////// *@
+					<!-- حالة القبول/الرفض -->
+					@if ((ViewBag.ISAdmin != null && int.Parse(ViewBag.ISAdmin) == 0))
+					{
+						<div id="NotAdmin">
+							<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
+								<div class="form-check form-check-inline mb-0">
+									<input class="form-check-input" type="radio" name="Accept_NotAdmin" value="accepted" />
+									<label class="form-check-label fw-semibold text-success" for="">مقبول</label>
+								</div>
+								<div class="form-check form-check-inline mb-0">
+									<input class="form-check-input" type="radio" name="Regfuse" value="rejected" />
+									<label class="form-check-label fw-semibold text-danger" for="">مرفوض</label>
+								</div>
+								<div class="fw-bold" style="min-width: 150px;"></div>
+							</div>
 
+							<div class="mb-3">
+								<label class="form-label fw-bold">ملاحظات</label>
+								<textarea class="form-control" rows="3" placeholder="اكتب ملاحظات المساعد هنا..."></textarea>
+							</div>
+							<button type="button" class="btn btn-success" onclick="">حفظ</button>
+						</div>
+					}
 				</div>
 			</div>
 		}
@@ -483,7 +434,7 @@
 				alert('❌ الرجاء إدخال عدد قطع صالح (أكبر من صفر) للوط رقم ' + lotId);
 				return;
 			}
-			
+
 			const ton = parseInt(document.getElementById(`ton_${lotId}`)?.value) || 0;
 			const kilo = parseInt(document.getElementById(`kilo_${lotId}`)?.value) || 0;
 			const gram = parseInt(document.getElementById(`gram_${lotId}`)?.value) || 0;
@@ -499,7 +450,7 @@
 				alert(`❌ الوزن المدخل (${Weight.toFixed(3)} كجم) لا يمكن أن يتجاوز الوزن الأصلي (${originalWeight.toFixed(3)} كجم) للوط رقم ${lotId}`);
 				return;
 			}
-			
+
 			const acceptRadio = card.querySelector(`input[name="status_${lotId}"][value="accepted"]`);
 			const rejectRadio = card.querySelector(`input[name="status_${lotId}"][value="rejected"]`);
 			let CommitteeResultType_ID = null;
@@ -522,7 +473,7 @@
 			const Committee_ID = document.getElementById('Committee_Id').value;
 			const EmployeeId = document.getElementById('EmployeeId').value;
 			////////////rrrrrrrrrrrr//////////////////////////
-			  
+
 		if(committeeTypeId==2){
 			 ExportAbroad = document.getElementById('gashniID').value;
 			alert("ExportAbroad: " + ExportAbroad);
