@@ -1,0 +1,49 @@
+﻿@{
+	Layout = null;
+}
+
+
+<link href="~/fontawesome-free-5.15.4-web/css/all.min.css" rel="stylesheet" />
+<link href="~/fontawesome-free-5.15.4-web/css/all.css" rel="stylesheet" />
+<link href="~/css/login.css" rel="stylesheet" />
+
+
+<div class="container">
+	<div class="screen">
+		<div class="screen__content">
+			<form class="login" method="post" action="GoDataEntryMenu">
+				<div class="login__field">
+
+					<input name="userName" type="text" class="login__input" placeholder="اسم المستخدم">
+					<i class="login__icon fas fa-user"></i>
+				</div>
+				<div class="login__field">
+
+					<input name="password" type="password" class="login__input" placeholder="كلمة السر">
+					<i class="login__icon fas fa-lock"></i>
+				</div>
+				<button class="button login__submit" type="submit">
+					<i class="button__icon fas fa-chevron-left"></i>
+					<span class="button__text">تسجيل الدخول</span>
+
+				</button>
+			</form>
+			<div class="social-login">
+				<h3>سجل دخول</h3>
+				<div class="social-icons">
+					<a href="#" class="social-login__icon fab fa-instagram">
+						<i class="fas fa-instagram"></i>
+					</a>
+					<a href="#" class="social-login__icon fab fa-facebook"></a>
+					<a href="#" class="social-login__icon fab fa-twitter"></a>
+				</div>
+			</div>
+		</div>
+		<div class="screen__background">
+			<span class="screen__background__shape screen__background__shape4"></span>
+			<span class="screen__background__shape screen__background__shape3"></span>
+			<span class="screen__background__shape screen__background__shape2"></span>
+			<span class="screen__background__shape screen__background__shape1"></span>
+		</div>
+	</div>
+</div>

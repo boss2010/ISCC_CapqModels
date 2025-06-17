@@ -1,0 +1,646 @@
+﻿@model ViewModels.Ex_CheckRequest_GetData_Android_V2_VM
+
+
+@Html.AntiForgeryToken()
+<input name="__RequestVerificationToken" type="hidden" value="...." />
+<input type="hidden" name="Committee_Id" id="Committee_Id" value="@ViewBag.Committee_Id" />
+<input type="hidden" name="EmployeeId" id="EmployeeId" value="@ViewBag.EmployeeId" />
+<input type="hidden" name="Committee_Type_Id" id="Committee_Type_Id" value="@ViewBag.Committee_Type_Id" />
+<!-- Page Header Start -->
+<div class="container-fluid py-1">
+	<div class="container py-2">
+		<div class="row align-items-center py-4">
+			<div class="col-md-6 text-center text-md-right">
+				<h3 class="mb-4 mb-md-0 text-primary text-uppercase output">
+					تفاصيل شحنة صادر
+				</h3>
+			</div>
+			<div class="col-md-6 text-center text-md-left">
+			</div>
+		</div>
+	</div>
+</div>
+<!-- Page Header End -->
+<!-- Contact Start -->
+<div class="container-fluid bg-light py-4">
+	<div class="container">
+		<!-- القسم العلوي: بيانات عامة -->
+		<div class="row">
+			<div class="col-md-4 mb-4">
+				<label for="exportCompany" class="form-label">رقم طلب الفحص</label>
+				<input type="text" id="exportCompany" class="form-control" value="@Model.CheckRequest_Number" readonly />
+			</div>
+			<div class="col-md-4 mb-4">
+				<label for="exportCompany" class="form-label">الشركة المصدرة</label>
+				<input type="text" id="exportCompany" class="form-control" value="@Model.Reciever_Name" readonly />
+			</div>
+			<div class="col-md-4 mb-4">
+				<label for="port" class="form-label">ميناء الشحن</label>
+				<input type="text" id="port" class="form-control" value="@Model.PortNational_Shippment_Name" readonly />
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="col-md-4 mb-4">
+				<label for="importCountry" class="form-label">الدولة المستوردة</label>
+				<input type="text" id="importCountry" class="form-control" value="@Model.ExportCountry_Name" readonly />
+			</div>
+			<div class="col-md-4 mb-4">
+				<label for="arrivalPort" class="form-label">ميناء الوصول</label>
+				<input type="text" id="arrivalPort" class="form-control" value="@Model.TransientCountry_Name" readonly />
+			</div>
+			<div class="col-md-4 mb-4">
+				<label for="inspectionPlace" class="form-label">مكان الفحص</label>
+				<input type="text" id="inspectionPlace" class="form-control" value="@Model.ImportCompany_Address" readonly />
+			</div>
+		</div>
+
+		<!-- قسم العناصر (النباتات أو الكائنات) -->
+		@foreach (var item in Model.Item_Data)
+		{
+			var divId = "detailDiv_" + item.Item_ShortName_id;
+			<div class="card mb-4 shadow-sm Item">
+				<div class="card-body">
+					<div class="row mb-3">
+						<div class="col-md-4">
+							<label class="form-label">اسم النبات/الكائن</label>
+							<input type="text" class="form-control" value="@item.Item_Name" readonly />
+						</div>
+						<div class="col-md-4">
+							<label class="form-label">المنتج</label>
+							<input type="text" class="form-control" value="@item.Item_ShortName_Name" readonly />
+						</div>
+						<div class="col-md-4">
+							<label class="form-label">الاسم العلمي</label>
+							<input type="text" class="form-control" value="@item.Scientific_Name" readonly />
+						</div>
+					</div>
+					<div class="row mb-3">
+						<div class="col-md-4">
+							<label class="form-label">المطلوب</label>
+							<input type="text" class="form-control" value="@Model.RequestCommittee_Status" readonly />
+						</div>
+					</div>
+					<div class="row">
+						<div class="col text-center">
+							<input type="button" class="btn btn-primary PlantDetailID" onclick="toggleDiv('@item.Item_ShortName_id')" name="btnSave" value="تفاصيل النبات" />
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- اللوطات -->
+			<div id="@divId" class="lot" dir="rtl" style="display:none; opacity:0;">
+				<div class="container-fluid bg-light py-5">
+					<div class="container">
+						<h3 class="mb-4 text-primary">فحص جزئى</h3>
+						<div class="row mb-4">
+							<div class="col-sm-3 fw-bold fs-5">رقم الطلب:</div>
+							<div class="col-sm-9 fs-5">@Model.CheckRequest_Number</div>
+						</div>
+
+						@foreach (var itemlot in item.Lot_Data)
+						{
+							double weightKg = itemlot.Package_Based_Weight;
+							int tons = (int)(weightKg / 1000);
+							int kilos = (int)weightKg % 1000;
+							int grams = (int)Math.Round((weightKg - Math.Floor(weightKg)) * 1000);
+
+							var radioIdAccept = "radioAccept_" + itemlot.ID;
+							var radioIdReject = "radioReject_" + itemlot.ID;
+							var messageId = "message_" + itemlot.ID; // معرف لرسالة الحالة
+							var textareaId = "textarea_" + itemlot.ID;
+							@* <div class="card mb-5 shadow rounded-4 border-primary"> *@
+							<input type="hidden" value="@itemlot.ID" />
+							<input type="hidden" value="@Model.CheckRequest_Id" />
+
+							@* </div> *@
+							<div class="card mb-5 shadow rounded-4 border-primary">
+								<div class="card-body">
+									<div class="row mb-4">
+										<div class="col-md-4 mb-3">
+											<label class="form-label">اسم النبات/الكائن</label>
+											<input type="text" class="form-control" value="@item.Item_Name" readonly />
+										</div>
+										<div class="col-md-4 mb-3">
+											<label class="form-label fw-bold text-secondary">المنتج</label>
+											<input type="text" class="form-control form-control-lg" value="@item.Item_ShortName_Name" readonly />
+										</div>
+										<div class="col-md-4 mb-3">
+											<label class="form-label fw-bold text-secondary">رقم اللوط</label>
+											<input type="text" class="form-control form-control-lg" value="@itemlot.Lot_Number" readonly />
+										</div>
+									</div>
+									@if (@ViewBag.Committee_Type_Id == 1 || @ViewBag.Committee_Type_Id == 2)
+									{
+										// لو مساعد او مشرف
+										@if (int.Parse(@ViewBag.ISAdmin) == 0)
+										{
+										<div id="fahs">
+											<div class="row mb-4 align-items-center">
+												<!-- العدد -->
+												<div class="col-md-4 mb-3">
+													<label class="form-label fw-bold text-secondary">العدد</label>
+													<div class="input-group input-group-lg">
+														<input type="number"
+															   class="form-control"
+															   name="Lot_Count_@itemlot.ID"
+															   value="@itemlot.Package_Count"
+															   data-max="@itemlot.Package_Count"
+															   oninput="validateCount(this)" readonly />
+														<span class="input-group-text bg-primary text-white fw-bold">@itemlot.Package_Type_Name</span>
+													</div>
+												</div>
+
+												<!-- الوزن القائم -->
+												<div class="col-md-8">
+													<input type="hidden" id="originalWeight_@itemlot.ID" value="@itemlot.Package_Based_Weight" />
+
+													<div class="row">
+														<label class="form-label fw-bold text-secondary mb-2">الوزن القائم</label>
+													</div>
+													<div class="row">
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">طن</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Ton_@itemlot.ID"
+																   value="@tons"
+																   id="ton_@itemlot.ID"
+																   min="0"
+																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+														</div>
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">كيلو</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Kilo_@itemlot.ID"
+																   value="@kilos"
+																   id="kilo_@itemlot.ID"
+																   min="0"
+																   max="999"
+																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+														</div>
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">جرام</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Gram_@itemlot.ID"
+																   value="@grams"
+																   id="gram_@itemlot.ID"
+																   min="0"
+																   max="999"
+																	   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" readonly />
+														</div>
+													</div>
+													<div class="text-danger fw-bold" id="weightWarning_@itemlot.ID"></div>
+												</div>
+											</div>
+
+											<!-- حالة القبول/الرفض -->
+											<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
+												<div class="form-check form-check-inline mb-0">
+														<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdAccept" value="accepted" onchange="handleRadioChange('@messageId', 'accepted')" readonly />
+													<label class="form-check-label fw-semibold text-success" for="@radioIdAccept">مقبول</label>
+												</div>
+												<div class="form-check form-check-inline mb-0">
+														<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdReject" value="rejected" onchange="handleRadioChange('@messageId', 'rejected')" readonly />
+													<label class="form-check-label fw-semibold text-danger" for="@radioIdReject">مرفوض</label>
+												</div>
+												<div id="@messageId" class="fw-bold" style="min-width: 150px;"></div>
+											</div>
+
+										</div>
+										}
+										@if (int.Parse(@ViewBag.ISAdmin) == 1)
+										{
+										<div id="fahs">
+											<div class="row mb-4 align-items-center">
+												<!-- العدد -->
+												<div class="col-md-4 mb-3">
+													<label class="form-label fw-bold text-secondary">العدد</label>
+													<div class="input-group input-group-lg">
+														<input type="number"
+															   class="form-control"
+															   name="Lot_Count_@itemlot.ID"
+															   value="@itemlot.Package_Count"
+															   data-max="@itemlot.Package_Count"
+															   oninput="validateCount(this)" />
+														<span class="input-group-text bg-primary text-white fw-bold">@itemlot.Package_Type_Name</span>
+													</div>
+												</div>
+
+												<!-- الوزن القائم -->
+												<div class="col-md-8">
+													<input type="hidden" id="originalWeight_@itemlot.ID" value="@itemlot.Package_Based_Weight" />
+
+													<div class="row">
+														<label class="form-label fw-bold text-secondary mb-2">الوزن القائم</label>
+													</div>
+													<div class="row">
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">طن</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Ton_@itemlot.ID"
+																   value="@tons"
+																   id="ton_@itemlot.ID"
+																   min="0"
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
+														</div>
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">كيلو</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Kilo_@itemlot.ID"
+																   value="@kilos"
+																   id="kilo_@itemlot.ID"
+																   min="0"
+																   max="999"
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
+														</div>
+														<div class="col-md-4 mb-3">
+															<label class="form-label text-muted">جرام</label>
+															<input type="number"
+																   class="form-control form-control-lg"
+																   name="Weight_Gram_@itemlot.ID"
+																   value="@grams"
+																   id="gram_@itemlot.ID"
+																   min="0"
+																   max="999"
+																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)" />
+														</div>
+													</div>
+													<div class="text-danger fw-bold" id="weightWarning_@itemlot.ID"></div>
+												</div>
+											</div>
+
+											<!-- حالة القبول/الرفض -->
+											<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
+												<div class="form-check form-check-inline mb-0">
+													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdAccept" value="accepted" onchange="handleRadioChange('@messageId', 'accepted')" />
+													<label class="form-check-label fw-semibold text-success" for="@radioIdAccept">مقبول</label>
+												</div>
+												<div class="form-check form-check-inline mb-0">
+													<input class="form-check-input" type="radio" name="status_@itemlot.ID" id="@radioIdReject" value="rejected" onchange="handleRadioChange('@messageId', 'rejected')" />
+													<label class="form-check-label fw-semibold text-danger" for="@radioIdReject">مرفوض</label>
+												</div>
+												<div id="@messageId" class="fw-bold" style="min-width: 150px;"></div>
+											</div>
+
+										</div>
+										}
+									}
+									@* ////////////////////////rehab ///////////////////////////////// *@
+									@if (@ViewBag.Committee_Type_Id == 2)
+									{
+										<div id="gashni" class="col-md-4 mb-3">
+
+											<input id="gashniID" type="checkbox" asp-for="ExportAbroad" />
+											<label asp-for="ExportAbroad">يصرح بالتصدير للخارج</label>
+										</div>
+
+									}
+									@if (@ViewBag.Committee_Type_Id != 3)
+									{
+										<!-- الملاحظات -->
+										<div class="mb-3">
+											<label class="form-label fw-bold">ملاحظات</label>
+											<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..."></textarea>
+										</div>
+									}
+									@if (@ViewBag.Committee_Type_Id == 3)
+									{
+										<div id="rehab">
+
+											@foreach (var itemSample_Data in @item.Sample_Data.Where(w => w.LotData_ID == itemlot.Lot_ID))
+											{
+
+
+												<div id="sahb" class="col-md-4 mb-3">
+													<input type="hidden" class="form-control" value="@itemSample_Data.Sample_dataId" readonly />
+
+													<label class="form-label">نوع التحليل</label>
+													<input type="text" class="form-control" value="@itemSample_Data.AnalysisType_Name" readonly />
+													<label class="form-label">المعمل</label>
+													<input type="text" class="form-control" value="@itemSample_Data.AnalysisLab_Name" readonly />
+													<label class="form-label">حجم فوق العينة</label>
+													<input type="text" class="form-control" value="@itemSample_Data.SampleRatio" />
+													كيلوجرام<label class="form-label">حجم العينة</label>
+													<input type="text" class="form-control" value="@itemSample_Data.SampleSize" />
+													كيلوجرام<label class="form-label">رقم الختامة</label>
+													<input type="text" class="form-control" value="@itemSample_Data.Sample_BarCode" />
+													<!-- الملاحظات -->
+													<div class="mb-3">
+														<label class="form-label fw-bold">ملاحظات</label>
+														<textarea id="@textareaId" class="form-control" rows="3" placeholder="اكتب ملاحظاتك هنا..."></textarea>
+													</div>
+
+												</div>
+
+											}
+										</div>
+									}
+									@* ////////////////////////rehab ///////////////////////////////// *@
+
+
+									<button type="button" class="btn btn-success" onclick="saveLot(@itemlot.ID, this)">حفظ</button>
+
+								</div>
+							</div>
+						}
+					</div>
+
+
+				</div>
+			</div>
+		}
+
+		<!-- زر حفظ الكل -->
+		<div class="text-center mb-5" id="saveAllSection" style="display:none;">
+			<button type="button" class="btn btn-success btn-lg px-5" onclick="saveAllLots()">
+				حفظ الكل
+			</button>
+		</div>
+	</div>
+</div>
+
+@section Scripts {
+	<script>
+		// مصفوفة تخزن بيانات اللوطات المحفوظة مؤقتًا
+		let collectedLotsData = [];
+		let totalLotsCount = 0;   // عدد اللوطات الكلي في الصفحة
+		let savedLotsCount = 0;   // عدد اللوطات التي تم حفظها مؤقتًا
+
+		// عند تحميل الصفحة، نحسب عدد اللوطات
+		document.addEventListener('DOMContentLoaded', () => {
+			totalLotsCount = document.querySelectorAll('.card.mb-5').length;
+			console.log('📦 إجمالي عدد اللوطات:', totalLotsCount);
+		});
+
+		// إظهار/إخفاء تفاصيل النبات
+		function toggleDiv(id) {
+
+			// alert("toglle");
+			const div = document.getElementById('detailDiv_' + id);
+			// alert("toglle"+div)
+			if (!div) return;
+			if (div.style.display === "block") {
+				div.style.opacity = 0;
+				setTimeout(() => {
+					div.style.display = "none";
+				}, 300);
+			} else {
+				div.style.display = "block";
+				setTimeout(() => {
+					div.style.opacity = 1;
+				}, 100);
+			}
+		}
+
+		// تحقق من العدد ألا يتجاوز العدد المسموح
+		function validateCount(input) {
+			const max = parseInt(input.getAttribute('data-max'));
+			if (parseInt(input.value) > max) {
+				alert('العدد لا يمكن أن يتجاوز ' + max);
+				input.value = max;
+			}
+			if (parseInt(input.value) < 0 || input.value === '') {
+				input.value = 0;
+			}
+		}
+
+		// تحقق من الوزن ألا يتجاوز الوزن الكلي بالـ Kg
+		function validateWeight(lotId, maxWeightKg) {
+			const ton = parseInt(document.getElementById('ton_' + lotId).value) || 0;
+			const kilo = parseInt(document.getElementById('kilo_' + lotId).value) || 0;
+			const gram = parseInt(document.getElementById('gram_' + lotId).value) || 0;
+
+			let totalKg = ton * 1000 + kilo + gram / 1000;
+			const warningDiv = document.getElementById('weightWarning_' + lotId);
+
+			if (totalKg > maxWeightKg) {
+				warningDiv.textContent = "الوزن لا يمكن أن يتجاوز الوزن الكلي " + maxWeightKg.toFixed(3) + " كجم";
+			} else {
+				warningDiv.textContent = "";
+			}
+		}
+
+		function handleRadioChange(messageId, status) {
+			const messageDiv = document.getElementById(messageId);
+			if (status === 'accepted') {
+				messageDiv.textContent = 'تم اختيار: مقبول ✅';
+				messageDiv.style.color = 'green';
+			} else if (status === 'rejected') {
+				messageDiv.textContent = 'تم اختيار: مرفوض ❌';
+				messageDiv.style.color = 'red';
+			} else {
+				messageDiv.textContent = '';
+			}
+		}
+
+		function convertToKg(ton = 0, kg = 0, g = 0) {
+			let totalKg = ton * 1000;
+			totalKg += kg;
+			totalKg += g * 0.001;
+			return totalKg;
+		}
+
+		function getCsrfToken() {
+			const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+			return tokenInput ? tokenInput.value : '';
+		}
+
+		// حفظ بيانات اللوط مؤقتًا
+
+		var committeeTypeId = @Json.Serialize(ViewBag.Committee_Type_Id);
+					 function saveLot(lotId, btnElement) {
+						 debugger
+						  alert("saveLotttttttttttt");
+						  alert("committeeTypeId"+committeeTypeId);
+
+			const card = btnElement.closest('.card.mb-5');
+
+			if (!card) {
+				alert('❌ لم يتم العثور على كارت اللوط');
+				return;
+			}
+
+			const lotContainer = card.closest('.lot');
+			//16-6-2025
+		let QuantitySize=0;
+		let Weight=0;
+		let originalWeight =0;
+		let CommitteeResultType_ID  =0;
+		let ExportAbroad=null;
+		debugger
+			//rrr  ولا وزن فى حاله سحب عينات مفيش عدد اصلا
+			if(committeeTypeId!=3){
+				alert("committeeTypeId"+committeeTypeId)
+			const countInput = card.querySelector(`input[name="Lot_Count_${lotId}"]`);
+			let QuantitySize = countInput ? parseInt(countInput.value) : 0;
+			if (isNaN(QuantitySize) || QuantitySize <= 0) {
+				alert('❌ الرجاء إدخال عدد قطع صالح (أكبر من صفر) للوط رقم ' + lotId);
+				return;
+			}
+			
+			const ton = parseInt(document.getElementById(`ton_${lotId}`)?.value) || 0;
+			const kilo = parseInt(document.getElementById(`kilo_${lotId}`)?.value) || 0;
+			const gram = parseInt(document.getElementById(`gram_${lotId}`)?.value) || 0;
+			let Weight = convertToKg(ton, kilo, gram);
+			const originalWeight = parseFloat(document.getElementById(`originalWeight_${lotId}`)?.value) || 0;
+
+			if (Weight <= 0) {
+				alert('❌ الرجاء إدخال وزن صحيح أكبر من صفر للوط رقم ' + lotId);
+				return;
+			}
+
+			if (Weight > originalWeight) {
+				alert(`❌ الوزن المدخل (${Weight.toFixed(3)} كجم) لا يمكن أن يتجاوز الوزن الأصلي (${originalWeight.toFixed(3)} كجم) للوط رقم ${lotId}`);
+				return;
+			}
+			
+			const acceptRadio = card.querySelector(`input[name="status_${lotId}"][value="accepted"]`);
+			const rejectRadio = card.querySelector(`input[name="status_${lotId}"][value="rejected"]`);
+			let CommitteeResultType_ID = null;
+			if (acceptRadio?.checked) CommitteeResultType_ID = '1';
+			else if (rejectRadio?.checked) CommitteeResultType_ID = '3';
+			else {
+				alert('❌ الرجاء اختيار حالة (مقبول أو مرفوض) للوط رقم ' + lotId);
+				return;
+			}
+			}
+			const notes = document.getElementById(`textarea_${lotId}`)?.value.trim() || '';
+			//15-6-2025
+			//الملاحظات الموجوده للsample وليس اللوط
+			// لو تحب تلزم وجود ملاحظات لو تم رفض اللوط15-
+			// if (CommitteeResultType_ID === '3' && notes.length === 0) {
+			// 	alert('❌ الرجاء إدخال ملاحظات للوط المرفوض رقم ' + lotId);
+			// 	return;
+			// }
+
+			const Committee_ID = document.getElementById('Committee_Id').value;
+			const EmployeeId = document.getElementById('EmployeeId').value;
+			////////////rrrrrrrrrrrr//////////////////////////
+			  
+		if(committeeTypeId==2){
+			 ExportAbroad = document.getElementById('gashniID').value;
+			alert("ExportAbroad: " + ExportAbroad);
+		}
+
+					// Collect sample data if Committee_Type_Id is 3
+				let sampleData = [];
+
+		if (committeeTypeId == 3) {
+			const sampleDivs = card.querySelectorAll('#rehab #sahb'); // More specific selection
+
+			sampleData = Array.from(sampleDivs).map(div => {
+				const hiddenInput = div.querySelector('input[type="hidden"]');
+				const inputs = div.querySelectorAll('input[type="text"]');
+
+				return {
+					Sample_dataId: hiddenInput?.value || '',
+					AnalysisType_Name: inputs[0]?.value || '',
+					AnalysisLab_Name: inputs[1]?.value || '',
+					SampleRatio: inputs[2]?.value || '',
+					SampleSize: inputs[3]?.value || '',
+					Sample_BarCode: inputs[4]?.value || ''
+				};
+			});
+
+			console.log("sampleData"+sampleData); // Debugging
+		}
+
+
+
+
+			const lotData = {
+
+				Committee_ID: Committee_ID,
+				Ex_Request_Item_Id: lotId,
+				LotData_ID: lotId,
+				QuantitySize: QuantitySize,
+				Weight: Weight,
+				OriginalWeight: originalWeight,
+				CommitteeResultType_ID: CommitteeResultType_ID,
+				Notes: notes,
+				EmployeeId: EmployeeId,
+			 _ExportAbroad:ExportAbroad,  // Add ExportAbroad
+				  Sample_Data: sampleData  // Add sampleData
+			};
+			alert("lotData" + JSON.stringify(lotData, null, 2));
+
+			// إضافة بيانات اللوط للمصفوفة
+			collectedLotsData.push(lotData);
+			console.log('✅ تم حفظ اللوط مؤقتًا:', lotData);
+
+			// إزالة الكارت واللوط إذا هو آخر واحد في القسم
+			const allLotsBeforeRemove = lotContainer.querySelectorAll('.card.mb-5');
+			if (allLotsBeforeRemove.length === 1) {
+				const plantCard = lotContainer.previousElementSibling;
+				if (plantCard && plantCard.classList.contains('Item')) {
+					plantCard.remove();
+				}
+				lotContainer.remove();
+			}
+
+			card.remove();
+
+			savedLotsCount++;
+			if (savedLotsCount === totalLotsCount) {
+				document.getElementById('saveAllSection').style.display = 'block';
+			}
+
+			alert(`✅ تم حفظ بيانات اللوط رقم ${lotId} مؤقتًا`);
+		}
+
+		// إرسال جميع البيانات المحفوظة للسيرفر
+			   function saveAllLots() {
+			if (collectedLotsData.length === 0) {
+				alert('❌ لا توجد بيانات محفوظة للحفظ.');
+				return;
+			}
+
+			console.log("🚀 يتم إرسال البيانات التالية إلى السيرفر:", collectedLotsData);
+
+			fetch('/shohna_sader/SaveLots', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					// افترض أن دالة getCsrfToken() تعيد القيمة الصحيحة للـ token
+					'RequestVerificationToken': getCsrfToken()
+				},
+				body: JSON.stringify(collectedLotsData)
+			})
+			.then(async response => {
+				// نتأكد إذا الاستجابة ناجحة
+				const data = await response.json();
+
+				if (response.ok && data.success) {
+					alert('✅ تم حفظ جميع البيانات بنجاح!');
+					collectedLotsData = [];
+					savedLotsCount = 0;
+					const saveSection = document.getElementById('saveAllSection');
+					if (saveSection) saveSection.style.display = 'none';
+
+					// إعادة التوجيه بعد الحفظ
+					if (data.redirectUrl) {
+						window.location.href = data.redirectUrl;
+					} else {
+						window.location.href = '~/Home/index'; // غيّر العنوان حسب الحاجة
+					}
+				} else {
+					// لو في رسالة خطأ من السيرفر نعرضها
+					alert('❌ حدث خطأ أثناء الحفظ: ' + (data.message || 'خطأ غير معروف'));
+				}
+			})
+			.catch(error => {
+				console.error('❌ خطأ أثناء الاتصال بالسيرفر:', error);
+				alert('❌ حدث خطأ في الاتصال بالسيرفر.');
+			});
+		}
+
+	</script>
+}
+
+

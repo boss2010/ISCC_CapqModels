@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Capqwebsite", "Capqwebsite\Capqwebsite.csproj", "{571C2854-9EFA-4B32-BA7F-22725C8A35D1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EF", "EF\EF.csproj", "{75FE3A1C-EBD2-43CC-9786-5D8941D3EABC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ViewModels", "ViewModels\ViewModels.csproj", "{3084128A-841D-41AA-8B74-7A9436FFECC3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{571C2854-9EFA-4B32-BA7F-22725C8A35D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{571C2854-9EFA-4B32-BA7F-22725C8A35D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{571C2854-9EFA-4B32-BA7F-22725C8A35D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{571C2854-9EFA-4B32-BA7F-22725C8A35D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{75FE3A1C-EBD2-43CC-9786-5D8941D3EABC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{75FE3A1C-EBD2-43CC-9786-5D8941D3EABC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{75FE3A1C-EBD2-43CC-9786-5D8941D3EABC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{75FE3A1C-EBD2-43CC-9786-5D8941D3EABC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3084128A-841D-41AA-8B74-7A9436FFECC3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3084128A-841D-41AA-8B74-7A9436FFECC3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3084128A-841D-41AA-8B74-7A9436FFECC3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3084128A-841D-41AA-8B74-7A9436FFECC3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C8B2AE31-337A-431A-9757-1B6B72EC2156}
+	EndGlobalSection
+EndGlobal

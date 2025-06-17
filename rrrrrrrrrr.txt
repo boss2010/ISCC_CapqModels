@@ -1,0 +1,29 @@
+ install these package in package manager console
+dotnet tool install --global dotnet-ef
+
+Install-Package Microsoft.EntityFrameworkCore
+Install-Package Microsoft.EntityFrameworkCore.SqlServer
+Install-Package Microsoft.EntityFrameworkCore.Tools
+
+////////////////////////////////////////////////////////////
+
+Scaffold-DbContext "Server=172.16.45.11;Database=PlantQuarantine_New;User=new;Password=123;TrustServerCertificate=true" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models -Context AgricultureDBContext -UseDatabaseNames -Force
+
+//////////////////////////////////////
+
+
+protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+{
+    try
+    {
+        string c = Directory.GetCurrentDirectory();
+        IConfigurationRoot configuration =
+            new ConfigurationBuilder().SetBasePath(c).AddJsonFile("appsettings.json").Build();
+
+        optionsBuilder.UseSqlServer(configuration.GetConnectionString("DBConnection"));
+    }
+    catch
+    {
+        //ignore
+    }
+}

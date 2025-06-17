@@ -1,0 +1,96 @@
+﻿@* @* @model List<EF.Models.WebsiteTypeDetail> 
+ @model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM> 
+ is CheckRequest_Number  
+ @foreach ( var item in Model) 
+ { 
+	 @item.CheckRequest_Number 
+
+ } 
+
+
+@* //////////////////////////////////////////////////////////////////////////////////// *@ 
+ @model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM>
+<!-- Page Header Start -->
+<div class="container-fluid py-1">
+    <div class="container py-2">
+        <div class="row align-items-center py-4">
+            <div class="col-md-6 text-center text-md-right">
+                <h3 class="mb-4 mb-md-0 text-primary text-uppercase output">
+                    مهام اليوم
+                </h3>
+            </div>
+            <div class="col-md-6 text-center text-md-left">
+                <div class="d-inline-flex align-items-center">
+                    <a class="btn btn-secondary" href=""> مهام اليوم</a>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Page Header Start -->
+<!-- Contact Start -->
+<div class="container-fluid bg-light">
+    <div class="container pt-5">
+        <div class="row">
+            <div class="col-md-2 col-sm-4">
+                <input type="radio" id="age1" name="age">
+                <label for="age1">صادر</label>
+            </div>
+            <div class="col-md-2 col-sm-4">
+                <input type="radio" id="age2" name="age">
+                <label for="age2">وارد</label>
+            </div>
+            <div class="col-md-2 col-sm-4">
+                <input type="radio" id="age3" name="age">
+                <label for="age3">اخري</label>
+            </div>
+            <br>
+
+        </div>
+        <br />
+        @* ///////////////////////////////////////////////////////////////// *@
+        @foreach (var item in Model)
+        {
+            <form>
+
+
+                <div class="row">
+                    <label class="label lbl-style col-md-2 col-sm-4">طلب الفحص</label>
+                  @*   <input class="form-control col-md-4 col-sm-8" value="75621262252335" readonly /> *@
+                    <input class="form-control col-md-4 col-sm-8" value=@item.CheckRequest_Number readonly />
+
+                </div>
+                <br />
+
+                @* ///////////////////////////////////////////////////////////////// *@
+
+                <div class="row">
+                    <label class="label lbl-style col-md-2 col-sm-4">إسم اللجنة</label>
+                    <input class="form-control col-md-4 col-sm-8" value=@item.Committee_Type_Name readonly />
+
+                </div>
+                <br />
+                <div class="row">
+                    <label class="label lbl-style col-md-2 col-sm-4">حالة الشحنة</label>
+                    <input class="form-control col-md-4 col-sm-8" value=@item.RequestCommittee_Status readonly />
+
+                </div>
+                <br />
+                <div class="row">
+                    <label class="label lbl-style col-md-2 col-sm-4">أعضاء اللجنة</label>
+                    <input class="form-control col-md-4 col-sm-8" value="مصطفي احمد محمد طلبة" readonly />
+
+                </div>
+                <br />
+                <div class="row">
+                    <div class="col-sm-4"></div>
+                    <div class="col-sm-4 text-center"><input type="submit" class="btn btn-secondary" name="btnSave" value="تفاصيل الشحنة"></div>
+                    <div class="col-sm-4"></div>
+                </div>
+
+            </form>
+            <br />
+        }
+    </div>
+</div>

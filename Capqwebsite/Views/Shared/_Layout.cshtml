@@ -1,0 +1,71 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] Capq</title>
+
+    <!-- Font Awesome -->
+    <link href="~/fontawesome-free-5.15.4-web/css/all.min.css" rel="stylesheet" />
+    <!-- Flaticon Font -->
+    <link href="~/lib/flaticon/font/flaticon.css" rel="stylesheet" />
+
+    <!-- Libraries Stylesheet -->
+    <link href="~/lib/owlcarousel/assets/owl.carousel.min.css" rel="stylesheet">
+    <!-- Customized Bootstrap Stylesheet -->
+    @*     <link href="~/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/bootstrap-select.css" rel="stylesheet" /> *@
+    <link href="~/css/style.css" rel="stylesheet">
+    <link href="~/css/custom.css" rel="stylesheet" />
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+</head>
+<body>
+    <!-- Topbar Start -->
+    <div class="container-fluid bg-dark py-3">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 text-center text-lg-right">
+                    <div class="align-items-center">
+                        <span class="color-white">وزارة الزراعة</span>
+                        <br />
+                        <span class="color-white">الإدارة المركزيه للحجر الزراعي</span>
+                    </div>
+                </div>
+                <div class="col-md-6 text-center text-lg-left mb-2 mb-lg-0">
+                    <div class="d-inline-flex align-items-center">
+                        <a href="" class="navbar-brand">
+                            <img src="~/img/logo-capq2.png" class="logo" />
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- Topbar End -->
+   
+
+    <div class="">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+   
+
+    <!-- JavaScript Libraries -->
+    <script src="~/js/jquery-3.4.1.min.js"></script>
+    <script src="~/bootstrap.bundle.min.js"></script>
+
+    <script src="~/lib/easing/easing.min.js"></script>
+    <script src="~/lib/owlcarousel/owl.carousel.min.js"></script>
+    <script src="~/lib/isotope/isotope.pkgd.min.js"></script>
+    <script src="~/lib/lightbox/js/lightbox.min.js"></script>
+    <!-- Template Javascript -->
+    <script src="~/js/main.js"></script>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+

@@ -1,0 +1,129 @@
+﻿@model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+<!-- Page Header Start -->
+<div class="container-fluid py-1">
+    <div class="container py-2">
+        <div class="row align-items-center py-4">
+            <div class="col-md-6 text-center text-md-right">
+                <h3 class="mb-4 mb-md-0 text-primary text-uppercase output">
+                    مهام اليوم
+                </h3>
+            </div>
+            <div class="col-md-6 text-center text-md-left">
+                <div class="d-inline-flex align-items-center">
+                    <a class="btn btn-secondary" href=""> مهام اليوم</a>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@functions {
+    public List<Employee> ParseEmployees(string empData)
+    {
+        List<Employee> employees = new List<Employee>();
+
+        if (string.IsNullOrEmpty(empData))
+            return employees;
+
+
+
+        // Step 1: split into each <fn_CommitteEmployee_GetData ... /> block
+        string[] entries = empData.Split(new[] { "<fn_CommitteEmployee_GetData" }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var entry in entries)
+        {
+            // Re-add the tag start to make the entry valid again
+            string fullEntry = "<fn_CommitteEmployee_GetData" + entry;
+
+            var matches = System.Text.RegularExpressions.Regex.Matches(fullEntry, @"(\w+)=""([^""]*)""");
+
+            var emp = new Employee(); // New instance for each employee
+
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var key = match.Groups[1].Value;
+                var value = match.Groups[2].Value;
+
+                switch (key)
+                {
+                    case "Employee_Id": emp.Employee_Id = value; break;
+                    case "FullName": emp.FullName = value; break;
+                    case "LoginName": emp.LoginName = value; break;
+                    case "Password": emp.Password = value; break;
+                    case "ISAdmin": emp.ISAdmin = value; break;
+                    case "EmpToken": emp.EmpToken = value; break;
+                }
+            }
+
+            employees.Add(emp); // Add unique employee object
+        }
+
+
+        return employees;
+    }
+}
+
+<table class="table table-bordered table-striped text-center">
+    <thead class="thead-dark">
+        <tr>
+            <th>#</th>
+            <th>رقم الطلب</th>
+            <th>نوع اللجنة</th>
+            <th>الحالة</th>
+            <th>أعضاء اللجنة</th>
+            <th>التفاصيل</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+
+
+            var employees = ParseEmployees(item.Emp_Committe);
+            @*             consol.log(employees)
+ *@            <tr>
+                <td>@item.Row_Num</td>
+                <td>@item.CheckRequest_Number</td>
+                <td>@item.Committee_Type_Name</td>
+                <td>@item.RequestCommittee_Status</td>
+                <td>
+                    <ul class="list-unstyled">
+                        @foreach (var emp in employees)
+                        {
+                            <li>
+                                @emp.FullName - @(emp.ISAdmin == "1" ? "مشرف" : "عضو")
+                            </li>
+                        }
+                    </ul>
+                </td>
+                <td>
+                    <form asp-controller="Shohna_Sader" asp-action="Index" method="post">
+                        <input type="hidden" name="Committee_ID" value="@item.Committee_ID" />
+                        <input type="hidden" name="CheckRequest_Id" value="@item.checkRequest_Id" />
+                        <input type="hidden" name="Committee_Type_Id" value="@item.Committee_Type_Id" />
+                        <input type="hidden" name="EmployeeId" value="@ViewBag.User_Id" />
+                        @foreach (var emp in employees)
+                        {
+
+
+
+                            if (@ViewBag.User_Id == int.Parse(emp.Employee_Id))
+                            {
+                                <input type="hidden" name="ISAdmin" value="@emp.ISAdmin" />
+                                
+                            
+                            }
+                        }
+                        <input type="submit" class="btn btn-secondary" name="btnSave" value="تفاصيل الشحنة" data-rehab="@item.Committee_ID" >
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+
+

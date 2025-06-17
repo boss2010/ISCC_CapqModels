@@ -1,0 +1,21 @@
+{
+  "version": "3.0",
+  "defaultProvider": "cdnjs",
+  "libraries": [
+    {
+      "library": "jquery.is.js@0.2.1",
+      "destination": "wwwroot/lib/jquery.is.js/"
+    },
+    {
+      "library": "jquery@3.6.0",
+      "destination": "wwwroot/lib/jquery/"
+    },
+    {
+      "library": "jquery@3.6.4",
+      "destination": "wwwroot/lib/jquery/dist",
+      "files": [
+        "jquery.min.js"
+      ]
+    }
+  ]
+}
