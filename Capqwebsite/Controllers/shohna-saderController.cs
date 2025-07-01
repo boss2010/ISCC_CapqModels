@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Newtonsoft.Json;
 using System.Data.Common;
 using System.Net.Http;
@@ -58,102 +59,73 @@ namespace Capqwebsite.Controllers
         [HttpPost]
         public async Task<IActionResult> SaveLots([FromBody] List<LotDataModel> lots)
         {
-            if (!ModelState.IsValid)
+            AgricultureDBContext dbContext = new AgricultureDBContext();
+            using var transaction = dbContext.Database.BeginTransaction();
+            try 
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors);
-                return BadRequest(errors);
-            }
 
-            if (lots == null || lots.Count == 0)
-                return Json(new { success = false, message = "البيانات غير موجودة" });
+           
+            
 
-            try
+
+                dbContext.Database.UseTransaction(transaction.GetDbTransaction());
+
+                try
+                {
+
+                    foreach (var lot in lots)
             {
-                long employeeId = lots.FirstOrDefault().EmployeeId;
-                double latitude = 0;
-                double longitude = 0;
-                var committeeId = lots.FirstOrDefault().Committee_ID;
+                //////////////////////////////////Ex_RequestCommittees/////////////////////////////////////////
 
-                //update
-                //using (DbContext context = new DbContext())
-                //{
-                //    using (System.Data.Entity.DbContextTransaction trans = context.Database.BeginTransaction())
-                //    {
+                var committee_Id = lot.Committee_ID;
+                var updatedRow1 = dbContext.Ex_RequestCommittees.Find(committee_Id);
+                //var updatedRow1 = dbContext.Ex_RequestCommittees.Select(a => a.ID == committee_Id).FirstOrDefault();
+                updatedRow1.IsFinishedAll = true;
+                updatedRow1.Status = true;
+                 
+                    //////////////////////////////////Ex_CommitteeResult/////////////////////////////////////////
+                    var updatedRow2 = dbContext.Ex_CommitteeResults.FirstOrDefault(a => a.Committee_ID == committee_Id);
+                updatedRow2.Weight = (float)lot.Weight;
+                updatedRow2.Notes = lot.Notes;
+                updatedRow2.WeightOld = (float)lot.OriginalWeight;
+                updatedRow2.Weight = (float)lot.Weight;
+                updatedRow2.LotData_ID = lot.LotData_ID;
+                updatedRow2.EmployeeId = lot.EmployeeId;
+                updatedRow2.QuantitySize = (double)lot.QuantitySize;
+                updatedRow2.User_Updation_Date = DateTime.Now;  
 
-
-
-                ////update request status  Ex_request_Committe
-                //Ex_RequestCommittee RequestCommittee =  Ex_RequestCommittee().fin(committeeId);
-                //        RequestCommittee.Status = true;
-                //        RequestCommittee.User_Updation_Id = (short)EmployeeId;
-                //        RequestCommittee.User_Updation_Date = DateTime.Now;
-                //        //fz IsFinishedAll 
-                //        RequestCommittee.IsFinishedAll = IsFinishedAll;
-                //        uow.Repository<Ex_RequestCommittee>().Update(RequestCommittee);
-                //        uow.SaveChanges();
-                ////    }
-                ////}
-
-
-
-                var groupedLots = lots
-                    .GroupBy(l => l.Ex_Request_Item_Id)
-                    .Select(group => new CommitteDto
-                    {
-                        Ex_Request_Item_Id = group.Key,
-                        Committee_ID = committeeId,
-                        EmployeeId = employeeId,
-
-                        ComResult = group.Select(lot => new CommitteeResultDto
-                        {
-                            CommitteeResultType_ID = lot.CommitteeResultType_ID,
-                            Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                            Ex_RequestLotData_ID = lot.LotData_ID,
-                            Notes = lot.Notes,
-                            QuantitySize = lot.QuantitySize,
-                            Weight = lot.Weight,
-                            OriginalWeight = lot.OriginalWeight,
-                            Latitude = latitude,
-                            Longitude = longitude,
-                            EmployeeId = employeeId,
-                            //Photos = new List<string>(),
-                            //infectionData = new List<string>()
-                        }).ToList()
-                    }).ToList();
-
-                var payload = new CommitteeRequestWrapper
-                {
-                    Committe_Dto = groupedLots,
-                    SampleDto = new List<object>(),
-                    Treatment_Dto = new List<object>()
-                };
-
-                var client = _httpClientFactory.CreateClient();
-                var apiUrl = "http://10.7.7.250:40/API/Ex_CommitteeResult_API?IsFinishedAll=true";
-                var json = JsonConvert.SerializeObject(payload);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await client.PostAsync(apiUrl, content);
-                var responseString = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return Json(new { success = true, redirectUrl = Url.Action("index", "Home") });
+              
                 }
-                else
-                {
-                    return Json(new { success = false, message = $"خطأ في استجابة الـ API: {responseString}" });
+
+                    dbContext.SaveChanges();
+
+                    transaction.Commit();
+
                 }
+                catch (Exception ex2)
+                {
+                    transaction.Rollback();
+                    
+                }
+
+
+
+                // جاشنى مقبول >>>>> CommitteeResultType_ID=1&&&& مرفوض CommitteeResultType_ID=3
+
+
+
+
+
+
+                return Json(new { success = true, redirectUrl = Url.Action("index", "Home") });
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = $"خطأ غير متوقع: {ex.Message}" });
+
+                throw;
             }
         }
-        //public async Task<IActionResult> SaveLots([FromBody] List<Ex_CheckRequest_GetData_Android_V2_VM> lots)
-        //{ 
-        //return View();  
-        //}
+    
         }
 
     public class LotDataModel

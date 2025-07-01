@@ -131,7 +131,12 @@
 											<input type="text" class="form-control form-control-lg" value="@itemlot.Lot_Number" readonly />
 										</div>
 									</div>
-									@if (@ViewBag.Committee_Type_Id == 1 || @ViewBag.Committee_Type_Id == 2)
+									@{
+										////////////////////////index increaseddddddddddd
+										int committeeTypeId = ViewBag.Committee_Type_Id != null ? int.Parse(ViewBag.Committee_Type_Id.ToString()) : -1;
+
+									}
+									@if (committeeTypeId == 1 || committeeTypeId == 2)
 									{
 										// لو مساعد او مشرف
 
@@ -143,11 +148,12 @@
 													<label class="form-label fw-bold text-secondary">العدد</label>
 													<div class="input-group input-group-lg">
 														<input type="number"
-															   class="form-control"
-															   name="Lot_Count_@itemlot.ID"
-															   value="@itemlot.Package_Count"
-															   data-max="@itemlot.Package_Count"
-															   oninput="validateCount(this)"
+														class="form-control"
+														name="Lot_Count_@itemlot.ID"
+														id="Lot_Count_@itemlot.ID"
+														value="@itemlot.Package_Count"
+														data-max="@itemlot.Package_Count"
+														oninput="validateCount(this)"
 														@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														<span class="input-group-text bg-primary text-white fw-bold">@itemlot.Package_Type_Name</span>
 													</div>
@@ -164,36 +170,36 @@
 														<div class="col-md-4 mb-3">
 															<label class="form-label text-muted">طن</label>
 															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Ton_@itemlot.ID"
-																   value="@tons"
-																   id="ton_@itemlot.ID"
-																   min="0"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															class="form-control form-control-lg"
+															name="Weight_Ton_@itemlot.ID"
+															value="@tons"
+															id="ton_@itemlot.ID"
+															min="0"
+															oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
 															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 														<div class="col-md-4 mb-3">
 															<label class="form-label text-muted">كيلو</label>
 															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Kilo_@itemlot.ID"
-																   value="@kilos"
-																   id="kilo_@itemlot.ID"
-																   min="0"
-																   max="999"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															class="form-control form-control-lg"
+															name="Weight_Kilo_@itemlot.ID"
+															value="@kilos"
+															id="kilo_@itemlot.ID"
+															min="0"
+															max="999"
+															oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
 															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 														<div class="col-md-4 mb-3">
 															<label class="form-label text-muted">جرام</label>
 															<input type="number"
-																   class="form-control form-control-lg"
-																   name="Weight_Gram_@itemlot.ID"
-																   value="@grams"
-																   id="gram_@itemlot.ID"
-																   min="0"
-																   max="999"
-																   oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
+															class="form-control form-control-lg"
+															name="Weight_Gram_@itemlot.ID"
+															value="@grams"
+															id="gram_@itemlot.ID"
+															min="0"
+															max="999"
+															oninput="validateWeight('@itemlot.ID', @itemlot.Package_Based_Weight)"
 															@(int.Parse(ViewBag.ISAdmin) == 0 ? "readonly" : "") />
 														</div>
 													</div>
@@ -286,23 +292,32 @@
 						<div id="NotAdmin">
 							<div class="mb-3 d-flex align-items-center" style="gap: 5rem;">
 								<div class="form-check form-check-inline mb-0">
-									<input class="form-check-input" type="radio" name="Accept_NotAdmin" value="accepted" />
+									<input id="Accept_NotAdminID" class="form-check-input" type="radio" name="_NotAdmin" value="accepted"  />
 									<label class="form-check-label fw-semibold text-success" for="">مقبول</label>
 								</div>
 								<div class="form-check form-check-inline mb-0">
-									<input class="form-check-input" type="radio" name="Regfuse" value="rejected" />
+									<input id="Refuse_NotAdminID" class="form-check-input" type="radio" name="_NotAdmin" value="rejected"  />
 									<label class="form-check-label fw-semibold text-danger" for="">مرفوض</label>
 								</div>
 								<div class="fw-bold" style="min-width: 150px;"></div>
 							</div>
 
+								
 							<div class="mb-3">
 								<label class="form-label fw-bold">ملاحظات</label>
 								<textarea class="form-control" rows="3" placeholder="اكتب ملاحظات المساعد هنا..."></textarea>
 							</div>
+							<div class="mb-3">
+								<label id="messssssageID" class="form-label fw-bold"></label>
+								<label hidden id="lotsIDDDs" class="form-label fw-bold">@string.Join(", ", Model.Item_Data.SelectMany(item => item.Lot_Data.Select(lot => lot.Lot_ID)))</label>
+									
+								
+									@* @Model.Item_Data.Where(a =>a.ItemStatus_ID == item.ItemStatus_ID).Select(a =>a.Lot_Data.Select(a=>a.Lot_ID).ToList())</label> *@
+							</div>
 							<button type="button" class="btn btn-success" onclick="">حفظ</button>
 						</div>
 					}
+		
 				</div>
 			</div>
 		}
@@ -389,7 +404,60 @@
 				messageDiv.textContent = '';
 			}
 		}
+		/////////////////19-6-2025///////////notAdmin///////('تم اختيار: مرفوض ❌')//////////("تم اختيار: مرفوض ❌")//////////////////
 
+
+		// 		$(document).ready(function() {
+
+		// 				$("#Accept_NotAdminID").change(function() {
+		// 	if ($(this).is(":checked")) {
+		// 		alert("Accept_NotAdminID checked");
+
+		// 		// Then update all message divs with the combined list
+		// 		var message = 'تم اختيار: مقبول ✅ (Lots: ' + $('#lotsIDDDs').text() + ')';
+		// 		$('#messssssageID').text(message).css('color', 'green');
+		// 	}
+		// });
+
+		// 			$("#Refuse_NotAdminID").change(function() {
+		// if ($(this).is(":checked")) {
+
+
+		// 	alert("Refuse_NotAdminID checked");
+		// 					var message = 'تم اختيار: مرفوض ✅ (Lots: ' + $('#lotsIDDDs').text() + ')';
+		// 						$('#messssssageID').text(message).css('color', 'red');
+
+		// }
+
+		// 	});
+		// });
+		////////////////////23-6-2025////////////////////
+		$(document).ready(function() {
+
+						$("#Accept_NotAdminID").change(function() {
+			if ($(this).is(":checked")) {
+				alert("Accept_NotAdminID checked");
+
+				// Then update all message divs with the combined list
+				var message = 'تم اختيار: مقبول ✅ (Lots: ' + $('#lotsIDDDs').text() + ')';
+				$('#messssssageID').text(message).css('color', 'green');
+			}
+		});
+
+					$("#Refuse_NotAdminID").change(function() {
+		if ($(this).is(":checked")) {
+
+
+			alert("Refuse_NotAdminID checked");
+							var message = 'تم اختيار: مرفوض ✅ (Lots: ' + $('#lotsIDDDs').text() + ')';
+								$('#messssssageID').text(message).css('color', 'red');
+
+		}
+
+			});
+		});
+		//////////////////////////////////////
+		
 		function convertToKg(ton = 0, kg = 0, g = 0) {
 			let totalKg = ton * 1000;
 			totalKg += kg;
@@ -408,7 +476,6 @@
 					 function saveLot(lotId, btnElement) {
 						 debugger
 						  alert("saveLotttttttttttt");
-						  alert("committeeTypeId"+committeeTypeId);
 
 			const card = btnElement.closest('.card.mb-5');
 
@@ -424,12 +491,12 @@
 		let originalWeight =0;
 		let CommitteeResultType_ID  =0;
 		let ExportAbroad=null;
-		debugger
 			//rrr  ولا وزن فى حاله سحب عينات مفيش عدد اصلا
 			if(committeeTypeId!=3){
-				alert("committeeTypeId"+committeeTypeId)
-			const countInput = card.querySelector(`input[name="Lot_Count_${lotId}"]`);
-			let QuantitySize = countInput ? parseInt(countInput.value) : 0;
+				alert("committeeTypeId : "+committeeTypeId)
+			const countInput =document.getElementById(`Lot_Count_${lotId}`)?.value.trim() || 0; //card.querySelector(`input[name="Lot_Count_${lotId}"]`);
+			 QuantitySize = countInput ? parseInt(countInput) : 0;
+
 			if (isNaN(QuantitySize) || QuantitySize <= 0) {
 				alert('❌ الرجاء إدخال عدد قطع صالح (أكبر من صفر) للوط رقم ' + lotId);
 				return;
@@ -438,8 +505,8 @@
 			const ton = parseInt(document.getElementById(`ton_${lotId}`)?.value) || 0;
 			const kilo = parseInt(document.getElementById(`kilo_${lotId}`)?.value) || 0;
 			const gram = parseInt(document.getElementById(`gram_${lotId}`)?.value) || 0;
-			let Weight = convertToKg(ton, kilo, gram);
-			const originalWeight = parseFloat(document.getElementById(`originalWeight_${lotId}`)?.value) || 0;
+			 Weight = convertToKg(ton, kilo, gram);
+			 originalWeight = parseFloat(document.getElementById(`originalWeight_${lotId}`)?.value) || 0;
 
 			if (Weight <= 0) {
 				alert('❌ الرجاء إدخال وزن صحيح أكبر من صفر للوط رقم ' + lotId);
@@ -450,17 +517,38 @@
 				alert(`❌ الوزن المدخل (${Weight.toFixed(3)} كجم) لا يمكن أن يتجاوز الوزن الأصلي (${originalWeight.toFixed(3)} كجم) للوط رقم ${lotId}`);
 				return;
 			}
-
-			const acceptRadio = card.querySelector(`input[name="status_${lotId}"][value="accepted"]`);
-			const rejectRadio = card.querySelector(`input[name="status_${lotId}"][value="rejected"]`);
-			let CommitteeResultType_ID = null;
-			if (acceptRadio?.checked) CommitteeResultType_ID = '1';
-			else if (rejectRadio?.checked) CommitteeResultType_ID = '3';
-			else {
+			// ///////////18-6-2025/////////////////
+			const acceptRadio =document.getElementById(`radioAccept_${lotId}`);// document.getElementById().value;
+			const rejectRadio =document.getElementById(`radioReject_${lotId}`);// document.getElementById().value;
+			let selectedRadio = document.querySelector(`input[name="radioReject_${lotId}"]:checked`);
+			
+					if ($('#radioAccept_'+lotId).is(':checked')) {
+			CommitteeResultType_ID = '1';
+					}
+		else if ($('#radioReject_'+lotId).is(':checked'))
+		{
+			CommitteeResultType_ID = '3';
+		}
+		else {
 				alert('❌ الرجاء اختيار حالة (مقبول أو مرفوض) للوط رقم ' + lotId);
 				return;
+		}
+
+
+			//card.querySelector(`input[name="status_${lotId}"][value="accepted"]`);
+			//const rejectRadio = card.querySelector(`input[name="status_${lotId}"][value="rejected"]`);
+			alert(CommitteeResultType_ID)
+			//alert(rejectRadio)
+
+			
+			// if (acceptRadio.checked) CommitteeResultType_ID = '1';
+			// else if (rejectRadio.checked) CommitteeResultType_ID = '3';
+			// else {
+			// 	alert('❌ الرجاء اختيار حالة (مقبول أو مرفوض) للوط رقم ' + lotId);
+			// 	return;
+			// }
 			}
-			}
+		
 			const notes = document.getElementById(`textarea_${lotId}`)?.value.trim() || '';
 			//15-6-2025
 			//الملاحظات الموجوده للsample وليس اللوط
@@ -569,6 +657,8 @@
 
 				if (response.ok && data.success) {
 					alert('✅ تم حفظ جميع البيانات بنجاح!');
+					debugger
+					console.log('   rrrrrrr :', data);
 					collectedLotsData = [];
 					savedLotsCount = 0;
 					const saveSection = document.getElementById('saveAllSection');
