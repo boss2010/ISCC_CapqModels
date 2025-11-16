@@ -1,12 +1,9 @@
 ﻿using EF.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Newtonsoft.Json;
-using System.Data.Common;
-using System.Net.Http;
-using System.Text;
 using ViewModels;
 
 namespace Capqwebsite.Controllers
@@ -61,52 +58,83 @@ namespace Capqwebsite.Controllers
         {
             AgricultureDBContext dbContext = new AgricultureDBContext();
             using var transaction = dbContext.Database.BeginTransaction();
-            try 
+            dbContext.Database.UseTransaction(transaction.GetDbTransaction());
+            try
             {
 
-           
-            
+                
 
-
-                dbContext.Database.UseTransaction(transaction.GetDbTransaction());
-
-                try
+                if ((lots.FirstOrDefault().Committee_Type_Id == 1) || (lots.FirstOrDefault().Committee_Type_Id == 2))
                 {
 
                     foreach (var lot in lots)
-            {
-                //////////////////////////////////Ex_RequestCommittees/////////////////////////////////////////
+                    {
+                        //////////////////////////////////Ex_RequestCommittees/////////////////////////////////////////
+                        if (lots.FirstOrDefault().ISAdmin == 1)
+                        {
+                            var committee_Id = lot.Committee_ID;
+                        var updatedRow1 = dbContext.Ex_RequestCommittees.Where(a => a.ID == committee_Id).FirstOrDefault();
+                        //var updatedRow1 = dbContext.Ex_RequestCommittees.Select(a => a.ID == committee_Id).FirstOrDefault();
+                        updatedRow1.IsFinishedAll = true;
+                        updatedRow1.Status = true;
+                        updatedRow1.User_Updation_Date = DateTime.Now;
+                        dbContext.SaveChanges();
 
-                var committee_Id = lot.Committee_ID;
-                var updatedRow1 = dbContext.Ex_RequestCommittees.Find(committee_Id);
-                //var updatedRow1 = dbContext.Ex_RequestCommittees.Select(a => a.ID == committee_Id).FirstOrDefault();
-                updatedRow1.IsFinishedAll = true;
-                updatedRow1.Status = true;
-                 
-                    //////////////////////////////////Ex_CommitteeResult/////////////////////////////////////////
-                    var updatedRow2 = dbContext.Ex_CommitteeResults.FirstOrDefault(a => a.Committee_ID == committee_Id);
-                updatedRow2.Weight = (float)lot.Weight;
-                updatedRow2.Notes = lot.Notes;
-                updatedRow2.WeightOld = (float)lot.OriginalWeight;
-                updatedRow2.Weight = (float)lot.Weight;
-                updatedRow2.LotData_ID = lot.LotData_ID;
-                updatedRow2.EmployeeId = lot.EmployeeId;
-                updatedRow2.QuantitySize = (double)lot.QuantitySize;
-                updatedRow2.User_Updation_Date = DateTime.Now;  
+                        
+                            /////////////////////////update in Ex_CommitteeResults>>>>>admin///////////////////////////////////
+                            var updatedRow2 = dbContext.Ex_CommitteeResults
+          .Where(a => a.Committee_ID == lot.Committee_ID && a.LotData_ID == lot.LotData_ID && a.EmployeeId==lot.EmployeeId && a.Ex_Request_Item_Id== lot.Ex_Request_Item_Id)
+          .FirstOrDefault();
+                            updatedRow2.EmployeeId = lot.EmployeeId;
+                            updatedRow2.CommitteeResultType_ID = lot.CommitteeResultType_ID;
 
-              
+                            updatedRow2.QuantitySize = lot.QuantitySize;
+                            updatedRow2.Weight = lot.Weight;
+                            updatedRow2.WeightOld = lot.OriginalWeight;
+                            updatedRow2.Notes = lot.Notes;
+                            updatedRow2.AdminFinalResult_Note = lot.Notes;
+                            updatedRow2.User_Updation_Date = DateTime.Now;
+                            updatedRow2.Date = DateTime.Now;
+
+                        }
+                        else
+                        {
+                            /////////////////////////insert in Ex_CommitteeResult_Confirm>>>>>مساعد////////Ex_CommitteeResult_Confirm_SEQ///////////////////////////
+
+
+                            var Ex_CommitteeResult_Confirm_ID = GetSequenceFromTable("Ex_CommitteeResult_Confirm_SEQ");
+
+                            var Ex_CommitteeResult_ConfirmnewRowObj = new Ex_CommitteeResult_Confirm();
+
+                            Ex_CommitteeResult_ConfirmnewRowObj.ID = Ex_CommitteeResult_Confirm_ID;
+
+                            Ex_CommitteeResult_ConfirmnewRowObj.Ex_CommitteeResult_ID = dbContext.Ex_CommitteeResults
+          .Where(a => a.Committee_ID == lot.Committee_ID && a.LotData_ID == lot.LotData_ID && a.Ex_Request_Item_Id == lot.Ex_Request_Item_Id)
+          .FirstOrDefault().ID;
+                            Ex_CommitteeResult_ConfirmnewRowObj.Date = DateTime.Now;
+                            Ex_CommitteeResult_ConfirmnewRowObj.EmployeeId = lots.FirstOrDefault().EmployeeId;
+
+                            dbContext.Add(Ex_CommitteeResult_ConfirmnewRowObj);
+                            dbContext.SaveChanges();
+
+                        }
+                    }
                 }
 
-                    dbContext.SaveChanges();
 
-                    transaction.Commit();
 
-                }
-                catch (Exception ex2)
-                {
-                    transaction.Rollback();
-                    
-                }
+
+
+
+
+
+
+
+                dbContext.SaveChanges();
+
+                transaction.Commit();
+
+
 
 
 
@@ -122,16 +150,34 @@ namespace Capqwebsite.Controllers
             catch (Exception ex)
             {
 
-                throw;
+                // transaction.Rollback(); // Rollback FIRST ✅
+                throw new Exception("rehab errorr", ex); // Then throw
             }
+            return Json(new { success = false, });
         }
-    
+        public long GetSequenceFromTable(string seqName)
+        {
+            using var dbContext = new AgricultureDBContext();
+
+            var nextVal = dbContext.Database
+                .SqlQueryRaw<long>(
+                    @"UPDATE Sequences
+              SET LastValue = LastValue + 1
+              OUTPUT INSERTED.LastValue
+              WHERE SeqName = {0}", seqName)
+                .AsEnumerable()
+                .First();
+
+            return nextVal;
         }
+    }
 
     public class LotDataModel
     {
-
-
+        
+        public short? itemID { get; set; }
+        public short? Committee_Type_Id { get; set; }
+        public short? ISAdmin { get; set; }
 
         //public  bool ExportAbroad { get; set; } //rrrrrr
         public string _ExportAbroad { get; set; } //rrrrrr
@@ -140,10 +186,10 @@ namespace Capqwebsite.Controllers
         public long EmployeeId { get; set; }
         public long Ex_Request_Item_Id { get; set; }
         public long LotData_ID { get; set; }
-        public decimal QuantitySize { get; set; }
-        public decimal Weight { get; set; }
-        public decimal OriginalWeight { get; set; }
-        public int CommitteeResultType_ID { get; set; }
+        public double? QuantitySize { get; set; }
+        public double? Weight { get; set; }
+        public double? OriginalWeight { get; set; }
+        public byte? CommitteeResultType_ID { get; set; }
         public string Notes { get; set; }
         //public string Sample_Data { get; set; }
 

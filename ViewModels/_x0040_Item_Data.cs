@@ -8,7 +8,7 @@
         //public string item_Category_Register;
         //public string contaier_type_Name;
 
-        // public long ID { get; set; }
+        public long ID { get; set; }
 
         public string Sub_Name { get; set; }
         public string ItemState_Name { get; set; }

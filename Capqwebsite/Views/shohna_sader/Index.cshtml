@@ -6,6 +6,7 @@
 <input type="hidden" name="Committee_Id" id="Committee_Id" value="@ViewBag.Committee_Id" />
 <input type="hidden" name="EmployeeId" id="EmployeeId" value="@ViewBag.EmployeeId" />
 <input type="hidden" name="Committee_Type_Id" id="Committee_Type_Id" value="@ViewBag.Committee_Type_Id" />
+<input type="hidden" name="ISAdmin" id="ISAdmin" value="@ViewBag.ISAdmin" />
 <!-- Page Header Start -->
 <div class="container-fluid py-1">
 	<div class="container py-2">
@@ -65,6 +66,10 @@
 						<div class="col-md-4">
 							<label class="form-label">اسم النبات/الكائن</label>
 							<input type="text" class="form-control" value="@item.Item_Name" readonly />
+							@* /////////////////////////1-10-2025/////////////////// *@
+							<input type="hidden" class="form-control" value="@item.ID"  />
+							
+
 						</div>
 						<div class="col-md-4">
 							<label class="form-label">المنتج</label>
@@ -98,7 +103,7 @@
 							<div class="col-sm-3 fw-bold fs-5">رقم الطلب:</div>
 							<div class="col-sm-9 fs-5">@Model.CheckRequest_Number</div>
 						</div>
-
+						
 						@foreach (var itemlot in item.Lot_Data)
 						{
 							double weightKg = itemlot.Package_Based_Weight;
@@ -113,6 +118,7 @@
 							@* <div class="card mb-5 shadow rounded-4 border-primary"> *@
 							<input type="hidden" value="@itemlot.ID" />
 							<input type="hidden" value="@Model.CheckRequest_Id" />
+							
 
 							@* </div> *@
 							<div class="card mb-5 shadow rounded-4 border-primary">
@@ -121,10 +127,12 @@
 										<div class="col-md-4 mb-3">
 											<label class="form-label">اسم النبات/الكائن</label>
 											<input type="text" class="form-control" value="@item.Item_Name" readonly />
+											<input type="hidden" class="form-control" value="@item.ID" name="itemID_@item.ID" id="itemID_@item.ID" />
 										</div>
 										<div class="col-md-4 mb-3">
 											<label class="form-label fw-bold text-secondary">المنتج</label>
 											<input type="text" class="form-control form-control-lg" value="@item.Item_ShortName_Name" readonly />
+											
 										</div>
 										<div class="col-md-4 mb-3">
 											<label class="form-label fw-bold text-secondary">رقم اللوط</label>
@@ -590,11 +598,15 @@
 			console.log("sampleData"+sampleData); // Debugging
 		}
 
-
-
-
+		// let itemID = document.getElementById(`itemID_${lotId}`).value;
+		// console.log(itemID);
+			const Committee_Type_Id = document.getElementById('Committee_Type_Id').value;
+			const ISAdmin = document.getElementById('ISAdmin').value;
 			const lotData = {
 
+				// itemID:itemID,
+				ISAdmin:ISAdmin,
+				   Committee_Type_Id:committeeTypeId,
 				Committee_ID: Committee_ID,
 				Ex_Request_Item_Id: lotId,
 				LotData_ID: lotId,
