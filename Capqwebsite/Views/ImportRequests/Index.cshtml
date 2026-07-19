@@ -1,0 +1,110 @@
+@model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM>
+@{
+    ViewData["Title"] = "طلبات الوارد";
+    int total = Model.Count;
+    int newCount = Model.Count(x => x.WorkStatusKey == "new");
+    int workingCount = Model.Count(x => x.WorkStatusKey == "working");
+    int completedCount = Model.Count(x => x.WorkStatusKey == "completed");
+    int canceledCount = Model.Count(x => x.WorkStatusKey == "canceled");
+}
+
+<style>
+    .status-cards { display:grid; gap:14px; grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .status-card { background:#fff; border:1px solid #dbe8e8; border-radius:12px; color:#405658; cursor:pointer; padding:15px; text-align:right; transition:.2s; }
+    .status-card:hover,.status-card.active { border-color:#178b91; box-shadow:0 5px 16px rgba(23,139,145,.15); transform:translateY(-2px); }
+    .status-card.active { background:#eaf9f7; }
+    .status-card span { display:block; font-size:.9rem; }
+    .status-card strong { color:#147d83; display:block; font-size:1.65rem; margin-top:4px; }
+    .status-badge { border-radius:20px; display:inline-block; font-weight:700; padding:5px 12px; }
+    .status-new { background:#eef2f4; color:#52636a; }
+    .status-working { background:#fff4d8; color:#936b00; }
+    .status-completed { background:#dcf5e7; color:#187446; }
+    .status-canceled { background:#fde4e4; color:#a43131; }
+    .member-list { display:flex; flex-direction:column; gap:6px; text-align:right; }
+    .member-row { align-items:center; display:flex; gap:7px; white-space:nowrap; }
+    .member-role { border-radius:12px; font-size:.75rem; font-weight:700; padding:3px 8px; }
+    .role-admin { background:#dff3f1; color:#147d83; }
+    .role-assistant { background:#edf0f3; color:#56656a; }
+    @@media(max-width:900px){.status-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @@media(max-width:480px){.status-cards{grid-template-columns:1fr 1fr;}.status-card{padding:11px;}}
+</style>
+
+<div class="container py-4" dir="rtl">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="text-primary mb-2">طلبات الوارد</h2>
+            <div class="text-muted">اسم المستخدم: <strong>@ViewBag.UserName</strong> | رقم المستخدم: <strong>@ViewBag.UserId</strong> | رقم الموظف: <strong>@ViewBag.EmployeeId</strong></div>
+        </div>
+        <form method="get" asp-controller="ImportRequests" asp-action="Index" class="d-flex align-items-end gap-2">
+            <div><label for="date" class="form-label">تاريخ اللجنة</label><input id="date" name="date" type="date" value="@ViewBag.SelectedDate" class="form-control" /></div>
+            <button type="submit" class="btn btn-primary">عرض</button>
+        </form>
+    </div>
+
+    @if (ViewBag.PageError != null)
+    {
+        <div class="alert alert-danger text-center">@ViewBag.PageError</div>
+    }
+    else
+    {
+        <div class="status-cards mb-4" id="statusCards">
+            <button type="button" class="status-card active" data-filter="all"><span>إجمالي الطلبات</span><strong>@total</strong></button>
+            <button type="button" class="status-card" data-filter="new"><span>جديد</span><strong>@newCount</strong></button>
+            <button type="button" class="status-card" data-filter="working"><span>جاري العمل</span><strong>@workingCount</strong></button>
+            <button type="button" class="status-card" data-filter="completed"><span>تم الانتهاء</span><strong>@completedCount</strong></button>
+            <button type="button" class="status-card" data-filter="canceled"><span>ملغي</span><strong>@canceledCount</strong></button>
+        </div>
+
+        @if (Model.Count == 0)
+        {
+            <div class="alert alert-info text-center">لا توجد طلبات وارد مسندة للمستخدم في التاريخ المحدد.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover text-center align-middle bg-white">
+                    <thead class="table-dark"><tr><th>#</th><th>رقم الطلب</th><th>نوع اللجنة</th><th>أعضاء اللجنة</th><th>الحالة</th><th>التفاصيل</th></tr></thead>
+                    <tbody id="requestsBody">
+                    @foreach (var item in Model)
+                    {
+                        <tr data-status="@item.WorkStatusKey">
+                            <td>@item.Row_Num</td><td>@item.CheckRequest_Number</td><td>@item.Committee_Type_Name</td>
+                            <td>
+                                <div class="member-list">
+                                @foreach (var member in item.CommitteeMembers.Split('|', StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    bool adminMember = member.EndsWith("(أدمن)");
+                                    string memberName = member.Replace(" (أدمن)", "").Replace(" (مساعد)", "");
+                                    <div class="member-row"><span>@memberName</span><span class="member-role @(adminMember ? "role-admin" : "role-assistant")">@(adminMember ? "أدمن" : "مساعد")</span></div>
+                                }
+                                </div>
+                            </td>
+                            <td><span class="status-badge status-@item.WorkStatusKey">@item.WorkStatusName</span></td>
+                            <td><a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly ? "btn-outline-secondary" : "btn-info text-white")">@(item.IsReadOnly ? "عرض فقط" : item.IsAdmin ? "متابعة العمل" : "إبداء الرأي")</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <div id="emptyFilter" class="alert alert-info text-center d-none">لا توجد طلبات في هذه الحالة.</div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+<script>
+    (() => {
+        const cards = [...document.querySelectorAll('.status-card')];
+        const rows = [...document.querySelectorAll('#requestsBody tr')];
+        const empty = document.getElementById('emptyFilter');
+        cards.forEach(card => card.addEventListener('click', () => {
+            cards.forEach(x => x.classList.remove('active'));
+            card.classList.add('active');
+            const filter = card.dataset.filter;
+            let visible = 0;
+            rows.forEach(row => { const show = filter === 'all' || row.dataset.status === filter; row.style.display = show ? '' : 'none'; if (show) visible++; });
+            empty?.classList.toggle('d-none', visible > 0);
+        }));
+    })();
+</script>
+}

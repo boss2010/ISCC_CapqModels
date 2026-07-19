@@ -6,29 +6,81 @@ namespace Capqwebsite.Controllers
 {
     public class LoginController : Controller
     {
+        private readonly IConfiguration _configuration;
+
+        public LoginController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
         [AllowAnonymous]
         [Route("/Login/Index")]
 
         public IActionResult Index()
         {
+            if (HttpContext.Session.GetString("UserSession") == "Authenticated")
+            {
+                return RedirectToAction("Index", "ImportRequests");
+            }
+
             return View();
         }
 
         [HttpPost]
-        public IActionResult GoDataEntryMenu(string userName, string password)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GoDataEntryMenu(string userName, string password)
         {
-            if (userName == "admin" && password == "admin@123")
+            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
             {
-                
-                CookieOptions option = new CookieOptions();
+                ViewBag.LoginError = "اكتب اسم المستخدم وكلمة السر";
+                return View("Index");
+            }
 
-                HttpContext.Session.SetString("UserSession", "Authenticated");
-                return View();
-            }
-            else
+            try
             {
-                return RedirectToAction("Index");
+                var connectionString = _configuration.GetConnectionString("PrivilegeDBConnection");
+                await using var connection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+                await connection.OpenAsync();
+
+                await using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT TOP (1) Id, EmpId, LoginName
+                    FROM dbo.PR_User
+                    WHERE LoginName = @LoginName
+                      AND Password = @Password
+                      AND Active = 1";
+                command.Parameters.AddWithValue("@LoginName", userName.Trim());
+                command.Parameters.AddWithValue("@Password", password);
+
+                await using var reader = await command.ExecuteReaderAsync();
+                if (!await reader.ReadAsync() || reader.IsDBNull(0) || reader.IsDBNull(1))
+                {
+                    ViewBag.LoginError = "اسم المستخدم أو كلمة السر غير صحيحة، أو الحساب غير نشط";
+                    return View("Index");
+                }
+
+                long userId = Convert.ToInt64(reader.GetValue(0));
+                long employeeId = Convert.ToInt64(reader.GetValue(1));
+                string loginName = reader.GetString(2);
+                HttpContext.Session.SetString("UserSession", "Authenticated");
+                HttpContext.Session.SetString("UserName", loginName);
+                HttpContext.Session.SetString("UserId", userId.ToString());
+                HttpContext.Session.SetString("EmployeeId", employeeId.ToString());
+                return RedirectToAction("Index", "ImportRequests");
             }
+            catch (Exception)
+            {
+                ViewBag.LoginError = "تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى أو تواصل مع مسؤول النظام";
+                return View("Index");
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Logout()
+        {
+            HttpContext.Session.Clear();
+            return RedirectToAction("Index");
         }
     }
 }

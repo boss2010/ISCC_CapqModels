@@ -20,16 +20,31 @@ namespace Capqwebsite.Controllers
         [AllowAnonymous]
         [Route("/shohna_sader/index")]
         public async Task<IActionResult> Index(long checkRequest_Id, long Committee_ID = 0, byte Committee_Type_Id = 1
-            , long EmployeeId = 0, string ISAdmin = null)
+            , long EmployeeId = 0, string ISAdmin = null, byte IsExport = 2)
         {
             try
             {
+                if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+                    !long.TryParse(HttpContext.Session.GetString("UserId"), out long sessionUserId))
+                {
+                    return RedirectToAction("Index", "Login");
+                }
 
-                string apiUrl = $"http://10.7.7.250:40/api/Export_CheckRequest_API?CheckRequest_Id={checkRequest_Id}&Committee_Id={Committee_ID}&Committee_Type_Id={Committee_Type_Id}";
+                if (checkRequest_Id <= 0 || Committee_ID <= 0)
+                {
+                    TempData["PageError"] = "افتح تفاصيل الشحنة من زر تفاصيل الشحنة الموجود أمام الطلب";
+                    return RedirectToAction("Index", "Home");
+                }
+
+                EmployeeId = sessionUserId;
+
+                IsExport = 2;
+                string apiUrl = $"http://10.7.7.250:40/api/Import_CheckRequest_API?CheckRequest_Id={checkRequest_Id}&Committee_Id={Committee_ID}&Committee_Type_Id={Committee_Type_Id}";
                 ViewBag.ISAdmin = ISAdmin;
                 ViewBag.Committee_Id = Committee_ID;
                 ViewBag.EmployeeId = EmployeeId;
                 ViewBag.Committee_Type_Id = Committee_Type_Id;
+                ViewBag.IsExport = IsExport;
 
                 var client = _httpClientFactory.CreateClient();
                 var response = await client.GetAsync(apiUrl);

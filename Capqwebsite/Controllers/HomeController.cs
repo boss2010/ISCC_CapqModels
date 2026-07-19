@@ -9,17 +9,26 @@ namespace Capqwebsite.Controllers
     {
         private readonly HttpClient _httpClient = httpClientFactory.CreateClient();
         //Api Get with param
-        public async Task<IActionResult> Index(long User_Id= 222)
+        public async Task<IActionResult> Index()
         {
-
             try
             {
+                if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+                    !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId) ||
+                    !long.TryParse(HttpContext.Session.GetString("EmployeeId"), out long employeeId))
+                {
+                    return RedirectToAction("Index", "Login");
+                }
+
+                long User_Id = userId;
                 ViewBag.User_Id = User_Id;
+                ViewBag.EmployeeId = employeeId;
+                ViewBag.UserName = HttpContext.Session.GetString("UserName");
                 //string Check_Date = "05-31-2025";
                 string Check_Date = DateTime.Now.ToString("MM-dd-yyyy");
                 //string Check_Date = "2025-04-27";
 
-                string apiUrl = $"http://10.7.7.250:40/api/ExportImportActivity_API?User_Id={User_Id}&Check_Date={Uri.EscapeDataString(Check_Date)}";
+                string apiUrl = $"http://10.7.7.250:40/api/ExportImportActivity_API?User_Id={employeeId}&Check_Date={Uri.EscapeDataString(Check_Date)}";
 
                 HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
                 response.EnsureSuccessStatusCode();
@@ -32,7 +41,10 @@ namespace Capqwebsite.Controllers
                     PropertyNameCaseInsensitive = true
                 };
 
-                var activityList = JsonSerializer.Deserialize<List<Ex_Im_CheckRequest_GetAllByUser_DateVM>>(responseBody, options);
+                var activityList = JsonSerializer
+                    .Deserialize<List<Ex_Im_CheckRequest_GetAllByUser_DateVM>>(responseBody, options)
+                    ?.Where(item => item.IsExport == 2)
+                    .ToList() ?? new List<Ex_Im_CheckRequest_GetAllByUser_DateVM>();
               
 
                 return View("Index", activityList);

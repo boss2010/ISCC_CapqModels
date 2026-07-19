@@ -35,7 +35,11 @@ namespace ViewModels
         public Nullable<System.DateTime> Check_Date { get; set; }
         public string RequestCommittee_Status { get; set; }
         public string Outlet_Name { get; set; }
+        public string Outlet_Address { get; set; }
         public string Govern_Name { get; set; }
+        public string General_Admin_Name { get; set; }
+        public int? Opreration_type_Id { get; set; }
+        public string Opreration_type_Name { get; set; }
         public List<_x0040_Item_Data> Item_Data { get; set; } = new List<_x0040_Item_Data>();
 
      

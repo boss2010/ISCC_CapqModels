@@ -5,6 +5,9 @@
 <input name="__RequestVerificationToken" type="hidden" value="...." />
 <input type="hidden" name="Committee_Id" id="Committee_Id" value="@ViewBag.Committee_Id" />
 <input type="hidden" name="EmployeeId" id="EmployeeId" value="@ViewBag.EmployeeId" />
+<div class="container mt-2 text-right">
+	رقم الموظف: <strong>@ViewBag.EmployeeId</strong>
+</div>
 <input type="hidden" name="Committee_Type_Id" id="Committee_Type_Id" value="@ViewBag.Committee_Type_Id" />
 <input type="hidden" name="ISAdmin" id="ISAdmin" value="@ViewBag.ISAdmin" />
 <!-- Page Header Start -->
@@ -13,7 +16,7 @@
 		<div class="row align-items-center py-4">
 			<div class="col-md-6 text-center text-md-right">
 				<h3 class="mb-4 mb-md-0 text-primary text-uppercase output">
-					تفاصيل شحنة صادر
+					تفاصيل شحنة وارد
 				</h3>
 			</div>
 			<div class="col-md-6 text-center text-md-left">

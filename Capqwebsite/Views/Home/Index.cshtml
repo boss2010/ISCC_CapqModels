@@ -1,6 +1,13 @@
 ﻿@model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" />
 
+@if (TempData["PageError"] != null)
+{
+    <div class="container mt-3">
+        <div class="alert alert-warning text-center" role="alert">@TempData["PageError"]</div>
+    </div>
+}
+
 <!-- Page Header Start -->
 <div class="container-fluid py-1">
     <div class="container py-2">
@@ -9,6 +16,11 @@
                 <h3 class="mb-4 mb-md-0 text-primary text-uppercase output">
                     مهام اليوم
                 </h3>
+                <div class="mt-2 text-dark">
+                    رقم المستخدم: <strong>@ViewBag.User_Id</strong>
+                    | رقم الموظف: <strong>@ViewBag.EmployeeId</strong>
+                    | اسم المستخدم: <strong>@ViewBag.UserName</strong>
+                </div>
             </div>
             <div class="col-md-6 text-center text-md-left">
                 <div class="d-inline-flex align-items-center">
@@ -103,6 +115,7 @@
                         <input type="hidden" name="Committee_ID" value="@item.Committee_ID" />
                         <input type="hidden" name="CheckRequest_Id" value="@item.checkRequest_Id" />
                         <input type="hidden" name="Committee_Type_Id" value="@item.Committee_Type_Id" />
+                        <input type="hidden" name="IsExport" value="2" />
                         <input type="hidden" name="EmployeeId" value="@ViewBag.User_Id" />
                         @foreach (var emp in employees)
                         {

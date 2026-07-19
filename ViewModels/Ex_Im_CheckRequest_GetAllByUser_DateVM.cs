@@ -27,6 +27,11 @@ namespace ViewModels
             public CheckRequest_GetTreatment_Analsis_DTO Request_Treatment_Data { get; set; }
 
             public string FarmAnlysisCount_XMl { get; set; }
+            public string WorkStatusKey { get; set; } = "new";
+            public string WorkStatusName { get; set; } = "جديد";
+            public bool IsReadOnly { get; set; }
+            public bool IsAdmin { get; set; }
+            public string CommitteeMembers { get; set; } = string.Empty;
 
         }
 

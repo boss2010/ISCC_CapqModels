@@ -55,6 +55,20 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseSession();
+app.Use(async (context, next) =>
+{
+    bool isLoginRequest = context.Request.Path.StartsWithSegments("/Login");
+    bool isErrorRequest = context.Request.Path.StartsWithSegments("/Home/Error");
+    bool isAuthenticated = context.Session.GetString("UserSession") == "Authenticated";
+
+    if (!isAuthenticated && !isLoginRequest && !isErrorRequest)
+    {
+        context.Response.Redirect("/Login/Index");
+        return;
+    }
+
+    await next();
+});
 app.UseCors("AllowAll");
 app.UseCookiePolicy();
 app.UseAuthorization();
@@ -80,7 +94,7 @@ app.MapControllerRoute(
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=Login}/{action=Index}/{id?}");
 app.Run();
 
 

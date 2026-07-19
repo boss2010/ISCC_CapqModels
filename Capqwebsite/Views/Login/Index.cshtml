@@ -4,46 +4,52 @@
 
 
 <link href="~/fontawesome-free-5.15.4-web/css/all.min.css" rel="stylesheet" />
-<link href="~/fontawesome-free-5.15.4-web/css/all.css" rel="stylesheet" />
 <link href="~/css/login.css" rel="stylesheet" />
 
+<main class="auth-page" dir="rtl">
+	<section class="auth-card">
+		<div class="auth-brand">
+			<div class="auth-logo-wrap">
+				<img src="~/img/logo-capq2.png" alt="شعار الحجر الزراعي" class="auth-logo" />
+			</div>
+			<p>وزارة الزراعة واستصلاح الأراضي</p>
+			<h1>الإدارة المركزية للحجر الزراعي</h1>
+			<span>منظومة لجان فحص الوارد</span>
+		</div>
 
-<div class="container">
-	<div class="screen">
-		<div class="screen__content">
-			<form class="login" method="post" action="GoDataEntryMenu">
-				<div class="login__field">
+		<div class="auth-form-panel">
+			<div class="auth-heading">
+				<h2>تسجيل الدخول</h2>
+				<p>أدخل بيانات حسابك للوصول إلى مهام اليوم</p>
+			</div>
 
-					<input name="userName" type="text" class="login__input" placeholder="اسم المستخدم">
-					<i class="login__icon fas fa-user"></i>
+			@if (ViewBag.LoginError != null)
+			{
+				<div class="auth-error" role="alert">
+					<i class="fas fa-exclamation-circle"></i>
+					<span>@ViewBag.LoginError</span>
 				</div>
-				<div class="login__field">
+			}
 
-					<input name="password" type="password" class="login__input" placeholder="كلمة السر">
-					<i class="login__icon fas fa-lock"></i>
+			<form class="auth-form" method="post" asp-controller="Login" asp-action="GoDataEntryMenu">
+				@Html.AntiForgeryToken()
+				<label for="userName">اسم المستخدم</label>
+				<div class="auth-input-wrap">
+					<i class="fas fa-user"></i>
+					<input id="userName" name="userName" type="text" placeholder="اكتب اسم المستخدم" autocomplete="username" autofocus required />
 				</div>
-				<button class="button login__submit" type="submit">
-					<i class="button__icon fas fa-chevron-left"></i>
-					<span class="button__text">تسجيل الدخول</span>
 
+				<label for="password">كلمة المرور</label>
+				<div class="auth-input-wrap">
+					<i class="fas fa-lock"></i>
+					<input id="password" name="password" type="password" placeholder="اكتب كلمة المرور" autocomplete="current-password" required />
+				</div>
+
+				<button class="auth-submit" type="submit">
+					<span>دخول إلى النظام</span>
+					<i class="fas fa-arrow-left"></i>
 				</button>
 			</form>
-			<div class="social-login">
-				<h3>سجل دخول</h3>
-				<div class="social-icons">
-					<a href="#" class="social-login__icon fab fa-instagram">
-						<i class="fas fa-instagram"></i>
-					</a>
-					<a href="#" class="social-login__icon fab fa-facebook"></a>
-					<a href="#" class="social-login__icon fab fa-twitter"></a>
-				</div>
-			</div>
 		</div>
-		<div class="screen__background">
-			<span class="screen__background__shape screen__background__shape4"></span>
-			<span class="screen__background__shape screen__background__shape3"></span>
-			<span class="screen__background__shape screen__background__shape2"></span>
-			<span class="screen__background__shape screen__background__shape1"></span>
-		</div>
-	</div>
-</div>
+	</section>
+</main>
