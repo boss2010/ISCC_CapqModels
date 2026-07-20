@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Security.Cryptography;
 using ViewModels;
 
 namespace Capqwebsite.Controllers;
@@ -112,6 +113,148 @@ public class ImportRequestDetailsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveSamples(ImportSamplesSaveVm input)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !short.TryParse(HttpContext.Session.GetString("UserId"), out short userId))
+            return RedirectToAction("Index", "Login");
+
+        var route = new { checkRequestId = input.CheckRequestId, committeeId = input.CommitteeId, committeeTypeId = input.CommitteeTypeId };
+        if (input.CommitteeTypeId != 13)
+        {
+            TempData["SaveError"] = "حفظ بيانات السحب متاح للجنة سحب العينات فقط.";
+            return RedirectToAction(nameof(Index), route);
+        }
+        var access = await GetCommitteeAccessAsync(input.CheckRequestId, input.CommitteeId);
+        if (!access.IsAdmin || access.IsReadOnly)
+        {
+            TempData["SaveError"] = access.IsReadOnly ? "تم الانتهاء من لجنة السحب والبيانات للعرض فقط." : "تعديل بيانات السحب متاح لأدمن اللجنة فقط.";
+            return RedirectToAction(nameof(Index), route);
+        }
+        if (input.Samples.Count == 0 || input.Samples.Any(x => x.SampleId <= 0 || x.SampleSize <= 0 || x.SampleRatio <= 0))
+        {
+            TempData["SaveError"] = "يجب إدخال حجم العينة ونسبة سحب صحيحة لكل تحليل.";
+            return RedirectToAction(nameof(Index), route);
+        }
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            const string updateSql = """
+                UPDATE dbo.Im_CheckRequest_SampleData
+                SET WithdrawDate = CONVERT(date, GETDATE()),
+                    Sample_BarCode = COALESCE(NULLIF(Sample_BarCode, ''), @Barcode),
+                    SampleSize = @SampleSize, SampleRatio = @SampleRatio,
+                    Notes_Ar = @Notes, Syl_ALkhatima_Number = @SealNumber,
+                    IS_From_Android = 1, User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
+                WHERE ID = @SampleId AND Im_RequestCommittee_ID = @CommitteeId
+                  AND User_Deletion_Id IS NULL
+                """;
+            foreach (var group in input.Samples.GroupBy(x => x.LotDataId))
+            {
+                string barcode = GenerateImportSampleBarcode();
+                foreach (var sample in group)
+                {
+                    await using var command = new SqlCommand(updateSql, connection, transaction);
+                    command.Parameters.AddWithValue("@Barcode", barcode);
+                    command.Parameters.AddWithValue("@SampleSize", sample.SampleSize);
+                    command.Parameters.AddWithValue("@SampleRatio", sample.SampleRatio);
+                    command.Parameters.AddWithValue("@Notes", (object?)sample.Notes?.Trim() ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@SealNumber", (object?)sample.SealNumber?.Trim() ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@UserId", userId);
+                    command.Parameters.AddWithValue("@SampleId", sample.SampleId);
+                    command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+                    if (await command.ExecuteNonQueryAsync() != 1)
+                        throw new InvalidOperationException($"تعذر حفظ بيانات العينة رقم {sample.SampleId}.");
+                }
+            }
+            const string committeeSql = """
+                UPDATE dbo.Im_RequestCommittee SET Status = @Finished, IsFinishedAll = @Finished, Is_Start_Android = 1,
+                    User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
+                WHERE ID = @CommitteeId AND ImCheckRequest_ID = @CheckRequestId AND User_Deletion_Id IS NULL
+                """;
+            await using var committeeCommand = new SqlCommand(committeeSql, connection, transaction);
+            committeeCommand.Parameters.AddWithValue("@Finished", input.IsFinishedAll);
+            committeeCommand.Parameters.AddWithValue("@UserId", userId);
+            committeeCommand.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+            committeeCommand.Parameters.AddWithValue("@CheckRequestId", input.CheckRequestId);
+            if (await committeeCommand.ExecuteNonQueryAsync() != 1) throw new InvalidOperationException("تعذر تحديث حالة لجنة السحب.");
+            await transaction.CommitAsync();
+            TempData["SaveSuccess"] = "تم حفظ بيانات سحب العينات وتوليد الباركود تلقائيًا.";
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            TempData["SaveError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index), route);
+    }
+
+    private static string GenerateImportSampleBarcode()
+    {
+        DateTime now = DateTime.Now;
+        string random = RandomNumberGenerator.GetInt32(0, 100000).ToString("D5");
+        return $"74{random}{now.DayOfYear:D3}{now:yyHHmmss}";
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveSampleAssistantOpinion(SampleAssistantOpinionSaveVm input)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !short.TryParse(HttpContext.Session.GetString("UserId"), out short userId))
+            return RedirectToAction("Index", "Login");
+        var route = new { checkRequestId = input.CheckRequestId, committeeId = input.CommitteeId, committeeTypeId = input.CommitteeTypeId };
+        var access = await GetCommitteeAccessAsync(input.CheckRequestId, input.CommitteeId);
+        var opinions = input.Opinions.Where(x => x.SampleId > 0 && x.IsAccepted != null).ToList();
+        if (input.CommitteeTypeId != 13 || access.IsAdmin || opinions.Count == 0)
+        {
+            TempData["SaveError"] = "يجب تحديد موافق أو غير موافق لكل عينة.";
+            return RedirectToAction(nameof(Index), route);
+        }
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            const string sql = """
+                INSERT INTO dbo.Im_CheckRequest_SampleData_Confirm
+                    (ID, Im_CheckRequest_SampleData_ID, [Date], EmployeeId, Notes, IsAccepted)
+                SELECT NEXT VALUE FOR dbo.Im_CheckRequest_SampleData_Confirm_SEQ,
+                       sample.ID, GETDATE(), @UserId, @Notes, @IsAccepted
+                FROM dbo.Im_CheckRequest_SampleData sample
+                WHERE sample.ID = @SampleId AND sample.Im_RequestCommittee_ID = @CommitteeId
+                  AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm confirm
+                                  WHERE confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId)
+                """;
+            foreach (var opinion in opinions)
+            {
+                await using var command = new SqlCommand(sql, connection, transaction);
+                command.Parameters.AddWithValue("@UserId", userId);
+                command.Parameters.AddWithValue("@Notes", (object?)opinion.Notes?.Trim() ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsAccepted", opinion.IsAccepted!.Value);
+                command.Parameters.AddWithValue("@SampleId", opinion.SampleId);
+                command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+                if (await command.ExecuteNonQueryAsync() != 1)
+                    throw new InvalidOperationException("تعذر حفظ رأي المساعد أو تم تسجيله من قبل.");
+            }
+            await transaction.CommitAsync();
+            TempData["SaveSuccess"] = "تم حفظ موافقة المساعد على بيانات السحب بنجاح.";
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            TempData["SaveError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index), route);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveAssistantOpinion(AssistantOpinionSaveVm input)
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
@@ -167,6 +310,10 @@ public class ImportRequestDetailsController : Controller
 
     private async Task<ImportRequestDetailsPageVm> LoadPageAsync(long checkRequestId, long committeeId, byte committeeTypeId)
     {
+        var access = await GetCommitteeAccessAsync(checkRequestId, committeeId);
+        if (committeeTypeId == 13 && access.IsAdmin && !access.IsReadOnly)
+            await EnsureSampleBarcodesAsync(committeeId);
+
         var client = _httpClientFactory.CreateClient();
         var detailsResponse = await client.GetAsync(
             $"{ImportApi}?CheckRequest_Id={checkRequestId}&Committee_Id={committeeId}&Committee_Type_Id={committeeTypeId}");
@@ -174,6 +321,9 @@ public class ImportRequestDetailsController : Controller
         var details = await detailsResponse.Content.ReadFromJsonAsync<Ex_CheckRequest_GetData_Android_V2_VM>(
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException("لم يتم إرجاع بيانات للطلب.");
+
+        if (committeeTypeId == 13)
+            await MergeSavedSampleDataAsync(details, committeeId);
 
         var statuses = new List<QuarantineStatusVm>();
         if (committeeTypeId == 11)
@@ -187,7 +337,6 @@ public class ImportRequestDetailsController : Controller
             statuses = statuses.Where(x => x.Value > 0).ToList();
         }
 
-        var access = await GetCommitteeAccessAsync(checkRequestId, committeeId);
         var infectionItems = committeeTypeId == 11 && access.IsAdmin
             ? await LoadInfectionItemsAsync()
             : new List<InfectionItemVm>();
@@ -205,6 +354,97 @@ public class ImportRequestDetailsController : Controller
             InfectionItems = infectionItems,
             AssistantResults = access.IsAdmin ? new() : await LoadAssistantResultsAsync(committeeId, long.Parse(HttpContext.Session.GetString("UserId")!))
         };
+    }
+
+    private async Task MergeSavedSampleDataAsync(Ex_CheckRequest_GetData_Android_V2_VM details, long committeeId)
+    {
+        var samples = details.Item_Data?
+            .SelectMany(x => x.Sample_Data ?? Enumerable.Empty<Itemsample_data>())
+            .ToDictionary(x => x.Sample_dataId) ?? new Dictionary<long, Itemsample_data>();
+        if (samples.Count == 0) return;
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        const string sql = """
+            SELECT sample.ID, sample.Sample_BarCode, sample.SampleSize, sample.SampleRatio,
+                   sample.Syl_ALkhatima_Number, sample.Notes_Ar, sample.LotData_ID, sample.WithdrawDate,
+                   confirm.IsAccepted, confirm.Notes
+            FROM dbo.Im_CheckRequest_SampleData sample
+            LEFT JOIN dbo.Im_CheckRequest_SampleData_Confirm confirm
+              ON confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId
+            WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@CommitteeId", committeeId);
+        command.Parameters.AddWithValue("@UserId", long.TryParse(HttpContext.Session.GetString("UserId"), out long currentUserId) ? currentUserId : 0);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            long id = reader.GetInt64(0);
+            if (!samples.TryGetValue(id, out var sample)) continue;
+            sample.Sample_BarCode = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+            sample.SampleSize = reader.IsDBNull(2) ? null : reader.GetDouble(2);
+            sample.SampleRatio = reader.IsDBNull(3) ? null : reader.GetDouble(3);
+            sample.Syl_ALkhatima_Number = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+            sample.Notes_Ar = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
+            sample.LotData_ID = reader.IsDBNull(6) ? null : reader.GetInt64(6);
+            sample.AssistantAccepted = reader.IsDBNull(8) ? null : reader.GetBoolean(8);
+            sample.AssistantNotes = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
+        }
+    }
+
+    private async Task EnsureSampleBarcodesAsync(long committeeId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        try
+        {
+            var sampleGroups = new List<(long SampleId, long? LotId)>();
+            const string selectSql = """
+                SELECT ID, LotData_ID
+                FROM dbo.Im_CheckRequest_SampleData WITH (UPDLOCK, HOLDLOCK)
+                WHERE Im_RequestCommittee_ID = @CommitteeId
+                  AND User_Deletion_Id IS NULL
+                  AND (NULLIF(LTRIM(RTRIM(Sample_BarCode)), '') IS NULL OR Sample_BarCode LIKE '72%')
+                ORDER BY ID
+                """;
+            await using (var select = new SqlCommand(selectSql, connection, transaction))
+            {
+                select.Parameters.AddWithValue("@CommitteeId", committeeId);
+                await using var reader = await select.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    sampleGroups.Add((reader.GetInt64(0), reader.IsDBNull(1) ? null : reader.GetInt64(1)));
+            }
+
+            const string updateSql = """
+                UPDATE dbo.Im_CheckRequest_SampleData
+                SET Sample_BarCode = @Barcode, IS_From_Android = 1,
+                    User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
+                WHERE ID = @SampleId AND Im_RequestCommittee_ID = @CommitteeId
+                  AND (NULLIF(LTRIM(RTRIM(Sample_BarCode)), '') IS NULL OR Sample_BarCode LIKE '72%')
+                """;
+            short.TryParse(HttpContext.Session.GetString("UserId"), out short userId);
+            foreach (var group in sampleGroups.GroupBy(x => x.LotId))
+            {
+                string barcode = GenerateImportSampleBarcode();
+                foreach (var sample in group)
+                {
+                    await using var update = new SqlCommand(updateSql, connection, transaction);
+                    update.Parameters.AddWithValue("@Barcode", barcode);
+                    update.Parameters.AddWithValue("@UserId", userId);
+                    update.Parameters.AddWithValue("@SampleId", sample.SampleId);
+                    update.Parameters.AddWithValue("@CommitteeId", committeeId);
+                    await update.ExecuteNonQueryAsync();
+                }
+            }
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     private async Task<List<InfectionItemVm>> LoadInfectionItemsAsync()
@@ -285,6 +525,15 @@ public class ImportRequestDetailsController : Controller
               CASE WHEN committee.Is_Cancel IS NOT NULL THEN 1
                    WHEN employee.ISAdmin = 1 AND (committee.Status = 1 OR committee.IsFinishedAll = 1) THEN 1
                    WHEN employee.ISAdmin = 0 AND NOT EXISTS
+                     (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
+                      WHERE committee.CommitteeType_ID = 13 AND sample.Im_RequestCommittee_ID = committee.ID
+                        AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL
+                        AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm confirm
+                                        WHERE confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId))
+                     AND committee.CommitteeType_ID = 13
+                     AND EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample WHERE sample.Im_RequestCommittee_ID = committee.ID AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL)
+                   THEN 1
+                   WHEN employee.ISAdmin = 0 AND committee.CommitteeType_ID <> 13 AND NOT EXISTS
                      (SELECT 1 FROM dbo.Im_CommitteeResult result
                       WHERE result.Committee_ID = committee.ID AND result.CommitteeResultType_ID IS NOT NULL
                         AND NOT EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult_Confirm confirm
@@ -562,4 +811,38 @@ public class ImportInspectionLotVm
     public int QuarantineStatusId { get; set; }
     public string Notes { get; set; } = string.Empty;
     public long InfectionItemId { get; set; }
+}
+
+public class ImportSamplesSaveVm
+{
+    public long CheckRequestId { get; set; }
+    public long CommitteeId { get; set; }
+    public byte CommitteeTypeId { get; set; }
+    public bool IsFinishedAll { get; set; }
+    public List<ImportSampleSaveVm> Samples { get; set; } = new();
+}
+
+public class ImportSampleSaveVm
+{
+    public long SampleId { get; set; }
+    public long? LotDataId { get; set; }
+    public double SampleSize { get; set; }
+    public double SampleRatio { get; set; }
+    public string? SealNumber { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class SampleAssistantOpinionSaveVm
+{
+    public long CheckRequestId { get; set; }
+    public long CommitteeId { get; set; }
+    public byte CommitteeTypeId { get; set; }
+    public List<SampleAssistantOpinionVm> Opinions { get; set; } = new();
+}
+
+public class SampleAssistantOpinionVm
+{
+    public long SampleId { get; set; }
+    public bool? IsAccepted { get; set; }
+    public string? Notes { get; set; }
 }

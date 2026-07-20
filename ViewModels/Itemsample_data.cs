@@ -14,5 +14,9 @@
         //abeer
         public long? AnalysisType_ID { get; set; }
         public string Lotnum { get; set; }
+        public string Syl_ALkhatima_Number { get; set; }
+        public string Notes_Ar { get; set; }
+        public bool? AssistantAccepted { get; set; }
+        public string AssistantNotes { get; set; }
     }
 }

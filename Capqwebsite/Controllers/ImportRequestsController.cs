@@ -46,6 +46,8 @@ public class ImportRequestsController : Controller
                          WHERE member.Committee_ID = committee.ID AND member.OperationType = 74 AND member.User_Deletion_Id IS NULL) AS CommitteeMembers,
                         (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r WHERE r.Committee_ID = committee.ID AND r.CommitteeResultType_ID IS NOT NULL) AS ResultCount,
                         (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r INNER JOIN dbo.Im_CommitteeResult_Confirm c ON c.Im_CommitteeResult_ID = r.ID AND c.EmployeeId = @UserId WHERE r.Committee_ID = committee.ID) AS ConfirmCount
+                        ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleCount
+                        ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s INNER JOIN dbo.Im_CheckRequest_SampleData_Confirm c ON c.Im_CheckRequest_SampleData_ID = s.ID AND c.EmployeeId = @UserId WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleConfirmCount
                     FROM dbo.Im_CheckRequest request
                     INNER JOIN dbo.Im_RequestCommittee committee ON committee.ImCheckRequest_ID = request.ID
                     INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = committee.ID
@@ -78,9 +80,14 @@ public class ImportRequestsController : Controller
                 bool isAdmin = GetBool(reader, "ISAdmin");
                 int resultCount = Convert.ToInt32(reader["ResultCount"]);
                 int confirmCount = Convert.ToInt32(reader["ConfirmCount"]);
+                int sampleCount = Convert.ToInt32(reader["SampleCount"]);
+                int sampleConfirmCount = Convert.ToInt32(reader["SampleConfirmCount"]);
                 string key = isAdmin
                     ? canceled ? "canceled" : (status || finished) ? "completed" : started || !IsDbNull(reader, "User_Updation_Date") ? "working" : "new"
-                    : canceled ? "canceled" : resultCount > 0 && confirmCount >= resultCount ? "completed" : confirmCount > 0 ? "working" : "new";
+                    : canceled ? "canceled"
+                    : Convert.ToByte(reader["CommitteeType_ID"]) == 13
+                        ? sampleCount > 0 && sampleConfirmCount >= sampleCount ? "completed" : sampleConfirmCount > 0 ? "working" : "new"
+                        : resultCount > 0 && confirmCount >= resultCount ? "completed" : confirmCount > 0 ? "working" : "new";
                 string name = key switch { "completed" => "تم الانتهاء", "working" => "جاري العمل", "canceled" => "ملغي", _ => "جديد" };
 
                 requests.Add(new Ex_Im_CheckRequest_GetAllByUser_DateVM
