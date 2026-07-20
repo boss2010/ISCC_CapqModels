@@ -23,5 +23,7 @@
         public bool? QuarantineAccepted { get; set; }
         public long? AttachmentId { get; set; }
         public string AttachmentName { get; set; }
+        public int? QuarantineStatusId { get; set; }
+        public string QuarantineStatusName { get; set; }
     }
 }

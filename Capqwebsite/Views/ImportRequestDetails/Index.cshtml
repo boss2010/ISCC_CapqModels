@@ -315,23 +315,26 @@
                             <div class="inspection-field"><label class="form-label fw-bold">حجم العينة</label><div class="input-group"><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[@sampleIndex].SampleSize" value="@sample.SampleSize" required disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /><span class="input-group-text">كيلوجرام</span></div></div>
                             <div class="inspection-field"><label class="form-label fw-bold">حجم تحت العينة</label><div class="input-group"><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[@sampleIndex].SampleRatio" value="@sample.SampleRatio" required disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /><span class="input-group-text">كيلوجرام</span></div></div>
                             <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو السيل الملاحي</label><input class="form-control" name="Samples[@sampleIndex].SealNumber" value="@sample.Syl_ALkhatima_Number" disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /></div>
-                            <div class="inspection-field"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" rows="2" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات السحب..." disabled="@(!Model.IsAdmin || Model.IsReadOnly)">@sample.Notes_Ar</textarea></div>
+                            @if (!sample.HasAttachment)
+                            {
+                                <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" rows="2" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات السحب..." disabled="@(!Model.IsAdmin || Model.IsReadOnly)">@sample.Notes_Ar</textarea></div>
+                            }
                         </div>
                         @if (Model.IsAdmin && sample.HasAttachment)
                         {
                             <div class="inspection-panel mt-3">
-                                <div class="inspection-panel-title">نتيجة العينة وموقف الحجر</div>
-                                <div class="alert alert-success py-2">تم رفع مرفق نتيجة العينة، برجاء تحديد النتيجة وموقف الحجر.</div>
-                                @if (sample.LabResultAccepted != null && sample.QuarantineAccepted != null)
+                                <div class="inspection-panel-title">بيانات نتيجة السحب — @(string.IsNullOrWhiteSpace(sample.Lotnum) ? "تطبيق على جميع اللوطات" : $"اللوط رقم {sample.Lotnum}")</div>
+                                <div class="alert alert-info py-2">سيتم تطبيق النتيجة وموقف الحجر والملاحظات على بيانات العينة الحالية.</div>
+                                @if (sample.LabResultAccepted != null && sample.QuarantineStatusId != null)
                                 {
                                     <div class="d-flex flex-wrap gap-2 mb-3">
                                         <span class="status-badge @(sample.LabResultAccepted == true ? "status-completed" : "status-canceled")">نتيجة التحليل: @(sample.LabResultAccepted == true ? "مقبول" : "مرفوض")</span>
-                                        <span class="status-badge @(sample.QuarantineAccepted == true ? "status-completed" : "status-canceled")">موقف الحجر: @(sample.QuarantineAccepted == true ? "مقبول" : "مرفوض")</span>
+                                        <span class="status-badge status-completed">موقف الحجر: @sample.QuarantineStatusName</span>
                                     </div>
                                 }
                                 <div class="inspection-fields">
                                     <div class="inspection-field">
-                                        <label class="form-label fw-bold">نتيجة التحليل</label>
+                                        <label class="form-label fw-bold">نتيجة الفحص</label>
                                         <select class="form-select" name="Samples[@sampleIndex].LabResultAccepted" required disabled="@Model.IsReadOnly">
                                             <option value="">— اختر النتيجة —</option>
                                             <option value="true" selected="@(sample.LabResultAccepted == true)">مقبول</option>
@@ -340,11 +343,17 @@
                                     </div>
                                     <div class="inspection-field">
                                         <label class="form-label fw-bold">موقف الحجر</label>
-                                        <select class="form-select" name="Samples[@sampleIndex].QuarantineAccepted" required disabled="@Model.IsReadOnly">
+                                        <select class="form-select" name="Samples[@sampleIndex].QuarantineStatusId" required disabled="@Model.IsReadOnly">
                                             <option value="">— اختر موقف الحجر —</option>
-                                            <option value="true" selected="@(sample.QuarantineAccepted == true)">مقبول</option>
-                                            <option value="false" selected="@(sample.QuarantineAccepted == false)">مرفوض</option>
+                                            @foreach (var status in Model.QuarantineStatuses)
+                                            {
+                                                <option value="@status.Value" selected="@(sample.QuarantineStatusId == status.Value)">@status.DisplayText</option>
+                                            }
                                         </select>
+                                    </div>
+                                    <div class="inspection-field inspection-field-notes">
+                                        <label class="form-label fw-bold">الملاحظات</label>
+                                        <textarea class="form-control" rows="3" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات نتيجة السحب هنا..." required disabled="@Model.IsReadOnly">@sample.Notes_Ar</textarea>
                                     </div>
                                 </div>
                             </div>

@@ -132,7 +132,7 @@ public class ImportRequestDetailsController : Controller
             return RedirectToAction(nameof(Index), route);
         }
         if (input.Samples.Count == 0 || input.Samples.Any(x => x.SampleId <= 0 || x.SampleSize <= 0 || x.SampleRatio <= 0
-            || (x.HasAttachment && (x.LabResultAccepted == null || x.QuarantineAccepted == null))))
+            || (x.HasAttachment && (x.LabResultAccepted == null || x.QuarantineStatusId <= 0))))
         {
             TempData["SaveError"] = "يجب استكمال أحجام العينات، واختيار نتيجة التحليل وموقف الحجر للعينات التي تم رفع مرفق لها.";
             return RedirectToAction(nameof(Index), route);
@@ -150,7 +150,7 @@ public class ImportRequestDetailsController : Controller
                     SampleSize = @SampleSize, SampleRatio = @SampleRatio,
                     Notes_Ar = @Notes, Syl_ALkhatima_Number = @SealNumber,
                     IsAccepted = CASE WHEN @HasAttachment = 1 THEN @LabResultAccepted ELSE IsAccepted END,
-                    Admin_Confirmation = CASE WHEN @HasAttachment = 1 THEN @QuarantineAccepted ELSE Admin_Confirmation END,
+                    Admin_Confirmation = CASE WHEN @HasAttachment = 1 THEN (SELECT Is_Continue FROM dbo.Im_CheckRequest_Lot_Result_Status WHERE ID = @QuarantineStatusId) ELSE Admin_Confirmation END,
                     Admin_User = CASE WHEN @HasAttachment = 1 THEN @UserId ELSE Admin_User END,
                     Admin_Date = CASE WHEN @HasAttachment = 1 THEN GETDATE() ELSE Admin_Date END,
                     IS_From_Android = 1, User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
@@ -170,12 +170,32 @@ public class ImportRequestDetailsController : Controller
                     command.Parameters.AddWithValue("@SealNumber", (object?)sample.SealNumber?.Trim() ?? DBNull.Value);
                     command.Parameters.AddWithValue("@HasAttachment", sample.HasAttachment);
                     command.Parameters.AddWithValue("@LabResultAccepted", (object?)sample.LabResultAccepted ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@QuarantineAccepted", (object?)sample.QuarantineAccepted ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@QuarantineStatusId", (object?)sample.QuarantineStatusId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@UserId", userId);
                     command.Parameters.AddWithValue("@SampleId", sample.SampleId);
                     command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
                     if (await command.ExecuteNonQueryAsync() != 1)
                         throw new InvalidOperationException($"تعذر حفظ بيانات العينة رقم {sample.SampleId}.");
+                }
+
+                var attachedSamples = group.Where(x => x.HasAttachment).ToList();
+                if (group.Key != null && attachedSamples.Count > 0)
+                {
+                    if (attachedSamples.Select(x => x.QuarantineStatusId).Distinct().Count() != 1)
+                        throw new InvalidOperationException("يجب اختيار موقف حجر واحد لكل تحاليل اللوط نفسه.");
+                    const string lotStatusSql = """
+                        UPDATE dbo.Im_CheckRequest_Items_Lot_Result SET IS_Status_Committee = 0
+                        WHERE Im_CheckRequest_Items_Lot_Category_ID = @LotId;
+                        INSERT INTO dbo.Im_CheckRequest_Items_Lot_Result
+                            (ID, Im_CheckRequest_Items_Lot_Category_ID, Nots, User_Creation_Id, User_Creation_Date, IS_Status, IS_Status_Committee)
+                        VALUES (NEXT VALUE FOR dbo.Im_CheckRequest_Items_Lot_Result_SEQ, @LotId, @Notes, @UserId, GETDATE(), @StatusId, 1);
+                        """;
+                    await using var statusCommand = new SqlCommand(lotStatusSql, connection, transaction);
+                    statusCommand.Parameters.AddWithValue("@LotId", group.Key.Value);
+                    statusCommand.Parameters.AddWithValue("@Notes", (object?)attachedSamples[0].Notes?.Trim() ?? DBNull.Value);
+                    statusCommand.Parameters.AddWithValue("@UserId", userId);
+                    statusCommand.Parameters.AddWithValue("@StatusId", attachedSamples[0].QuarantineStatusId!.Value);
+                    await statusCommand.ExecuteNonQueryAsync();
                 }
             }
             const string committeeSql = """
@@ -372,7 +392,7 @@ public class ImportRequestDetailsController : Controller
             await MergeSavedSampleDataAsync(details, committeeId);
 
         var statuses = new List<QuarantineStatusVm>();
-        if (committeeTypeId == 11)
+        if (committeeTypeId is 11 or 13)
         {
             using var statusRequest = new HttpRequestMessage(HttpMethod.Get, FinalResultApi);
             statusRequest.Headers.Add("lang", "1");
@@ -417,7 +437,8 @@ public class ImportRequestDetailsController : Controller
                    confirm.IsAccepted, confirm.Notes,
                    CAST(CASE WHEN attachment.Id IS NULL THEN 0 ELSE 1 END AS bit),
                    sample.IsAccepted, sample.Admin_Confirmation,
-                   attachment.Id, COALESCE(attachment.Attachment_Number, attachment.Attachment_TypeName)
+                   attachment.Id, COALESCE(attachment.Attachment_Number, attachment.Attachment_TypeName),
+                   lotStatus.IS_Status, lotStatus.Name_AR
             FROM dbo.Im_CheckRequest_SampleData sample
             LEFT JOIN dbo.Im_CheckRequest_SampleData_Confirm confirm
               ON confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId
@@ -425,6 +446,11 @@ public class ImportRequestDetailsController : Controller
                          FROM dbo.A_AttachmentData a
                          WHERE a.RowId = sample.ID AND a.A_AttachmentTableNameId = 12
                            AND a.User_Deletion_Id IS NULL ORDER BY a.Id DESC) attachment
+            OUTER APPLY (SELECT TOP 1 lr.IS_Status, status.Name_AR
+                         FROM dbo.Im_CheckRequest_Items_Lot_Result lr
+                         LEFT JOIN dbo.Im_CheckRequest_Lot_Result_Status status ON status.ID = lr.IS_Status
+                         WHERE lr.Im_CheckRequest_Items_Lot_Category_ID = sample.LotData_ID
+                           AND lr.IS_Status_Committee = 1 ORDER BY lr.ID DESC) lotStatus
             WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
             """;
         await using var command = new SqlCommand(sql, connection);
@@ -448,6 +474,8 @@ public class ImportRequestDetailsController : Controller
             sample.QuarantineAccepted = reader.IsDBNull(12) ? null : reader.GetBoolean(12);
             sample.AttachmentId = reader.IsDBNull(13) ? null : reader.GetInt64(13);
             sample.AttachmentName = reader.IsDBNull(14) ? string.Empty : reader.GetString(14);
+            sample.QuarantineStatusId = reader.IsDBNull(15) ? null : reader.GetInt32(15);
+            sample.QuarantineStatusName = reader.IsDBNull(16) ? string.Empty : reader.GetString(16);
         }
     }
 
@@ -581,7 +609,20 @@ public class ImportRequestDetailsController : Controller
         const string sql = """
             SELECT employee.ISAdmin,
               CASE WHEN committee.Is_Cancel IS NOT NULL THEN 1
-                   WHEN employee.ISAdmin = 1 AND (committee.Status = 1 OR committee.IsFinishedAll = 1) THEN 1
+                   WHEN employee.ISAdmin = 1 AND committee.CommitteeType_ID <> 13
+                        AND (committee.Status = 1 OR committee.IsFinishedAll = 1) THEN 1
+                   WHEN employee.ISAdmin = 1 AND committee.CommitteeType_ID = 13
+                        AND (committee.Status = 1 OR committee.IsFinishedAll = 1)
+                        AND NOT EXISTS
+                          (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
+                           WHERE sample.Im_RequestCommittee_ID = committee.ID
+                             AND sample.User_Deletion_Id IS NULL
+                             AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData attachment
+                                         WHERE attachment.RowId = sample.ID
+                                           AND attachment.A_AttachmentTableNameId = 12
+                                           AND attachment.User_Deletion_Id IS NULL)
+                             AND (sample.IsAccepted IS NULL OR sample.Admin_Confirmation IS NULL))
+                   THEN 1
                    WHEN employee.ISAdmin = 0 AND NOT EXISTS
                      (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
                       WHERE committee.CommitteeType_ID = 13 AND sample.Im_RequestCommittee_ID = committee.ID
@@ -891,6 +932,7 @@ public class ImportSampleSaveVm
     public bool HasAttachment { get; set; }
     public bool? LabResultAccepted { get; set; }
     public bool? QuarantineAccepted { get; set; }
+    public int? QuarantineStatusId { get; set; }
 }
 
 public class SampleAssistantOpinionSaveVm
