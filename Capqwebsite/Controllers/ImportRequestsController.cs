@@ -48,6 +48,14 @@ public class ImportRequestsController : Controller
                         (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r INNER JOIN dbo.Im_CommitteeResult_Confirm c ON c.Im_CommitteeResult_ID = r.ID AND c.EmployeeId = @UserId WHERE r.Committee_ID = committee.ID) AS ConfirmCount
                         ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleCount
                         ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s INNER JOIN dbo.Im_CheckRequest_SampleData_Confirm c ON c.Im_CheckRequest_SampleData_ID = s.ID AND c.EmployeeId = @UserId WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleConfirmCount
+                        ,CAST(CASE WHEN EXISTS
+                          (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
+                           INNER JOIN dbo.A_AttachmentData attachment ON attachment.RowId = sample.ID
+                             AND attachment.A_AttachmentTableNameId = 12
+                             AND attachment.User_Deletion_Id IS NULL
+                           WHERE sample.Im_RequestCommittee_ID = committee.ID
+                             AND sample.User_Deletion_Id IS NULL)
+                         THEN 1 ELSE 0 END AS bit) AS SampleAttachmentUploaded
                     FROM dbo.Im_CheckRequest request
                     INNER JOIN dbo.Im_RequestCommittee committee ON committee.ImCheckRequest_ID = request.ID
                     INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = committee.ID
@@ -106,6 +114,7 @@ public class ImportRequestsController : Controller
                     IsReadOnly = key is "completed" or "canceled",
                     IsAdmin = isAdmin,
                     CommitteeMembers = reader["CommitteeMembers"] == DBNull.Value ? string.Empty : Convert.ToString(reader["CommitteeMembers"]) ?? string.Empty
+                    ,SampleAttachmentUploaded = Convert.ToBoolean(reader["SampleAttachmentUploaded"])
                 });
             }
 

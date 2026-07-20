@@ -25,6 +25,8 @@
     .member-role { border-radius:12px; font-size:.75rem; font-weight:700; padding:3px 8px; }
     .role-admin { background:#dff3f1; color:#147d83; }
     .role-assistant { background:#edf0f3; color:#56656a; }
+    .attachment-uploaded { background:#dcf5e7; color:#187446; }
+    .attachment-missing { background:#fde4e4; color:#a43131; }
     @@media(max-width:900px){.status-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
     @@media(max-width:480px){.status-cards{grid-template-columns:1fr 1fr;}.status-card{padding:11px;}}
 </style>
@@ -63,7 +65,7 @@
         {
             <div class="table-responsive">
                 <table class="table table-bordered table-hover text-center align-middle bg-white">
-                    <thead class="table-dark"><tr><th>#</th><th>رقم الطلب</th><th>نوع اللجنة</th><th>أعضاء اللجنة</th><th>الحالة</th><th>التفاصيل</th></tr></thead>
+                    <thead class="table-dark"><tr><th>#</th><th>رقم الطلب</th><th>نوع اللجنة</th><th>أعضاء اللجنة</th><th>الحالة</th><th>مرفق السحب</th><th>التفاصيل</th></tr></thead>
                     <tbody id="requestsBody">
                     @foreach (var item in Model)
                     {
@@ -80,6 +82,13 @@
                                 </div>
                             </td>
                             <td><span class="status-badge status-@item.WorkStatusKey">@item.WorkStatusName</span></td>
+                            <td>
+                                @if (item.Committee_Type_Id == 13)
+                                {
+                                    <span class="status-badge @(item.SampleAttachmentUploaded ? "attachment-uploaded" : "attachment-missing")">@(item.SampleAttachmentUploaded ? "تم رفع المرفق" : "لم يتم رفع المرفق")</span>
+                                }
+                                else { <span class="text-muted">—</span> }
+                            </td>
                             <td><a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly ? "btn-outline-secondary" : "btn-info text-white")">@(item.IsReadOnly ? "عرض فقط" : item.IsAdmin ? "متابعة العمل" : "إبداء الرأي")</a></td>
                         </tr>
                     }

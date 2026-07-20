@@ -54,6 +54,9 @@
     .assistant-data span { color:#168087; display:block; font-size:.85rem; margin-bottom:4px; }
     .opinion-options { display:flex; gap:18px; }
     .opinion-options label { align-items:center; cursor:pointer; display:flex; gap:6px; font-weight:700; }
+    .status-badge { border-radius:20px; display:inline-block; font-weight:700; padding:6px 12px; }
+    .status-completed { background:#dcf5e7; color:#187446; }
+    .status-canceled { background:#fde4e4; color:#a43131; }
     @@media (max-width:767px) {
         .lot-card summary { grid-template-columns:1fr auto; }
         .lot-summary-weight { grid-column:1 / -1; }
@@ -298,6 +301,7 @@
                     <div class="inspection-panel shadow-sm mb-3">
                         <input type="hidden" name="Samples[@sampleIndex].SampleId" value="@sample.Sample_dataId" />
                         <input type="hidden" name="Samples[@sampleIndex].LotDataId" value="@sample.LotData_ID" />
+                        <input type="hidden" name="Samples[@sampleIndex].HasAttachment" value="@sample.HasAttachment.ToString().ToLowerInvariant()" />
                         @if (!Model.IsAdmin) { <input type="hidden" name="Opinions[@sampleIndex].SampleId" value="@sample.Sample_dataId" /> }
                         <div class="inspection-panel-title">@item.Item_Name — @(string.IsNullOrWhiteSpace(sample.Lotnum) ? "سحب كلي" : $"اللوط {sample.Lotnum}")</div>
                         <div class="lot-data-grid mb-3">
@@ -305,6 +309,7 @@
                             <div><span>المعمل</span><strong>@sample.AnalysisLab_Name</strong></div>
                             <div><span>مكان السحب</span><strong>@(string.IsNullOrWhiteSpace(details.Outlet_Name) ? "—" : details.Outlet_Name)</strong></div>
                             <div><span>باركود العينة</span><strong>@(string.IsNullOrWhiteSpace(sample.Sample_BarCode) ? "غير متاح" : sample.Sample_BarCode)</strong></div>
+                            <div><span>مرفق نتيجة العينة</span>@if (sample.AttachmentId != null) { <a asp-controller="ImportRequestDetails" asp-action="ViewSampleAttachment" asp-route-id="@sample.AttachmentId" target="_blank" class="btn btn-sm btn-outline-primary">عرض المرفق</a> } else { <strong class="text-danger">لم يتم رفع المرفق</strong> }</div>
                         </div>
                         <div class="inspection-fields">
                             <div class="inspection-field"><label class="form-label fw-bold">حجم العينة</label><div class="input-group"><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[@sampleIndex].SampleSize" value="@sample.SampleSize" required disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /><span class="input-group-text">كيلوجرام</span></div></div>
@@ -312,6 +317,42 @@
                             <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو السيل الملاحي</label><input class="form-control" name="Samples[@sampleIndex].SealNumber" value="@sample.Syl_ALkhatima_Number" disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /></div>
                             <div class="inspection-field"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" rows="2" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات السحب..." disabled="@(!Model.IsAdmin || Model.IsReadOnly)">@sample.Notes_Ar</textarea></div>
                         </div>
+                        @if (Model.IsAdmin && sample.HasAttachment)
+                        {
+                            <div class="inspection-panel mt-3">
+                                <div class="inspection-panel-title">نتيجة العينة وموقف الحجر</div>
+                                <div class="alert alert-success py-2">تم رفع مرفق نتيجة العينة، برجاء تحديد النتيجة وموقف الحجر.</div>
+                                @if (sample.LabResultAccepted != null && sample.QuarantineAccepted != null)
+                                {
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <span class="status-badge @(sample.LabResultAccepted == true ? "status-completed" : "status-canceled")">نتيجة التحليل: @(sample.LabResultAccepted == true ? "مقبول" : "مرفوض")</span>
+                                        <span class="status-badge @(sample.QuarantineAccepted == true ? "status-completed" : "status-canceled")">موقف الحجر: @(sample.QuarantineAccepted == true ? "مقبول" : "مرفوض")</span>
+                                    </div>
+                                }
+                                <div class="inspection-fields">
+                                    <div class="inspection-field">
+                                        <label class="form-label fw-bold">نتيجة التحليل</label>
+                                        <select class="form-select" name="Samples[@sampleIndex].LabResultAccepted" required disabled="@Model.IsReadOnly">
+                                            <option value="">— اختر النتيجة —</option>
+                                            <option value="true" selected="@(sample.LabResultAccepted == true)">مقبول</option>
+                                            <option value="false" selected="@(sample.LabResultAccepted == false)">مرفوض</option>
+                                        </select>
+                                    </div>
+                                    <div class="inspection-field">
+                                        <label class="form-label fw-bold">موقف الحجر</label>
+                                        <select class="form-select" name="Samples[@sampleIndex].QuarantineAccepted" required disabled="@Model.IsReadOnly">
+                                            <option value="">— اختر موقف الحجر —</option>
+                                            <option value="true" selected="@(sample.QuarantineAccepted == true)">مقبول</option>
+                                            <option value="false" selected="@(sample.QuarantineAccepted == false)">مرفوض</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (Model.IsAdmin)
+                        {
+                            <div class="alert alert-warning mt-3 mb-0">لم يتم رفع مرفق نتيجة العينة بعد؛ ستظهر نتيجة التحليل وموقف الحجر بعد رفعه.</div>
+                        }
                         @if (!Model.IsAdmin)
                         {
                             if (sample.AssistantAccepted != null)

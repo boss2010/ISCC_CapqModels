@@ -131,9 +131,10 @@ public class ImportRequestDetailsController : Controller
             TempData["SaveError"] = access.IsReadOnly ? "تم الانتهاء من لجنة السحب والبيانات للعرض فقط." : "تعديل بيانات السحب متاح لأدمن اللجنة فقط.";
             return RedirectToAction(nameof(Index), route);
         }
-        if (input.Samples.Count == 0 || input.Samples.Any(x => x.SampleId <= 0 || x.SampleSize <= 0 || x.SampleRatio <= 0))
+        if (input.Samples.Count == 0 || input.Samples.Any(x => x.SampleId <= 0 || x.SampleSize <= 0 || x.SampleRatio <= 0
+            || (x.HasAttachment && (x.LabResultAccepted == null || x.QuarantineAccepted == null))))
         {
-            TempData["SaveError"] = "يجب إدخال حجم العينة ونسبة سحب صحيحة لكل تحليل.";
+            TempData["SaveError"] = "يجب استكمال أحجام العينات، واختيار نتيجة التحليل وموقف الحجر للعينات التي تم رفع مرفق لها.";
             return RedirectToAction(nameof(Index), route);
         }
 
@@ -148,6 +149,10 @@ public class ImportRequestDetailsController : Controller
                     Sample_BarCode = COALESCE(NULLIF(Sample_BarCode, ''), @Barcode),
                     SampleSize = @SampleSize, SampleRatio = @SampleRatio,
                     Notes_Ar = @Notes, Syl_ALkhatima_Number = @SealNumber,
+                    IsAccepted = CASE WHEN @HasAttachment = 1 THEN @LabResultAccepted ELSE IsAccepted END,
+                    Admin_Confirmation = CASE WHEN @HasAttachment = 1 THEN @QuarantineAccepted ELSE Admin_Confirmation END,
+                    Admin_User = CASE WHEN @HasAttachment = 1 THEN @UserId ELSE Admin_User END,
+                    Admin_Date = CASE WHEN @HasAttachment = 1 THEN GETDATE() ELSE Admin_Date END,
                     IS_From_Android = 1, User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
                 WHERE ID = @SampleId AND Im_RequestCommittee_ID = @CommitteeId
                   AND User_Deletion_Id IS NULL
@@ -163,6 +168,9 @@ public class ImportRequestDetailsController : Controller
                     command.Parameters.AddWithValue("@SampleRatio", sample.SampleRatio);
                     command.Parameters.AddWithValue("@Notes", (object?)sample.Notes?.Trim() ?? DBNull.Value);
                     command.Parameters.AddWithValue("@SealNumber", (object?)sample.SealNumber?.Trim() ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@HasAttachment", sample.HasAttachment);
+                    command.Parameters.AddWithValue("@LabResultAccepted", (object?)sample.LabResultAccepted ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@QuarantineAccepted", (object?)sample.QuarantineAccepted ?? DBNull.Value);
                     command.Parameters.AddWithValue("@UserId", userId);
                     command.Parameters.AddWithValue("@SampleId", sample.SampleId);
                     command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
@@ -190,6 +198,44 @@ public class ImportRequestDetailsController : Controller
             TempData["SaveError"] = ex.Message;
         }
         return RedirectToAction(nameof(Index), route);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ViewSampleAttachment(long id)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId))
+            return RedirectToAction("Index", "Login");
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        const string sql = """
+            SELECT attachment.AttachmentPath_Binary, attachment.AttachmentPath,
+                   attachment.Attachment_TypeName, attachment.Attachment_Number
+            FROM dbo.A_AttachmentData attachment
+            INNER JOIN dbo.Im_CheckRequest_SampleData sample ON sample.ID = attachment.RowId
+            INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = sample.Im_RequestCommittee_ID
+              AND employee.Employee_Id = @UserId AND employee.OperationType = 74
+              AND employee.User_Deletion_Id IS NULL
+            WHERE attachment.Id = @Id AND attachment.A_AttachmentTableNameId = 12
+              AND attachment.User_Deletion_Id IS NULL AND sample.User_Deletion_Id IS NULL
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@Id", id);
+        command.Parameters.AddWithValue("@UserId", userId);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return NotFound("المرفق غير موجود أو غير مسموح بعرضه.");
+
+        string contentType = reader.IsDBNull(2) ? "application/octet-stream" : reader.GetString(2);
+        if (!contentType.Contains('/')) contentType = contentType.ToLowerInvariant() switch
+        {
+            "jpg" or "jpeg" => "image/jpeg", "png" => "image/png", "pdf" => "application/pdf", _ => "application/octet-stream"
+        };
+        if (!reader.IsDBNull(0)) return File((byte[])reader[0], contentType);
+        string path = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") return Redirect(path);
+        if (!string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)) return PhysicalFile(path, contentType);
+        return NotFound("ملف المرفق غير متاح على الخادم.");
     }
 
     private static string GenerateImportSampleBarcode()
@@ -368,10 +414,17 @@ public class ImportRequestDetailsController : Controller
         const string sql = """
             SELECT sample.ID, sample.Sample_BarCode, sample.SampleSize, sample.SampleRatio,
                    sample.Syl_ALkhatima_Number, sample.Notes_Ar, sample.LotData_ID, sample.WithdrawDate,
-                   confirm.IsAccepted, confirm.Notes
+                   confirm.IsAccepted, confirm.Notes,
+                   CAST(CASE WHEN attachment.Id IS NULL THEN 0 ELSE 1 END AS bit),
+                   sample.IsAccepted, sample.Admin_Confirmation,
+                   attachment.Id, COALESCE(attachment.Attachment_Number, attachment.Attachment_TypeName)
             FROM dbo.Im_CheckRequest_SampleData sample
             LEFT JOIN dbo.Im_CheckRequest_SampleData_Confirm confirm
               ON confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId
+            OUTER APPLY (SELECT TOP 1 a.Id, a.Attachment_Number, a.Attachment_TypeName
+                         FROM dbo.A_AttachmentData a
+                         WHERE a.RowId = sample.ID AND a.A_AttachmentTableNameId = 12
+                           AND a.User_Deletion_Id IS NULL ORDER BY a.Id DESC) attachment
             WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
             """;
         await using var command = new SqlCommand(sql, connection);
@@ -390,6 +443,11 @@ public class ImportRequestDetailsController : Controller
             sample.LotData_ID = reader.IsDBNull(6) ? null : reader.GetInt64(6);
             sample.AssistantAccepted = reader.IsDBNull(8) ? null : reader.GetBoolean(8);
             sample.AssistantNotes = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
+            sample.HasAttachment = reader.GetBoolean(10);
+            sample.LabResultAccepted = reader.IsDBNull(11) ? null : reader.GetBoolean(11);
+            sample.QuarantineAccepted = reader.IsDBNull(12) ? null : reader.GetBoolean(12);
+            sample.AttachmentId = reader.IsDBNull(13) ? null : reader.GetInt64(13);
+            sample.AttachmentName = reader.IsDBNull(14) ? string.Empty : reader.GetString(14);
         }
     }
 
@@ -830,6 +888,9 @@ public class ImportSampleSaveVm
     public double SampleRatio { get; set; }
     public string? SealNumber { get; set; }
     public string? Notes { get; set; }
+    public bool HasAttachment { get; set; }
+    public bool? LabResultAccepted { get; set; }
+    public bool? QuarantineAccepted { get; set; }
 }
 
 public class SampleAssistantOpinionSaveVm

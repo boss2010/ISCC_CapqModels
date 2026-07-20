@@ -18,5 +18,10 @@
         public string Notes_Ar { get; set; }
         public bool? AssistantAccepted { get; set; }
         public string AssistantNotes { get; set; }
+        public bool HasAttachment { get; set; }
+        public bool? LabResultAccepted { get; set; }
+        public bool? QuarantineAccepted { get; set; }
+        public long? AttachmentId { get; set; }
+        public string AttachmentName { get; set; }
     }
 }

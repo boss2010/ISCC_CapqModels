@@ -32,6 +32,7 @@ namespace ViewModels
             public bool IsReadOnly { get; set; }
             public bool IsAdmin { get; set; }
             public string CommitteeMembers { get; set; } = string.Empty;
+            public bool SampleAttachmentUploaded { get; set; }
 
         }
 
