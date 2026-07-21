@@ -89,7 +89,7 @@
                                 }
                                 else { <span class="text-muted">—</span> }
                             </td>
-                            <td><a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly ? "btn-outline-secondary" : "btn-info text-white")">@(item.IsReadOnly ? "عرض فقط" : item.IsAdmin ? "متابعة العمل" : "إبداء الرأي")</a></td>
+                            <td><a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly ? "btn-outline-secondary" : "btn-info text-white")">@(item.HasPendingSampleFinalResult && item.IsAdmin ? "تسجيل النتيجة النهائية" : item.IsReadOnly ? "عرض فقط" : item.IsAdmin ? "متابعة العمل" : "إبداء الرأي")</a></td>
                         </tr>
                     }
                     </tbody>

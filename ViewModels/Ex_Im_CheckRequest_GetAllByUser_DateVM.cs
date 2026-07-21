@@ -10,7 +10,7 @@ namespace ViewModels
     {
         public class Ex_Im_CheckRequest_GetAllByUser_DateVM
         {
-            public byte Row_Num { get; set; }
+            public int Row_Num { get; set; }
             //byte not bool
             public Nullable<byte> IsExport { get; set; }
             public string CheckRequest_Number { get; set; }
@@ -33,6 +33,7 @@ namespace ViewModels
             public bool IsAdmin { get; set; }
             public string CommitteeMembers { get; set; } = string.Empty;
             public bool SampleAttachmentUploaded { get; set; }
+            public bool HasPendingSampleFinalResult { get; set; }
 
         }
 

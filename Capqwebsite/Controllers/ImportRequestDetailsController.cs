@@ -374,6 +374,100 @@ public class ImportRequestDetailsController : Controller
         return RedirectToAction(nameof(Index), new { checkRequestId = input.CheckRequestId, committeeId = input.CommitteeId, committeeTypeId = input.CommitteeTypeId });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTreatment(ImportTreatmentSaveVm input)
+    {
+        var route = new { checkRequestId = input.CheckRequestId, committeeId = input.CommitteeId, committeeTypeId = input.CommitteeTypeId };
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId))
+            return RedirectToAction("Index", "Login");
+
+        if (input.CommitteeTypeId != 14)
+        {
+            TempData["SaveError"] = "حفظ بيان المعالجة متاح للجنة المعالجة فقط.";
+            return RedirectToAction(nameof(Index), route);
+        }
+
+        var access = await GetCommitteeAccessAsync(input.CheckRequestId, input.CommitteeId);
+        if (!access.IsAdmin || access.IsReadOnly)
+        {
+            TempData["SaveError"] = access.IsReadOnly
+                ? "تم الانتهاء من لجنة المعالجة والبيانات متاحة للعرض فقط."
+                : "تسجيل بيان المعالجة متاح لأدمن اللجنة فقط.";
+            return RedirectToAction(nameof(Index), route);
+        }
+
+        if (input.Records.Count == 0 || input.Records.Any(x => x.TreatmentDataId <= 0 || x.Size <= 0 ||
+            x.MaterialAmount <= 0 || x.Dose <= 0 || x.ExposureDay < 0 || x.ExposureHour < 0 ||
+            x.ExposureHour > 23 || x.ExposureMinute < 0 || x.ExposureMinute > 59))
+        {
+            TempData["SaveError"] = "يرجى استكمال حجم الرسالة وكمية المادة والجرعة ومدة التعرض بصورة صحيحة.";
+            return RedirectToAction(nameof(Index), route);
+        }
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            const string updateSql = """
+                UPDATE dbo.Im_Request_TreatmentData
+                SET Size = @Size, TreatmentMat_Amount = @MaterialAmount, TheDose = @Dose,
+                    Temperature = @Temperature, ThermalSealNumber = @ThermalSealNumber,
+                    Exposure_Day = @ExposureDay, Exposure_Hour = @ExposureHour,
+                    Exposure_Minute = @ExposureMinute, Note = @Notes,
+                    IS_Total = @IsTotal, IS_Total_Android = @IsTotal, IS_From_Android = 1,
+                    User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
+                WHERE ID = @TreatmentDataId AND Im_RequestCommittee_ID = @CommitteeId
+                  AND User_Deletion_Id IS NULL
+                """;
+            foreach (var record in input.Records)
+            {
+                await using var command = new SqlCommand(updateSql, connection, transaction);
+                command.Parameters.AddWithValue("@Size", record.Size);
+                command.Parameters.AddWithValue("@MaterialAmount", record.MaterialAmount);
+                command.Parameters.AddWithValue("@Dose", record.Dose);
+                command.Parameters.AddWithValue("@Temperature", (object?)record.Temperature ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ThermalSealNumber", (object?)record.ThermalSealNumber ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExposureDay", record.ExposureDay);
+                command.Parameters.AddWithValue("@ExposureHour", record.ExposureHour);
+                command.Parameters.AddWithValue("@ExposureMinute", record.ExposureMinute);
+                command.Parameters.AddWithValue("@Notes", (object?)record.Notes?.Trim() ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsTotal", input.ApplyToAll);
+                command.Parameters.AddWithValue("@UserId", userId);
+                command.Parameters.AddWithValue("@TreatmentDataId", record.TreatmentDataId);
+                command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+                if (await command.ExecuteNonQueryAsync() != 1)
+                    throw new InvalidOperationException($"تعذر حفظ سجل المعالجة رقم {record.TreatmentDataId}.");
+            }
+
+            const string committeeSql = """
+                UPDATE dbo.Im_RequestCommittee
+                SET Status = @Finished, IsFinishedAll = @Finished, Is_Start_Android = 1,
+                    User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
+                WHERE ID = @CommitteeId AND ImCheckRequest_ID = @CheckRequestId
+                  AND CommitteeType_ID = 14 AND User_Deletion_Id IS NULL
+                """;
+            await using var committee = new SqlCommand(committeeSql, connection, transaction);
+            committee.Parameters.AddWithValue("@Finished", input.IsFinishedAll);
+            committee.Parameters.AddWithValue("@UserId", userId);
+            committee.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+            committee.Parameters.AddWithValue("@CheckRequestId", input.CheckRequestId);
+            if (await committee.ExecuteNonQueryAsync() != 1)
+                throw new InvalidOperationException("تعذر تحديث حالة لجنة المعالجة.");
+
+            await transaction.CommitAsync();
+            TempData["SaveSuccess"] = "تم حفظ بيان المعالجة بنجاح.";
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            TempData["SaveError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index), route);
+    }
+
     private async Task<ImportRequestDetailsPageVm> LoadPageAsync(long checkRequestId, long committeeId, byte committeeTypeId)
     {
         var access = await GetCommitteeAccessAsync(checkRequestId, committeeId);
@@ -947,5 +1041,29 @@ public class SampleAssistantOpinionVm
 {
     public long SampleId { get; set; }
     public bool? IsAccepted { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class ImportTreatmentSaveVm
+{
+    public long CheckRequestId { get; set; }
+    public long CommitteeId { get; set; }
+    public byte CommitteeTypeId { get; set; }
+    public bool ApplyToAll { get; set; }
+    public bool IsFinishedAll { get; set; }
+    public List<ImportTreatmentRecordVm> Records { get; set; } = new();
+}
+
+public class ImportTreatmentRecordVm
+{
+    public long TreatmentDataId { get; set; }
+    public decimal Size { get; set; }
+    public decimal MaterialAmount { get; set; }
+    public decimal Dose { get; set; }
+    public decimal? Temperature { get; set; }
+    public decimal? ThermalSealNumber { get; set; }
+    public int ExposureDay { get; set; }
+    public int ExposureHour { get; set; }
+    public int ExposureMinute { get; set; }
     public string? Notes { get; set; }
 }

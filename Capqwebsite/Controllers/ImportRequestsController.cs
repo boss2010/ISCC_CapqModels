@@ -56,6 +56,16 @@ public class ImportRequestsController : Controller
                            WHERE sample.Im_RequestCommittee_ID = committee.ID
                              AND sample.User_Deletion_Id IS NULL)
                          THEN 1 ELSE 0 END AS bit) AS SampleAttachmentUploaded
+                        ,CAST(CASE WHEN EXISTS
+                          (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
+                           WHERE sample.Im_RequestCommittee_ID = committee.ID
+                             AND sample.User_Deletion_Id IS NULL
+                             AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData attachment
+                                         WHERE attachment.RowId = sample.ID
+                                           AND attachment.A_AttachmentTableNameId = 12
+                                           AND attachment.User_Deletion_Id IS NULL)
+                             AND (sample.IsAccepted IS NULL OR sample.Admin_Confirmation IS NULL))
+                         THEN 1 ELSE 0 END AS bit) AS HasPendingSampleFinalResult
                     FROM dbo.Im_CheckRequest request
                     INNER JOIN dbo.Im_RequestCommittee committee ON committee.ImCheckRequest_ID = request.ID
                     INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = committee.ID
@@ -67,8 +77,51 @@ public class ImportRequestsController : Controller
                     WHERE request.IsActive = 1
                       AND committee.IsApproved = 1
                       AND committee.User_Deletion_Id IS NULL
-                      AND committee.Delegation_Date = @SelectedDate
                       AND committee.CommitteeType_ID IN (11, 13, 14)
+                      AND
+                      (
+                        (committee.CommitteeType_ID <> 13 AND committee.Delegation_Date = @SelectedDate)
+                        OR
+                        (committee.CommitteeType_ID = 13 AND
+                          (
+                            /* النتيجة النهائية تظهر للأدمن في أي يوم بعد رفع المرفق */
+                            (employee.ISAdmin = 1 AND EXISTS
+                              (SELECT 1 FROM dbo.Im_CheckRequest_SampleData pendingSample
+                               WHERE pendingSample.Im_RequestCommittee_ID = committee.ID
+                                 AND pendingSample.User_Deletion_Id IS NULL
+                                 AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData pendingAttachment
+                                             WHERE pendingAttachment.RowId = pendingSample.ID
+                                               AND pendingAttachment.A_AttachmentTableNameId = 12
+                                               AND pendingAttachment.User_Deletion_Id IS NULL)
+                                 AND (pendingSample.IsAccepted IS NULL OR pendingSample.Admin_Confirmation IS NULL)))
+                            OR
+                            (committee.Delegation_Date = @SelectedDate AND
+                              (
+                                /* مرحلة السحب الأولى */
+                                (ISNULL(committee.Status, 0) = 0 AND ISNULL(committee.IsFinishedAll, 0) = 0)
+                                /* يظل للمساعد حتى يسجل رأيه على السحب */
+                                OR (employee.ISAdmin = 0 AND EXISTS
+                                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData assistantSample
+                                   WHERE assistantSample.Im_RequestCommittee_ID = committee.ID
+                                     AND assistantSample.Sample_BarCode IS NOT NULL
+                                     AND assistantSample.User_Deletion_Id IS NULL
+                                     AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm assistantConfirm
+                                                     WHERE assistantConfirm.Im_CheckRequest_SampleData_ID = assistantSample.ID
+                                                       AND assistantConfirm.EmployeeId = @UserId)))
+                                /* بعد تسجيل النتيجة النهائية يظهر في يوم اللجنة كعرض فقط */
+                                OR (EXISTS
+                                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData completedSample
+                                   WHERE completedSample.Im_RequestCommittee_ID = committee.ID
+                                     AND completedSample.User_Deletion_Id IS NULL
+                                     AND completedSample.IsAccepted IS NOT NULL
+                                     AND completedSample.Admin_Confirmation IS NOT NULL
+                                     AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData completedAttachment
+                                                 WHERE completedAttachment.RowId = completedSample.ID
+                                                   AND completedAttachment.A_AttachmentTableNameId = 12
+                                                   AND completedAttachment.User_Deletion_Id IS NULL)))
+                              ))
+                          ))
+                      )
                 )
                 SELECT ROW_NUMBER() OVER (ORDER BY CommitteeId) AS RowNum, *
                 FROM AssignedCommittees
@@ -76,6 +129,7 @@ public class ImportRequestsController : Controller
                 """;
 
             await using var command = new SqlCommand(sql, connection);
+            command.CommandTimeout = 90;
             command.Parameters.AddWithValue("@UserId", userId);
             command.Parameters.AddWithValue("@SelectedDate", selectedDate);
             await using var reader = await command.ExecuteReaderAsync();
@@ -90,8 +144,11 @@ public class ImportRequestsController : Controller
                 int confirmCount = Convert.ToInt32(reader["ConfirmCount"]);
                 int sampleCount = Convert.ToInt32(reader["SampleCount"]);
                 int sampleConfirmCount = Convert.ToInt32(reader["SampleConfirmCount"]);
+                bool pendingSampleFinalResult = Convert.ToBoolean(reader["HasPendingSampleFinalResult"]);
                 string key = isAdmin
-                    ? canceled ? "canceled" : (status || finished) ? "completed" : started || !IsDbNull(reader, "User_Updation_Date") ? "working" : "new"
+                    ? canceled ? "canceled"
+                      : Convert.ToByte(reader["CommitteeType_ID"]) == 13 && pendingSampleFinalResult ? "working"
+                      : (status || finished) ? "completed" : started || !IsDbNull(reader, "User_Updation_Date") ? "working" : "new"
                     : canceled ? "canceled"
                     : Convert.ToByte(reader["CommitteeType_ID"]) == 13
                         ? sampleCount > 0 && sampleConfirmCount >= sampleCount ? "completed" : sampleConfirmCount > 0 ? "working" : "new"
@@ -100,7 +157,7 @@ public class ImportRequestsController : Controller
 
                 requests.Add(new Ex_Im_CheckRequest_GetAllByUser_DateVM
                 {
-                    Row_Num = Convert.ToByte(reader["RowNum"]),
+                    Row_Num = Convert.ToInt32(reader["RowNum"]),
                     IsExport = 2,
                     CheckRequest_Number = Convert.ToString(reader["CheckRequest_Number"]) ?? string.Empty,
                     checkRequest_Id = Convert.ToInt64(reader["CheckRequestId"]),
@@ -115,6 +172,7 @@ public class ImportRequestsController : Controller
                     IsAdmin = isAdmin,
                     CommitteeMembers = reader["CommitteeMembers"] == DBNull.Value ? string.Empty : Convert.ToString(reader["CommitteeMembers"]) ?? string.Empty
                     ,SampleAttachmentUploaded = Convert.ToBoolean(reader["SampleAttachmentUploaded"])
+                    ,HasPendingSampleFinalResult = pendingSampleFinalResult
                 });
             }
 
