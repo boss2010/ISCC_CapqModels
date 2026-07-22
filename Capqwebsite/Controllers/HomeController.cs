@@ -11,6 +11,7 @@ namespace Capqwebsite.Controllers
         //Api Get with param
         public async Task<IActionResult> Index()
         {
+#if false // Old Home API is no longer needed. ImportRequests reads the data directly from DBConnection.
             try
             {
                 if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
@@ -53,6 +54,10 @@ namespace Capqwebsite.Controllers
             {
                 return StatusCode(500, $"API Error: {ex.Message}");
             }
+#else
+            await Task.CompletedTask;
+            return RedirectToAction("Index", "ImportRequests");
+#endif
         }
     }
 

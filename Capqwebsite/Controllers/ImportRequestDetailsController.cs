@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using System.Net.Http.Json;
-using System.Text.Json;
 using System.Security.Cryptography;
 using ViewModels;
 
@@ -9,14 +7,14 @@ namespace Capqwebsite.Controllers;
 
 public class ImportRequestDetailsController : Controller
 {
-    private const string ImportApi = "http://10.7.7.250:40/api/Import_CheckRequest_API";
-    private const string FinalResultApi = "http://localhost:49310/api/ImCommittee_Final_Result_API";
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _connectionString;
+    private readonly ILogger<ImportRequestDetailsController> _logger;
 
-    public ImportRequestDetailsController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public ImportRequestDetailsController(
+        IConfiguration configuration,
+        ILogger<ImportRequestDetailsController> logger)
     {
-        _httpClientFactory = httpClientFactory;
+        _logger = logger;
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
     }
@@ -39,6 +37,9 @@ public class ImportRequestDetailsController : Controller
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex,
+                "Failed to load import request details. CheckRequestId={CheckRequestId}, CommitteeId={CommitteeId}, CommitteeTypeId={CommitteeTypeId}; TraceId={TraceId}",
+                checkRequestId, committeeId, committeeTypeId, HttpContext.TraceIdentifier);
             TempData["PageError"] = $"تعذر تحميل تفاصيل طلب الوارد: {ex.Message}";
             return RedirectToAction("Index", "ImportRequests");
         }
@@ -474,6 +475,8 @@ public class ImportRequestDetailsController : Controller
         if (committeeTypeId == 13 && access.IsAdmin && !access.IsReadOnly)
             await EnsureSampleBarcodesAsync(committeeId);
 
+        var details = await LoadDetailsFromDatabaseAsync(checkRequestId, committeeId, committeeTypeId);
+#if false // Replaced by direct SQL loading.
         var client = _httpClientFactory.CreateClient();
         var detailsResponse = await client.GetAsync(
             $"{ImportApi}?CheckRequest_Id={checkRequestId}&Committee_Id={committeeId}&Committee_Type_Id={committeeTypeId}");
@@ -482,10 +485,12 @@ public class ImportRequestDetailsController : Controller
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException("لم يتم إرجاع بيانات للطلب.");
 
+#endif
         if (committeeTypeId == 13)
             await MergeSavedSampleDataAsync(details, committeeId);
 
         var statuses = new List<QuarantineStatusVm>();
+#if false // Replaced by direct SQL loading.
         if (committeeTypeId is 11 or 13)
         {
             using var statusRequest = new HttpRequestMessage(HttpMethod.Get, FinalResultApi);
@@ -496,6 +501,10 @@ public class ImportRequestDetailsController : Controller
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
             statuses = statuses.Where(x => x.Value > 0).ToList();
         }
+
+#endif
+        if (committeeTypeId is 11 or 13)
+            statuses = await LoadQuarantineStatusesAsync(committeeTypeId);
 
         var infectionItems = committeeTypeId == 11 && access.IsAdmin
             ? await LoadInfectionItemsAsync()
@@ -515,6 +524,263 @@ public class ImportRequestDetailsController : Controller
             AssistantResults = access.IsAdmin ? new() : await LoadAssistantResultsAsync(committeeId, long.Parse(HttpContext.Session.GetString("UserId")!))
         };
     }
+
+    private async Task<Ex_CheckRequest_GetData_Android_V2_VM> LoadDetailsFromDatabaseAsync(
+        long checkRequestId, long committeeId, byte committeeTypeId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string headerSql = """
+            SELECT request.ID, request.CheckRequest_Number, request.IsAccepted,
+                   data.ImporterType_Id, COALESCE(NULLIF(data.DelegateName, ''), N'غير محدد'),
+                   COALESCE(data.DelegateAddress, N''),
+                   COALESCE(country.Ar_Name, N''), COALESCE(outlet.Ar_Name, N''),
+                   COALESCE(outlet.Address_Ar, N''), COALESCE(type.Name_Ar, N''),
+                   committee.Delegation_Date,
+                   CASE WHEN committee.Is_Cancel IS NOT NULL THEN N'ملغي'
+                        WHEN committee.Status = 1 OR committee.IsFinishedAll = 1 THEN N'تم الانتهاء'
+                        WHEN committee.Is_Start_Android = 1 OR committee.User_Updation_Date IS NOT NULL THEN N'جاري العمل'
+                        ELSE N'جديد' END,
+                   operation.ID, COALESCE(operation.Name_Ar, N''), COALESCE(data.Ship_Name, N'')
+            FROM dbo.Im_CheckRequest request
+            INNER JOIN dbo.Im_RequestCommittee committee ON committee.ID = @CommitteeId
+                AND committee.ImCheckRequest_ID = request.ID AND committee.User_Deletion_Id IS NULL
+            LEFT JOIN dbo.Im_CheckRequest_Data data ON data.Im_CheckRequest_ID = request.ID
+                AND data.User_Deletion_Id IS NULL
+            LEFT JOIN dbo.Country country ON country.ID = data.ExportCountry_Id
+            LEFT JOIN dbo.Outlet outlet ON outlet.ID = request.Outlet_ID
+            LEFT JOIN dbo.CommitteeType type ON type.ID = committee.CommitteeType_ID
+            LEFT JOIN dbo.Im_OpertaionType operation ON operation.ID = request.Im_OperationType
+            WHERE request.ID = @CheckRequestId AND committee.CommitteeType_ID = @CommitteeTypeId
+            """;
+        var details = new Ex_CheckRequest_GetData_Android_V2_VM();
+        await using (var command = new SqlCommand(headerSql, connection))
+        {
+            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            command.Parameters.AddWithValue("@CommitteeId", committeeId);
+            command.Parameters.AddWithValue("@CommitteeTypeId", committeeTypeId);
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                throw new InvalidOperationException("الطلب غير موجود أو غير مسموح بعرض هذه اللجنة.");
+
+            details.CheckRequest_Id = reader.GetInt64(0);
+            details.CheckRequest_Number = DbString(reader, 1);
+            details.IsAcceppted = reader.IsDBNull(2) ? null : reader.GetBoolean(2);
+            details.ImporterType_Id = reader.IsDBNull(3) ? null : reader.GetInt32(3);
+            details.Reciever_Name = DbString(reader, 4);
+            details.ImportCompany_Address = DbString(reader, 5);
+            details.ExportCountry_Name = DbString(reader, 6);
+            details.Outlet_Name = DbString(reader, 7);
+            details.Outlet_Address = DbString(reader, 8);
+            details.Committee_Type = DbString(reader, 9);
+            details.Check_Date = reader.IsDBNull(10) ? null : Convert.ToDateTime(reader.GetValue(10));
+            details.RequestCommittee_Status = DbString(reader, 11);
+            details.Opreration_type_Id = reader.IsDBNull(12) ? null : Convert.ToInt32(reader.GetValue(12));
+            details.Opreration_type_Name = DbString(reader, 13);
+            details.Ship_Name = DbString(reader, 14);
+            details.IsExport = 2;
+        }
+
+        const string itemsSql = """
+            SELECT item.ID, item.Item_ShortName_ID, shortName.Item_Type_ID,
+                   COALESCE(plant.Name_Ar, shortName.ShortName_Ar, N''),
+                   COALESCE(plant.Scientific_Name, N''), COALESCE(shortName.ShortName_Ar, N''),
+                   item.Im_CheckRequset_Shipping_Method_ID
+            FROM dbo.Im_CheckRequest_Items item
+            INNER JOIN dbo.Im_CheckRequset_Shipping_Method shipping
+                ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID
+            LEFT JOIN dbo.Item_ShortName shortName ON shortName.ID = item.Item_ShortName_ID
+            LEFT JOIN dbo.Item plant ON plant.ID = shortName.Item_ID
+            WHERE shipping.Im_CheckRequest_ID = @CheckRequestId
+              AND shipping.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL
+            ORDER BY item.ID
+            """;
+        var itemMap = new Dictionary<long, _x0040_Item_Data>();
+        await using (var command = new SqlCommand(itemsSql, connection))
+        {
+            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var item = new _x0040_Item_Data
+                {
+                    ID = reader.GetInt64(0),
+                    Item_ShortName_id = reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
+                    Item_Type_ID = reader.IsDBNull(2) ? null : reader.GetByte(2),
+                    Item_Name = DbString(reader, 3),
+                    Scientific_Name = DbString(reader, 4),
+                    Item_ShortName_Name = DbString(reader, 5),
+                    Im_CheckRequset_Shipping_Method_ID = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+                    IsExport = 2,
+                    Lot_Data = new List<_x0040_temp_table_Lot>(),
+                    Sample_Data = new List<Itemsample_data>(),
+                    TreatmentLot = new List<TreatmentDataDTO>()
+                };
+                itemMap[item.ID] = item;
+                details.Item_Data.Add(item);
+            }
+        }
+
+        const string lotsSql = """
+            SELECT lot.ID, lot.Im_CheckRequest_Items_ID, COALESCE(lot.Lot_Number, CONVERT(nvarchar(30), lot.ID)),
+                   COALESCE(lot.Package_Count, item.Package_Count, 0),
+                   COALESCE(lot.Net_Weight, item.Net_Weight), COALESCE(lot.GrossWeight, item.GrossWeight),
+                   COALESCE(lot.Package_Weight, item.Package_Weight), COALESCE(lot.Units_Number, item.Units_Number),
+                   lot.Size, COALESCE(packageType.Ar_Name, N''), COALESCE(lot.Grower_Number, N''),
+                   COALESCE(lot.Number_Wooden_Package, N''),
+                   CAST(CASE WHEN result.IS_Total = 1 THEN 1 ELSE 0 END AS bit)
+            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+            INNER JOIN dbo.Im_CheckRequest_Items item ON item.ID = lot.Im_CheckRequest_Items_ID
+            INNER JOIN dbo.Im_CheckRequset_Shipping_Method shipping
+                ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID
+            LEFT JOIN dbo.Package_Type packageType ON packageType.ID = COALESCE(lot.Package_Type_ID, item.Package_Type_ID)
+            OUTER APPLY (SELECT TOP 1 r.IS_Total FROM dbo.Im_CommitteeResult r
+                         WHERE r.Committee_ID = @CommitteeId AND (r.LotData_ID = lot.ID OR r.Im_Request_Item_Id = item.ID)
+                         ORDER BY r.ID DESC) result
+            WHERE shipping.Im_CheckRequest_ID = @CheckRequestId
+              AND lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL
+            ORDER BY lot.ID
+            """;
+        await using (var command = new SqlCommand(lotsSql, connection))
+        {
+            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            command.Parameters.AddWithValue("@CommitteeId", committeeId);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                long requestItemId = reader.GetInt64(1);
+                if (!itemMap.TryGetValue(requestItemId, out var item)) continue;
+                ((List<_x0040_temp_table_Lot>)item.Lot_Data).Add(new _x0040_temp_table_Lot
+                {
+                    ID = reader.GetInt64(0), Lot_ID = reader.GetInt64(0), Lot_Number = DbString(reader, 2),
+                    Package_Count = reader.GetInt32(3), Net_Weight = reader.IsDBNull(4) ? null : reader.GetDecimal(4),
+                    Gross_Weight = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+                    Package_Weight = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                    Units_Number = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                    Size = reader.IsDBNull(8) ? null : Convert.ToDouble(reader.GetValue(8)),
+                    Package_Type_Name = DbString(reader, 9), Grower_Number = DbString(reader, 10),
+                    Number_Wooden_Package = DbString(reader, 11), is_Total = reader.GetBoolean(12)
+                });
+            }
+        }
+
+        await LoadSamplesFromDatabaseAsync(connection, committeeId, itemMap);
+        await LoadTreatmentsFromDatabaseAsync(connection, committeeId, itemMap);
+        return details;
+    }
+
+    private async Task LoadSamplesFromDatabaseAsync(
+        SqlConnection connection, long committeeId, Dictionary<long, _x0040_Item_Data> itemMap)
+    {
+        const string sql = """
+            SELECT sample.ID, sample.Im_Request_Item_Id, sample.LotData_ID,
+                   COALESCE(lab.Name_Ar, N''), COALESCE(analysis.Name_Ar, N''),
+                   COALESCE(sample.Sample_BarCode, N''), sample.SampleRatio, sample.SampleSize,
+                   sample.IS_From_Android, sample.IS_Total, COALESCE(lot.Lot_Number, N''),
+                   COALESCE(sample.Syl_ALkhatima_Number, N''), COALESCE(sample.Notes_Ar, N'')
+            FROM dbo.Im_CheckRequest_SampleData sample
+            LEFT JOIN dbo.AnalysisLabType labType ON labType.ID = sample.AnalysisLabType_ID
+            LEFT JOIN dbo.AnalysisLab lab ON lab.ID = labType.AnalysisLabID
+            LEFT JOIN dbo.AnalysisType analysis ON analysis.ID = labType.AnalysisTypeID
+            LEFT JOIN dbo.Im_CheckRequest_Items_Lot_Category lot ON lot.ID = sample.LotData_ID
+            WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
+            ORDER BY sample.ID
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@CommitteeId", committeeId);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            long requestItemId = reader.GetInt64(1);
+            if (!itemMap.TryGetValue(requestItemId, out var item)) continue;
+            ((List<Itemsample_data>)item.Sample_Data).Add(new Itemsample_data
+            {
+                Sample_dataId = reader.GetInt64(0), LotData_ID = reader.IsDBNull(2) ? null : reader.GetInt64(2),
+                AnalysisLab_Name = DbString(reader, 3), AnalysisType_Name = DbString(reader, 4),
+                Sample_BarCode = DbString(reader, 5), SampleRatio = reader.IsDBNull(6) ? null : Convert.ToDouble(reader.GetValue(6)),
+                SampleSize = reader.IsDBNull(7) ? null : Convert.ToDouble(reader.GetValue(7)),
+                IS_From_Android = reader.IsDBNull(8) ? null : reader.GetBoolean(8),
+                IS_Total = reader.IsDBNull(9) ? null : reader.GetBoolean(9), Lotnum = DbString(reader, 10),
+                Syl_ALkhatima_Number = DbString(reader, 11), Notes_Ar = DbString(reader, 12)
+            });
+        }
+    }
+
+    private async Task LoadTreatmentsFromDatabaseAsync(
+        SqlConnection connection, long committeeId, Dictionary<long, _x0040_Item_Data> itemMap)
+    {
+        const string sql = """
+            SELECT treatment.ID, treatment.Im_Request_Item_Id, treatment.Im_Request_LotData_ID,
+                   COALESCE(lot.Lot_Number, N''), treatment.TreatmentMethod_ID,
+                   COALESCE(method.Ar_Name, N''), COALESCE(type.Ar_Name, N''),
+                   COALESCE(materialItem.Name_Ar, N''), treatment.TreatmentMat_Amount,
+                   treatment.Item_ShortName_ID, treatment.Size, treatment.TheDose,
+                   treatment.Exposure_Hour, treatment.Exposure_Minute, treatment.Exposure_Day,
+                   treatment.Temperature, treatment.ThermalSealNumber, treatment.IS_Total,
+                   treatment.IS_Total_Android, treatment.IS_From_Android, COALESCE(treatment.Note, N''),
+                   COALESCE(treatment.Procedures, N'')
+            FROM dbo.Im_Request_TreatmentData treatment
+            LEFT JOIN dbo.Im_CheckRequest_Items_Lot_Category lot ON lot.ID = treatment.Im_Request_LotData_ID
+            LEFT JOIN dbo.TreatmentMethods method ON method.ID = treatment.TreatmentMethod_ID
+            LEFT JOIN dbo.TreatmentType type ON type.ID = treatment.TreatmentType_ID
+            LEFT JOIN dbo.TreatmentMaterial material ON material.ID = treatment.TreatmentMat_ID
+            LEFT JOIN dbo.Item materialItem ON materialItem.ID = material.Item_ID
+            WHERE treatment.Im_RequestCommittee_ID = @CommitteeId AND treatment.User_Deletion_Id IS NULL
+            ORDER BY treatment.ID
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@CommitteeId", committeeId);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            long requestItemId = reader.GetInt64(1);
+            if (!itemMap.TryGetValue(requestItemId, out var item)) continue;
+            ((List<TreatmentDataDTO>)item.TreatmentLot).Add(new TreatmentDataDTO
+            {
+                TreatmentDataID = reader.GetInt64(0), ID = reader.GetInt64(0),
+                RequestLotData_ID = reader.IsDBNull(2) ? null : reader.GetInt64(2), lot_ID = reader.IsDBNull(2) ? 0 : reader.GetInt64(2),
+                lot_Number = DbString(reader, 3), treatment_MethodId = reader.GetByte(4), treatment_MethodName = DbString(reader, 5),
+                treatment_TypeName = DbString(reader, 6), treatmentMaterial_Name = DbString(reader, 7),
+                treatmentMat_Amount = reader.IsDBNull(8) ? null : reader.GetDecimal(8),
+                Item_ShortName_ID = reader.IsDBNull(9) ? null : reader.GetInt64(9), size = reader.IsDBNull(10) ? null : reader.GetDecimal(10),
+                dose = reader.IsDBNull(11) ? null : reader.GetDecimal(11), exposure_Hour = reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                exposure_Minute = reader.IsDBNull(13) ? null : reader.GetInt32(13), exposure_Day = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                temperature = reader.IsDBNull(15) ? null : reader.GetDecimal(15), thermalSealNumber = reader.IsDBNull(16) ? null : reader.GetDecimal(16),
+                IS_Total = reader.IsDBNull(17) ? null : reader.GetBoolean(17), IS_Total_Android = reader.IsDBNull(18) ? null : reader.GetBoolean(18),
+                IS_From_Android = reader.IsDBNull(19) ? null : reader.GetBoolean(19), Notes = DbString(reader, 20), Procedures = DbString(reader, 21),
+                RequestCommittee_ID = committeeId
+            });
+        }
+    }
+
+    private async Task<List<QuarantineStatusVm>> LoadQuarantineStatusesAsync(byte committeeTypeId)
+    {
+        var statuses = new List<QuarantineStatusVm>();
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        const string sql = """
+            SELECT ID, Is_Continue, COALESCE(Name_AR, Name_En, CONVERT(nvarchar(20), ID))
+            FROM dbo.Im_CheckRequest_Lot_Result_Status
+            WHERE ID > 0 AND ISNULL(IsActive, 1) = 1
+              AND (CommitteeType_ID IS NULL OR CommitteeType_ID = @CommitteeTypeId)
+            ORDER BY ID
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@CommitteeTypeId", committeeTypeId);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            statuses.Add(new QuarantineStatusVm
+            {
+                Value = reader.GetInt32(0),
+                Value2 = reader.IsDBNull(1) ? null : reader.GetBoolean(1),
+                DisplayText = DbString(reader, 2)
+            });
+        return statuses;
+    }
+
+    private static string DbString(SqlDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? string.Empty : Convert.ToString(reader.GetValue(ordinal)) ?? string.Empty;
 
     private async Task MergeSavedSampleDataAsync(Ex_CheckRequest_GetData_Android_V2_VM details, long committeeId)
     {

@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Builder;
+using Capqwebsite.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
+builder.Logging.AddProvider(new DailyFileLoggerProvider(
+    Path.Combine(builder.Environment.ContentRootPath, "Logs")));
 /////////////////rrr8-5-2025/////////////////////////
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
@@ -55,6 +58,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseSession();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.Use(async (context, next) =>
 {
     bool isLoginRequest = context.Request.Path.StartsWithSegments("/Login");
@@ -64,6 +68,22 @@ app.Use(async (context, next) =>
     if (!isAuthenticated && !isLoginRequest && !isErrorRequest)
     {
         context.Response.Redirect("/Login/Index");
+        return;
+    }
+
+    await next();
+});
+app.Use(async (context, next) =>
+{
+    // These legacy screens depend on external APIs and are intentionally disabled.
+    string path = context.Request.Path.Value ?? string.Empty;
+    string[] disabledApiScreens = ["/Test", "/shohna_sader"];
+
+    if (disabledApiScreens.Any(prefix => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+    {
+        context.Response.StatusCode = StatusCodes.Status410Gone;
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        await context.Response.WriteAsync("تم إلغاء هذه الشاشة لأنها كانت تعتمد على API خارجي.");
         return;
     }
 

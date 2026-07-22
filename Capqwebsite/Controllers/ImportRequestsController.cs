@@ -7,8 +7,15 @@ namespace Capqwebsite.Controllers;
 public class ImportRequestsController : Controller
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<ImportRequestsController> _logger;
 
-    public ImportRequestsController(IConfiguration configuration) => _configuration = configuration;
+    public ImportRequestsController(
+        IConfiguration configuration,
+        ILogger<ImportRequestsController> logger)
+    {
+        _configuration = configuration;
+        _logger = logger;
+    }
 
     public async Task<IActionResult> Index(DateTime? date)
     {
@@ -42,7 +49,7 @@ public class ImportRequestsController : Controller
                         employee.ISAdmin,
                         (SELECT STRING_AGG(CONCAT(COALESCE(NULLIF(privilegeUser.FullName, ''), privilegeUser.LoginName, CONVERT(nvarchar(20), member.Employee_Id)), ' (', CASE WHEN member.ISAdmin = 1 THEN N'أدمن' ELSE N'مساعد' END, ')'), '|')
                          FROM dbo.CommitteeEmployee member
-                         LEFT JOIN dbPrivilage_Test.dbo.PR_User privilegeUser ON privilegeUser.Id = member.Employee_Id
+                         LEFT JOIN dbPrivilage.dbo.PR_User privilegeUser ON privilegeUser.Id = member.Employee_Id
                          WHERE member.Committee_ID = committee.ID AND member.OperationType = 74 AND member.User_Deletion_Id IS NULL) AS CommitteeMembers,
                         (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r WHERE r.Committee_ID = committee.ID AND r.CommitteeResultType_ID IS NOT NULL) AS ResultCount,
                         (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r INNER JOIN dbo.Im_CommitteeResult_Confirm c ON c.Im_CommitteeResult_ID = r.ID AND c.EmployeeId = @UserId WHERE r.Committee_ID = committee.ID) AS ConfirmCount
@@ -183,6 +190,9 @@ public class ImportRequestsController : Controller
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex,
+                "Failed to load import requests for UserId={UserId}, EmployeeId={EmployeeId}, Date={SelectedDate}; TraceId={TraceId}",
+                userId, employeeId, selectedDate, HttpContext.TraceIdentifier);
             ViewBag.PageError = $"تعذر تحميل طلبات الوارد: {ex.Message}";
             ViewBag.SelectedDate = selectedDate.ToString("yyyy-MM-dd");
         }

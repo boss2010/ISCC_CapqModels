@@ -7,10 +7,12 @@ namespace Capqwebsite.Controllers
     public class LoginController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<LoginController> _logger;
 
-        public LoginController(IConfiguration configuration)
+        public LoginController(IConfiguration configuration, ILogger<LoginController> logger)
         {
             _configuration = configuration;
+            _logger = logger;
         }
 
         [AllowAnonymous]
@@ -68,8 +70,11 @@ namespace Capqwebsite.Controllers
                 HttpContext.Session.SetString("EmployeeId", employeeId.ToString());
                 return RedirectToAction("Index", "ImportRequests");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex,
+                    "Login database error for user {LoginName}; TraceId={TraceId}",
+                    userName.Trim(), HttpContext.TraceIdentifier);
                 ViewBag.LoginError = "تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى أو تواصل مع مسؤول النظام";
                 return View("Index");
             }
