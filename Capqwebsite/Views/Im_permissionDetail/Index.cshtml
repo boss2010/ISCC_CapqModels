@@ -1,0 +1,67 @@
+@model ViewModels.ImPermissionDetailVm
+@{
+    ViewData["Title"] = "تفاصيل إذن الاستيراد";
+}
+
+<div class="container py-4" dir="rtl">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="text-primary mb-1">تفاصيل إذن الاستيراد</h2>
+            <span class="text-muted">رقم الإذن: @(string.IsNullOrWhiteSpace(Model.PermissionNumber) ? "—" : Model.PermissionNumber)</span>
+        </div>
+        <a asp-controller="ListIm_Permission" asp-action="Index" class="btn btn-outline-secondary">العودة إلى الأذون</a>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger shadow-sm">
+            <h5 class="alert-heading">تعذر عرض تفاصيل الإذن</h5>
+            <div class="mb-2" style="white-space:pre-wrap">@Model.ErrorMessage</div>
+            <hr />
+            <div><strong>رقم تتبع المشكلة:</strong> <code>@Model.TraceId</code></div>
+            <small>استخدم رقم التتبع للعثور على الـ Stack Trace الكامل داخل ملف السجل.</small>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">بيانات الإذن</div>
+            <div class="card-body"><div class="row g-3">
+                <div class="col-md-4"><strong>رقم الإذن</strong><div>@Model.PermissionNumber</div></div>
+                <div class="col-md-4"><strong>تاريخ الوصول</strong><div>@(Model.ArrivalDate?.ToString("yyyy/MM/dd") ?? "—")</div></div>
+                <div class="col-md-4"><strong>مدة الإذن</strong><div>@(Model.StartDate?.ToString("yyyy/MM/dd") ?? "—") — @(Model.EndDate?.ToString("yyyy/MM/dd") ?? "—")</div></div>
+                <div class="col-md-4"><strong>الدولة</strong><div>@(string.IsNullOrWhiteSpace(Model.Country) ? "—" : Model.Country)</div></div>
+                <div class="col-md-4"><strong>الشركة</strong><div>@(string.IsNullOrWhiteSpace(Model.Company) ? "—" : Model.Company)</div></div>
+                <div class="col-md-4"><strong>نوع المستورد</strong><div>@(string.IsNullOrWhiteSpace(Model.ImporterType) ? "—" : Model.ImporterType)</div></div>
+                <div class="col-md-4"><strong>نوع العملية</strong><div>@(string.IsNullOrWhiteSpace(Model.OperationType) ? "—" : Model.OperationType)</div></div>
+                <div class="col-md-4"><strong>الحالة</strong><div>@(Model.IsAccepted == true ? "مقبول" : Model.IsAccepted == false ? "مرفوض" : "تحت الإجراء")</div></div>
+                <div class="col-md-4"><strong>الدفع</strong><div>@(Model.IsPaid == true ? "تم الدفع" : "غير مدفوع")</div></div>
+            </div></div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between"><strong>الأصناف</strong><span class="badge bg-info text-dark">@Model.Items.Count</span></div>
+            <div class="table-responsive"><table class="table table-striped align-middle mb-0">
+                <thead><tr><th>رقم الصنف</th><th>الصنف</th><th>الاسم المختصر</th><th>دولة المنشأ</th><th>عدد العبوات</th><th>وزن العبوة</th><th>الوزن الإجمالي</th><th>الحجم</th><th>الحالة</th></tr></thead>
+                <tbody>
+                @if (Model.Items.Count == 0) { <tr><td colspan="9" class="text-center text-muted py-4">لا توجد أصناف مرتبطة بهذا الإذن.</td></tr> }
+                else
+                {
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(item.ItemPermissionNumber) ? "—" : item.ItemPermissionNumber)</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.ItemName) ? "—" : item.ItemName)</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.ShortName) ? "—" : item.ShortName)</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.OriginCountry) ? "—" : item.OriginCountry)</td>
+                            <td>@(item.PackageCount?.ToString() ?? "—")</td><td>@(item.PackageWeight?.ToString("0.###") ?? "—")</td>
+                            <td>@(item.GrossWeight?.ToString("0.###") ?? "—")</td><td>@(item.Size?.ToString("0.###") ?? "—")</td>
+                            <td>@(item.IsAccepted ? "مقبول" : "غير مقبول")</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table></div>
+        </div>
+    }
+</div>
