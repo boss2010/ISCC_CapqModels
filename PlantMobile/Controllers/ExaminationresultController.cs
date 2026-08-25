@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 
-namespace Capqwebsite.Controllers
+namespace PlantMobile.Controllers
 {
-    public class TypesOfanalysisController : Controller
+    public class ExaminationresultController : Controller
     {
         public IActionResult Index()
         {

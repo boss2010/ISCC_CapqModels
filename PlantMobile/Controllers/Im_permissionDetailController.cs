@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using ViewModels;
 
-namespace Capqwebsite.Controllers;
+namespace PlantMobile.Controllers;
 
 [Route("Im_Permissions/Im_permissionDetail")]
 public class Im_permissionDetailController : Controller

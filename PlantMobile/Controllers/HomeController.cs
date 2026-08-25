@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using static ViewModels.ExportImportActivity_API;
 
-namespace Capqwebsite.Controllers
+namespace PlantMobile.Controllers
 {
     public class HomeController(IHttpClientFactory httpClientFactory) : Controller
     {

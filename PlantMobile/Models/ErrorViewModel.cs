@@ -1,4 +1,4 @@
-namespace Capqwebsite.Models
+namespace PlantMobile.Models
 {
     public class ErrorViewModel
     {

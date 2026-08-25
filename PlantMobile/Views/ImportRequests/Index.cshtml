@@ -65,12 +65,12 @@
         {
             <div class="table-responsive">
                 <table class="table table-bordered table-hover text-center align-middle bg-white">
-                    <thead class="table-dark"><tr><th>#</th><th>رقم الطلب</th><th>نوع اللجنة</th><th>أعضاء اللجنة</th><th>الحالة</th><th>مرفق السحب</th><th>التفاصيل</th></tr></thead>
+                    <thead class="table-dark"><tr><th>#</th><th>رقم الطلب</th><th>الجهة المستوردة</th><th>نوع اللجنة</th><th>أعضاء اللجنة</th><th>الحالة</th><th>مرفق السحب</th><th>التفاصيل</th></tr></thead>
                     <tbody id="requestsBody">
                     @foreach (var item in Model)
                     {
                         <tr data-status="@item.WorkStatusKey">
-                            <td>@item.Row_Num</td><td>@item.CheckRequest_Number</td><td>@item.Committee_Type_Name</td>
+                            <td>@item.Row_Num</td><td>@item.CheckRequest_Number</td><td>@item.CompanyName</td><td>@item.Committee_Type_Name</td>
                             <td>
                                 <div class="member-list">
                                 @foreach (var member in item.CommitteeMembers.Split('|', StringSplitOptions.RemoveEmptyEntries))

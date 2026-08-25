@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Builder;
-using Capqwebsite.Infrastructure;
+using PlantMobile.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 

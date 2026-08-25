@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Capqwebsite.Infrastructure;
+namespace PlantMobile.Infrastructure;
 
 public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
 {

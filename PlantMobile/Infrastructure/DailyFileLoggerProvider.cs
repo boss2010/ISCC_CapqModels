@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Capqwebsite.Infrastructure;
+namespace PlantMobile.Infrastructure;
 
 public sealed class DailyFileLoggerProvider : ILoggerProvider
 {

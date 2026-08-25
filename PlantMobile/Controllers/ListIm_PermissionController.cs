@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using ViewModels;
 
-namespace Capqwebsite.Controllers;
+namespace PlantMobile.Controllers;
 
 public class ListIm_PermissionController : Controller
 {

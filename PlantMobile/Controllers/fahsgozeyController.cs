@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 
-namespace Capqwebsite.Controllers
+namespace PlantMobile.Controllers
 {
     public class fahsgozeyController : Controller
     {

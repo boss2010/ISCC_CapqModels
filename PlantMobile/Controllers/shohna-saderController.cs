@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ViewModels;
 
-namespace Capqwebsite.Controllers
+namespace PlantMobile.Controllers
 {
     public class shohna_saderController : Controller
     {

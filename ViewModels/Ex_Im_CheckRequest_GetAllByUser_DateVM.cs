@@ -14,6 +14,7 @@ namespace ViewModels
             //byte not bool
             public Nullable<byte> IsExport { get; set; }
             public string CheckRequest_Number { get; set; }
+            public string CompanyName { get; set; } = string.Empty;
             public Nullable<long> checkRequest_Id { get; set; }
             public Nullable<long> Committee_ID { get; set; }
             public string Committee_Type_Name { get; set; }

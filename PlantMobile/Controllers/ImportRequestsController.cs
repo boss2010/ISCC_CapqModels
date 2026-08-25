@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using static ViewModels.ExportImportActivity_API;
 
-namespace Capqwebsite.Controllers;
+namespace PlantMobile.Controllers;
 
 public class ImportRequestsController : Controller
 {
@@ -37,6 +37,10 @@ public class ImportRequestsController : Controller
                     SELECT DISTINCT
                         request.ID AS CheckRequestId,
                         request.CheckRequest_Number,
+                        COALESCE(
+                            NULLIF(permissionImporter.ImporterName COLLATE Arabic_CI_AS, N''),
+                            NULLIF(importer.DelegateName COLLATE Arabic_CI_AS, N''),
+                            N'غير محدد') COLLATE Arabic_CI_AS AS CompanyName,
                         committee.ID AS CommitteeId,
                         committee.CommitteeType_ID,
                         type.Name_Ar AS CommitteeTypeName,
@@ -81,6 +85,21 @@ public class ImportRequestsController : Controller
                         AND employee.User_Deletion_Id IS NULL
                     INNER JOIN dbo.CommitteeType type ON type.ID = committee.CommitteeType_ID
                     LEFT JOIN dbo.Im_OpertaionType operation ON operation.ID = request.Im_OperationType
+                    OUTER APPLY
+                    (
+                        SELECT TOP (1) permission.ImporterName
+                        FROM dbo.View_List_Im_PermissionRequest permission
+                        WHERE permission.Im_CheckRequest_ID = request.ID
+                        ORDER BY permission.Im_PermissionRequest_ID DESC
+                    ) permissionImporter
+                    OUTER APPLY
+                    (
+                        SELECT TOP (1) requestData.DelegateName
+                        FROM dbo.Im_CheckRequest_Data requestData
+                        WHERE requestData.Im_CheckRequest_ID = request.ID
+                          AND requestData.User_Deletion_Id IS NULL
+                        ORDER BY requestData.ID DESC
+                    ) importer
                     WHERE request.IsActive = 1
                       AND committee.IsApproved = 1
                       AND committee.User_Deletion_Id IS NULL
@@ -167,6 +186,7 @@ public class ImportRequestsController : Controller
                     Row_Num = Convert.ToInt32(reader["RowNum"]),
                     IsExport = 2,
                     CheckRequest_Number = Convert.ToString(reader["CheckRequest_Number"]) ?? string.Empty,
+                    CompanyName = Convert.ToString(reader["CompanyName"]) ?? "غير محدد",
                     checkRequest_Id = Convert.ToInt64(reader["CheckRequestId"]),
                     Committee_ID = Convert.ToInt64(reader["CommitteeId"]),
                     Committee_Type_Name = $"{reader["CommitteeTypeName"]} {reader["OperationTypeName"]}".Trim(),

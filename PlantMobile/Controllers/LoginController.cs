@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
-namespace Capqwebsite.Controllers
+namespace PlantMobile.Controllers
 {
     public class LoginController : Controller
     {
