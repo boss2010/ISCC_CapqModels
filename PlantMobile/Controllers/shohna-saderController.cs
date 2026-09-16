@@ -11,10 +11,12 @@ namespace PlantMobile.Controllers
     public class shohna_saderController : Controller
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
-        public shohna_saderController(IHttpClientFactory httpClientFactory)
+        public shohna_saderController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         [AllowAnonymous]
@@ -58,6 +60,29 @@ namespace PlantMobile.Controllers
                 };
 
                 var model = System.Text.Json.JsonSerializer.Deserialize<Ex_CheckRequest_GetData_Android_V2_VM>(responseBody, options);
+
+                // The legacy API count is not authoritative; use the request's lot counts.
+                if (model != null)
+                {
+                    await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
+                    await connection.OpenAsync();
+                    const string packagesSql = """
+                        SELECT lot.ID, COALESCE(lot.PackagesCount, 0)
+                        FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+                        JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID
+                        JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID
+                        WHERE shipping.Im_CheckRequest_ID=@CheckRequestId
+                          AND lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL
+                        """;
+                    await using var command = new SqlCommand(packagesSql, connection);
+                    command.Parameters.AddWithValue("@CheckRequestId", checkRequest_Id);
+                    var counts = new Dictionary<long, int>();
+                    await using var reader = await command.ExecuteReaderAsync();
+                    while (await reader.ReadAsync()) counts[reader.GetInt64(0)] = reader.GetInt32(1);
+                    foreach (var item in model.Item_Data)
+                    foreach (var lot in item.Lot_Data ?? Enumerable.Empty<_x0040_temp_table_Lot>())
+                        lot.Package_Count = counts.GetValueOrDefault(lot.ID);
+                }
 
                 return View("Index", model);
             }

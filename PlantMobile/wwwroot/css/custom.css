@@ -199,3 +199,28 @@ form {
     background: #ffffff;
     padding: 10px 25px;
 }
+
+@media (max-width: 767.98px) {
+    .site-header-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 12px;
+    }
+
+    .site-header-actions form {
+        padding: 0;
+        background: transparent;
+    }
+
+    .site-header-actions > form,
+    .site-header-actions > a {
+        margin: 0 !important;
+    }
+
+    .site-header-actions .btn {
+        min-height: 44px;
+        white-space: normal;
+    }
+}

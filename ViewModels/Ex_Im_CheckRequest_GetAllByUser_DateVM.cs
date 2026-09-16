@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,9 +32,21 @@ namespace ViewModels
             public string WorkStatusName { get; set; } = "جديد";
             public bool IsReadOnly { get; set; }
             public bool IsAdmin { get; set; }
+            public bool InspectionComplete { get; set; }
+            public bool WithdrawalComplete { get; set; }
+            public bool CanShowLaboratoryResult { get; set; }
+            public string ActionText => IsReadOnly ? "عرض اللجنة" : !IsAdmin ? "إبداء الرأي"
+                : Committee_Type_Id == 11 && InspectionComplete
+                    ? "عرض اللجنة"
+                : Committee_Type_Id == 13 && WithdrawalComplete
+                    ? "عرض اللجنة"
+                : Committee_Type_Id == 13 ? "استكمال السحب" : "بدء / استكمال";
             public string CommitteeMembers { get; set; } = string.Empty;
             public bool SampleAttachmentUploaded { get; set; }
             public bool HasPendingSampleFinalResult { get; set; }
+            public bool HasPendingLabResult { get; set; }
+            public string SampleBarcodes { get; set; } = string.Empty;
+            public string PendingLabBarcodes { get; set; } = string.Empty;
 
         }
 

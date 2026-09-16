@@ -1,0 +1,31 @@
+@model PlantMobile.Controllers.LaboratoryResultVm
+<form asp-controller="LaboratoryResult" asp-action="Save" method="post" enctype="multipart/form-data" class="lab-result-form" dir="rtl">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="SampleId" value="@Model.SampleId" />
+    <div class="alert alert-info">نتيجة هذا الباركود ومرفقها تُطبّق على جميع عينات اللوطات المرتبطة بنفس الباركود في هذه اللجنة. الباركودات الأخرى لها نتائج مستقلة.</div>
+    <div class="lab-summary">
+        <div><span>رقم الطلب</span><strong>@Model.RequestNumber</strong></div><div><span>باركود العينة</span><strong>@Model.Barcode</strong></div>
+        <div><span>النبات / اللوط</span><strong>@Model.PlantName — @Model.LotNumber</strong></div><div><span>التحليل / المعمل</span><strong>@Model.AnalysisType — @Model.Laboratory</strong></div>
+    </div>
+    <style>.lab-preview{display:block;max-width:180px!important;max-height:180px!important;width:auto;height:auto;object-fit:contain;border:1px solid #dce8e8;border-radius:10px;padding:4px}</style>
+    @if (Model.IsCompleted)
+    {
+        <div class="alert alert-success mt-3">تم حفظ نتيجة المعمل وأصبحت للعرض فقط.</div>
+        <div class="row mt-1">
+            <div class="col-md-6 mb-3"><label class="form-label fw-bold d-block">نتيجة المعمل</label><span class="badge @(Model.Accepted==true ? "badge-success" : "badge-danger") p-2">@(Model.Accepted==true ? "مقبول" : "مرفوض")</span></div>
+            <div class="col-12 mb-3"><label class="form-label fw-bold d-block">الملاحظات</label><div class="form-control bg-light" style="height:auto;min-height:70px">@Model.Notes</div></div>
+            <div class="col-12"><a asp-controller="ImportRequestDetails" asp-action="ViewSampleAttachment" asp-route-id="@Model.AttachmentId" target="_blank" class="btn btn-outline-primary">عرض صورة نتيجة المعمل</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3 mt-1">
+            <div class="col-12"><label class="form-label fw-bold">نتيجة المعمل</label><select name="Accepted" class="form-control" required><option value="">— اختر النتيجة —</option><option value="true" selected="@(Model.Accepted==true)">مقبول</option><option value="false" selected="@(Model.Accepted==false)">مرفوض</option></select></div>
+            <div class="col-12"><label class="form-label fw-bold">الملاحظات</label><textarea name="Notes" class="form-control" rows="3" required>@Model.Notes</textarea></div>
+            <div class="col-12"><label class="form-label fw-bold">صورة نتيجة المعمل</label><input name="Attachment" class="form-control lab-attachment" type="file" accept="image/*" capture="environment" required /><small class="text-muted d-block mt-1">من الموبايل يمكنك التصوير بالكاميرا مباشرة، أو اختيار صورة من الجهاز (بحد أقصى 10 ميجابايت).</small></div>
+            <div class="col-12"><img class="lab-preview d-none" alt="معاينة صورة نتيجة المعمل" /></div>
+        </div>
+        <div class="alert d-none mt-3 lab-message"></div>
+        <div class="text-start mt-3"><button type="submit" class="btn btn-success px-5">حفظ نتيجة المعمل</button></div>
+    }
+</form>

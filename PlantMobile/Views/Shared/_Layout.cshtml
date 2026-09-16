@@ -16,8 +16,8 @@
     @*     <link href="~/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/bootstrap-select.css" rel="stylesheet" /> *@
     <link href="~/css/style.css" rel="stylesheet">
-    <link href="~/css/custom.css" rel="stylesheet" />
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <link href="~/css/custom.css" rel="stylesheet" asp-append-version="true" />
+    <script src="~/lib/jquery/jquery.min.js"></script>
 
 </head>
 <body>
@@ -33,10 +33,11 @@
                     </div>
                 </div>
                 <div class="col-md-6 text-center text-lg-left mb-2 mb-lg-0">
-                    <div class="d-inline-flex align-items-center">
+                    <div class="site-header-actions d-inline-flex align-items-center">
                         <form asp-controller="Login" asp-action="Logout" method="post" class="ml-3">
                             <button type="submit" class="btn btn-outline-light">تسجيل الخروج</button>
                         </form>
+                        <a asp-controller="LaboratoryResult" asp-action="Index" class="btn btn-warning ml-2">نتيجة المعمل</a>
                         <a href="" class="navbar-brand">
                             <img src="~/img/logo-capq2.png" class="logo" />
                         </a>
@@ -57,7 +58,6 @@
    
 
     <!-- JavaScript Libraries -->
-    <script src="~/js/jquery-3.4.1.min.js"></script>
     <script src="~/bootstrap.bundle.min.js"></script>
 
     <script src="~/lib/easing/easing.min.js"></script>

@@ -1,0 +1,30 @@
+.weight-control { display:inline-flex !important; align-items:center; flex-wrap:wrap; gap:8px; margin:0 !important; color:inherit !important; font-size:inherit !important; }
+.weight-control [data-weight-value] { font-variant-numeric:tabular-nums; }
+.weight-unit { background:#fff; border:1px solid #b8deda; border-radius:8px; color:#176f75; font:inherit; font-size:14px; min-height:44px; padding:6px 10px; cursor:pointer; max-width:100%; }
+.weight-editor { display:flex !important; flex-wrap:nowrap; width:100%; }
+.weight-editor input { min-width:0; flex:1; }
+.weight-editor .weight-unit { flex:0 0 auto; }
+.plant-work-body .lot-card summary { grid-template-columns:minmax(110px,1fr) minmax(90px,1fr) minmax(0,2fr) auto; }
+.plant-work-body .lot-card summary::after { grid-column:4; grid-row:1; }
+.plant-work-body .inspection-fields { grid-template-columns:minmax(180px,1fr) minmax(0,2fr); align-items:start; }
+.plant-work-body .inspection-field-notes { grid-column:auto; }
+.plant-work-body .inspection-field .form-select { display:block; width:100%; padding:10px 12px; font-size:16px; }
+.plant-work-body .partial-inspection-panel { margin-top:0 !important; padding:20px; background:#f6fbfa; }
+.plant-work-body .inspection-field .form-label::before { display:none; }
+.plant-work-body .inspection-field textarea { min-height:110px; }
+.inspection-mode-option input:focus-visible + label { outline:3px solid #147d83; outline-offset:3px; }
+@media(max-width:767px) {
+    .plant-work-body { padding:10px; }
+    .plant-work-body .lot-card summary { grid-template-columns:1fr auto; padding:14px; }
+    .plant-work-body .lot-card summary::after { grid-column:2; }
+    .plant-work-body .lot-card summary .lot-summary-item { grid-column:1; }
+    .plant-work-body .inspection-fields { grid-template-columns:minmax(0,1fr); }
+    .plant-work-body .lot-card-body { padding:12px; }
+    .plant-work-body .partial-inspection-panel { padding:14px; }
+}
+.inspection-mode-inline .inspection-mode-options { display:inline-flex; gap:0; padding:4px; border-radius:12px; background:#edf7f6; }
+.inspection-mode-inline .inspection-mode-option label { margin:0; min-width:120px; text-align:center; border:0; background:transparent; padding:10px 22px; }
+#inspectionSaveForm.total-mode .lot-card summary { cursor:default; }
+#inspectionSaveForm.total-mode .lot-card summary::after { content:''; }
+#inspectionSaveForm.total-mode .lot-card .lot-card-body { display:none; }
+#inspectionSaveForm .plant-work-body > .lot-card { margin-bottom:8px !important; box-shadow:none !important; }

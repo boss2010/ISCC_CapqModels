@@ -17,7 +17,214 @@ public class ImportRequestsController : Controller
         _logger = logger;
     }
 
-    public async Task<IActionResult> Index(DateTime? date)
+    [HttpGet]
+    public async Task<IActionResult> QuarantineLots(long checkRequestId)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId))
+            return Unauthorized("انتهت جلسة الدخول.");
+
+        var model = new RequestQuarantineVm { CheckRequestId = checkRequestId };
+        await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
+        await connection.OpenAsync();
+        const string accessSql = """
+            SELECT TOP 1 request.CheckRequest_Number
+            FROM dbo.Im_CheckRequest request
+            JOIN dbo.Im_RequestCommittee committee ON committee.ImCheckRequest_ID=request.ID AND committee.User_Deletion_Id IS NULL
+            JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID=committee.ID AND employee.Employee_Id=@UserId
+              AND employee.OperationType=74 AND employee.User_Deletion_Id IS NULL
+            WHERE request.ID=@CheckRequestId
+            """;
+        await using (var access = new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(accessSql), connection))
+        {
+            access.Parameters.AddWithValue("@UserId", userId);
+            access.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            model.RequestNumber = Convert.ToString(await access.ExecuteScalarAsync()) ?? string.Empty;
+        }
+        if (string.IsNullOrWhiteSpace(model.RequestNumber)) return Forbid();
+
+        const string lotsSql = """
+            SELECT item.ID, COALESCE(plant.Name_Ar, shortName.ShortName_Ar, N'غير محدد'),
+                   lot.ID, COALESCE(lot.Lot_Number, CONVERT(nvarchar(30),lot.ID)),
+                   result.CommitteeResultType_ID,
+                   CAST(CASE WHEN result.ID IS NULL OR result.CommitteeResultType_ID IS NULL THEN 0 ELSE 1 END AS bit),
+                   ISNULL(samples.SampleCount,0), ISNULL(samples.IncompleteCount,0),
+                   activeStatus.IS_Status, activeStatus.Name_AR, activeStatus.Is_Continue,
+                   pendingLab.PendingCount
+            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+            JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID AND item.User_Deletion_Id IS NULL
+            JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID AND shipping.User_Deletion_Id IS NULL
+            LEFT JOIN dbo.Item_ShortName shortName ON shortName.ID=item.Item_ShortName_ID
+            LEFT JOIN dbo.Item plant ON plant.ID=shortName.Item_ID
+            OUTER APPLY (
+                SELECT TOP 1 r.ID,r.CommitteeResultType_ID
+                FROM dbo.Im_CommitteeResult r
+                JOIN dbo.Im_RequestCommittee c ON c.ID=r.Committee_ID AND c.CommitteeType_ID=11 AND c.User_Deletion_Id IS NULL
+                JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID AND e.Employee_Id=@UserId AND e.ISAdmin=1
+                  AND e.OperationType=74 AND e.User_Deletion_Id IS NULL
+                WHERE c.ImCheckRequest_ID=@CheckRequestId AND r.User_Deletion_Id IS NULL
+                  AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=item.ID))
+                ORDER BY r.ID DESC) result
+            OUTER APPLY (
+                SELECT COUNT(*) SampleCount,
+                       SUM(CASE WHEN sample.SampleSize IS NULL OR sample.SampleSize<=0 OR ISNULL(c.IsFinishedAll,0)=0 THEN 1 ELSE 0 END) IncompleteCount
+                FROM dbo.Im_CheckRequest_SampleData sample
+                JOIN dbo.Im_RequestCommittee c ON c.ID=sample.Im_RequestCommittee_ID AND c.User_Deletion_Id IS NULL
+                WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID IN (11,13)
+                  AND sample.LotData_ID=lot.ID AND sample.User_Deletion_Id IS NULL) samples
+            OUTER APPLY (
+                SELECT COUNT(*) PendingCount
+                FROM dbo.Im_CheckRequest_SampleData sample
+                JOIN dbo.Im_RequestCommittee c ON c.ID=sample.Im_RequestCommittee_ID AND c.User_Deletion_Id IS NULL
+                WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID IN (11,13)
+                  AND sample.LotData_ID=lot.ID AND sample.User_Deletion_Id IS NULL
+                  AND (sample.IsAccepted IS NULL OR NOT EXISTS
+                    (SELECT 1 FROM dbo.A_AttachmentData attachment
+                     WHERE attachment.RowId=sample.ID AND attachment.A_AttachmentTableNameId=12
+                       AND attachment.User_Deletion_Id IS NULL))) pendingLab
+            OUTER APPLY (
+                SELECT TOP 1 lr.IS_Status,status.Name_AR,status.Is_Continue
+                FROM dbo.Im_CheckRequest_Items_Lot_Result lr
+                LEFT JOIN dbo.Im_CheckRequest_Lot_Result_Status status ON status.ID=lr.IS_Status
+                WHERE lr.Im_CheckRequest_Items_Lot_Category_ID=lot.ID AND lr.IS_Status_Committee=1
+                ORDER BY lr.ID DESC) activeStatus
+            WHERE shipping.Im_CheckRequest_ID=@CheckRequestId AND lot.User_Deletion_Id IS NULL
+              AND (result.ID IS NOT NULL OR activeStatus.IS_Status IS NOT NULL)
+            ORDER BY item.ID,lot.ID
+            """;
+        await using (var command = new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(lotsSql), connection))
+        {
+            command.Parameters.AddWithValue("@UserId", userId);
+            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                model.Lots.Add(new RequestQuarantineLotVm
+                {
+                    RequestItemId=reader.GetInt64(0), PlantName=reader.GetString(1), LotId=reader.GetInt64(2), LotNumber=reader.GetString(3),
+                    InspectionComplete=reader.GetBoolean(5), HasWithdrawal=reader.GetInt32(6)>0,
+                    WithdrawalComplete=reader.GetInt32(6)==0 || reader.GetInt32(7)==0,
+                    ExistingStatusId=reader.IsDBNull(8)?null:reader.GetInt32(8), ExistingStatusName=reader.IsDBNull(9)?string.Empty:reader.GetString(9),
+                    ExistingStatusContinues=reader.IsDBNull(10)?null:reader.GetBoolean(10),
+                    LaboratoryResultComplete=reader.GetInt32(11)==0
+                });
+        }
+        const string statusesSql = "SELECT ID,COALESCE(Name_AR,Name_En,CONVERT(nvarchar(20),ID)),Is_Continue FROM dbo.Im_CheckRequest_Lot_Result_Status WHERE ID>0 AND ISNULL(IsActive,1)=1 ORDER BY ID";
+        await using (var command = new SqlCommand(statusesSql, connection))
+        await using (var reader = await command.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) model.Statuses.Add(new RequestQuarantineStatusVm { Id=reader.GetInt32(0), Name=reader.GetString(1), IsContinue=!reader.IsDBNull(2)&&reader.GetBoolean(2) });
+        return PartialView("_QuarantineLots", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveQuarantineLots(RequestQuarantineSaveVm input)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !short.TryParse(HttpContext.Session.GetString("UserId"), out short userId)) return Unauthorized();
+        if (input.Lots.Count==0 || input.Lots.Any(x=>x.LotId<=0 || x.StatusId<=0)) return BadRequest("يجب تحديد موقف الحجر لكل لوط جاهز.");
+        await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
+        await connection.OpenAsync();
+        await using var transaction=(SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            const string readySql="""
+                SELECT COUNT(*) FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+                JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID
+                JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID
+                WHERE lot.ID=@LotId AND shipping.Im_CheckRequest_ID=@CheckRequestId AND lot.User_Deletion_Id IS NULL
+                  AND EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult r JOIN dbo.Im_RequestCommittee c ON c.ID=r.Committee_ID
+                              JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID AND e.Employee_Id=@UserId AND e.ISAdmin=1 AND e.User_Deletion_Id IS NULL
+                              WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID=11 AND c.User_Deletion_Id IS NULL
+                                AND r.User_Deletion_Id IS NULL AND r.CommitteeResultType_ID IS NOT NULL
+                                AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=item.ID)))
+                  AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData s JOIN dbo.Im_RequestCommittee c ON c.ID=s.Im_RequestCommittee_ID
+                                  WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID IN (11,13) AND c.User_Deletion_Id IS NULL
+                                    AND s.LotData_ID=lot.ID AND s.User_Deletion_Id IS NULL
+                                    AND (s.SampleSize IS NULL OR s.SampleSize<=0 OR ISNULL(c.IsFinishedAll,0)=0
+                                      OR s.IsAccepted IS NULL OR NOT EXISTS
+                                        (SELECT 1 FROM dbo.A_AttachmentData attachment
+                                         WHERE attachment.RowId=s.ID AND attachment.A_AttachmentTableNameId=12
+                                           AND attachment.User_Deletion_Id IS NULL)))
+                """;
+            const string saveSql="""
+                UPDATE dbo.Im_CheckRequest_Items_Lot_Result SET IS_Status_Committee=0 WHERE Im_CheckRequest_Items_Lot_Category_ID=@LotId;
+                INSERT dbo.Im_CheckRequest_Items_Lot_Result(ID,Im_CheckRequest_Items_Lot_Category_ID,Nots,User_Creation_Id,User_Creation_Date,IS_Status,IS_Status_Committee)
+                VALUES(NEXT VALUE FOR dbo.Im_CheckRequest_Items_Lot_Result_SEQ,@LotId,@Notes,@UserId,GETDATE(),@StatusId,1);
+                """;
+            foreach(var lot in input.Lots)
+            {
+                await using var ready=new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(readySql),connection,transaction);
+                ready.Parameters.AddWithValue("@LotId",lot.LotId); ready.Parameters.AddWithValue("@CheckRequestId",input.CheckRequestId); ready.Parameters.AddWithValue("@UserId",userId);
+                if(Convert.ToInt32(await ready.ExecuteScalarAsync())!=1) throw new InvalidOperationException($"اللوط {lot.LotId} غير جاهز لتسجيل موقف الحجر.");
+                await using var save=new SqlCommand(saveSql,connection,transaction);
+                save.Parameters.AddWithValue("@LotId",lot.LotId); save.Parameters.AddWithValue("@Notes",(object?)lot.Notes?.Trim()??DBNull.Value); save.Parameters.AddWithValue("@UserId",userId); save.Parameters.AddWithValue("@StatusId",lot.StatusId);
+                await save.ExecuteNonQueryAsync();
+            }
+            await transaction.CommitAsync();
+            return Ok(new { message="تم حفظ موقف الحجر بنجاح." });
+        }
+        catch(Exception ex){ await transaction.RollbackAsync(); return BadRequest(ex.Message); }
+    }
+
+    public Task<IActionResult> Index(DateTime? date) => LoadRequests(date, null);
+
+    [HttpGet]
+    public Task<IActionResult> Committees(long checkRequestId, DateTime? date) => LoadRequests(date, checkRequestId);
+
+    [HttpGet]
+    public async Task<IActionResult> AfterCompletion(long checkRequestId)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
+            !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId))
+            return RedirectToAction("Index", "Login");
+
+        string? date = HttpContext.Session.GetString($"ImportRequestDate:{checkRequestId}");
+        try
+        {
+            await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
+            await connection.OpenAsync();
+            const string sql = """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM dbo.Im_RequestCommittee assigned
+                    JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = assigned.ID
+                    WHERE assigned.ImCheckRequest_ID = @CheckRequestId
+                      AND assigned.User_Deletion_Id IS NULL
+                      AND employee.Employee_Id = @UserId AND employee.OperationType = 74
+                      AND employee.User_Deletion_Id IS NULL
+                ) THEN CASE WHEN EXISTS (
+                    SELECT 1 FROM dbo.Im_RequestCommittee committee
+                    WHERE committee.ImCheckRequest_ID = @CheckRequestId
+                      AND committee.User_Deletion_Id IS NULL AND committee.Is_Cancel IS NULL
+                      AND (
+                        (ISNULL(committee.Status, 0) = 0 AND ISNULL(committee.IsFinishedAll, 0) = 0)
+                        OR (committee.CommitteeType_ID = 13 AND EXISTS (
+                            SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
+                            WHERE sample.Im_RequestCommittee_ID = committee.ID
+                              AND sample.User_Deletion_Id IS NULL AND sample.Sample_BarCode IS NOT NULL
+                              AND (sample.IsAccepted IS NULL OR NOT EXISTS (
+                                  SELECT 1 FROM dbo.A_AttachmentData attachment
+                                  WHERE attachment.RowId = sample.ID AND attachment.A_AttachmentTableNameId = 12
+                                    AND attachment.User_Deletion_Id IS NULL))
+                        ))
+                      )
+                ) THEN 1 ELSE 0 END ELSE -1 END
+                """;
+            await using var command = new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(sql), connection);
+            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
+            command.Parameters.AddWithValue("@UserId", userId);
+            int remaining = Convert.ToInt32(await command.ExecuteScalarAsync());
+            if (remaining < 0) return Forbid();
+            if (remaining == 0) return RedirectToAction(nameof(Index), new { date });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check remaining committees for request {CheckRequestId}", checkRequestId);
+        }
+
+        return RedirectToAction(nameof(Committees), new { checkRequestId, date });
+    }
+
+    private async Task<IActionResult> LoadRequests(DateTime? date, long? checkRequestId)
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated" ||
             !long.TryParse(HttpContext.Session.GetString("UserId"), out long userId) ||
@@ -25,141 +232,27 @@ public class ImportRequestsController : Controller
             return RedirectToAction("Index", "Login");
 
         DateTime selectedDate = (date ?? DateTime.Today).Date;
+        if (checkRequestId.HasValue)
+            HttpContext.Session.SetString($"ImportRequestDate:{checkRequestId.Value}", selectedDate.ToString("yyyy-MM-dd"));
         var requests = new List<Ex_Im_CheckRequest_GetAllByUser_DateVM>();
+        var loadStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        double connectionMs = 0;
+        double queryMs = 0;
 
         try
         {
             await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
-            await connection.OpenAsync();
-            const string sql = """
-                ;WITH AssignedCommittees AS
-                (
-                    SELECT DISTINCT
-                        request.ID AS CheckRequestId,
-                        request.CheckRequest_Number,
-                        COALESCE(
-                            NULLIF(permissionImporter.ImporterName COLLATE Arabic_CI_AS, N''),
-                            NULLIF(importer.DelegateName COLLATE Arabic_CI_AS, N''),
-                            N'غير محدد') COLLATE Arabic_CI_AS AS CompanyName,
-                        committee.ID AS CommitteeId,
-                        committee.CommitteeType_ID,
-                        type.Name_Ar AS CommitteeTypeName,
-                        operation.Name_Ar AS OperationTypeName,
-                        committee.Status,
-                        committee.IsFinishedAll,
-                        committee.Is_Start_Android,
-                        committee.Is_Cancel,
-                        committee.User_Updation_Date,
-                        employee.ISAdmin,
-                        (SELECT STRING_AGG(CONCAT(COALESCE(NULLIF(privilegeUser.FullName, ''), privilegeUser.LoginName, CONVERT(nvarchar(20), member.Employee_Id)), ' (', CASE WHEN member.ISAdmin = 1 THEN N'أدمن' ELSE N'مساعد' END, ')'), '|')
-                         FROM dbo.CommitteeEmployee member
-                         LEFT JOIN dbPrivilage.dbo.PR_User privilegeUser ON privilegeUser.Id = member.Employee_Id
-                         WHERE member.Committee_ID = committee.ID AND member.OperationType = 74 AND member.User_Deletion_Id IS NULL) AS CommitteeMembers,
-                        (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r WHERE r.Committee_ID = committee.ID AND r.CommitteeResultType_ID IS NOT NULL) AS ResultCount,
-                        (SELECT COUNT(*) FROM dbo.Im_CommitteeResult r INNER JOIN dbo.Im_CommitteeResult_Confirm c ON c.Im_CommitteeResult_ID = r.ID AND c.EmployeeId = @UserId WHERE r.Committee_ID = committee.ID) AS ConfirmCount
-                        ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleCount
-                        ,(SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData s INNER JOIN dbo.Im_CheckRequest_SampleData_Confirm c ON c.Im_CheckRequest_SampleData_ID = s.ID AND c.EmployeeId = @UserId WHERE s.Im_RequestCommittee_ID = committee.ID AND s.Sample_BarCode IS NOT NULL AND s.User_Deletion_Id IS NULL) AS SampleConfirmCount
-                        ,CAST(CASE WHEN EXISTS
-                          (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
-                           INNER JOIN dbo.A_AttachmentData attachment ON attachment.RowId = sample.ID
-                             AND attachment.A_AttachmentTableNameId = 12
-                             AND attachment.User_Deletion_Id IS NULL
-                           WHERE sample.Im_RequestCommittee_ID = committee.ID
-                             AND sample.User_Deletion_Id IS NULL)
-                         THEN 1 ELSE 0 END AS bit) AS SampleAttachmentUploaded
-                        ,CAST(CASE WHEN EXISTS
-                          (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
-                           WHERE sample.Im_RequestCommittee_ID = committee.ID
-                             AND sample.User_Deletion_Id IS NULL
-                             AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData attachment
-                                         WHERE attachment.RowId = sample.ID
-                                           AND attachment.A_AttachmentTableNameId = 12
-                                           AND attachment.User_Deletion_Id IS NULL)
-                             AND (sample.IsAccepted IS NULL OR sample.Admin_Confirmation IS NULL))
-                         THEN 1 ELSE 0 END AS bit) AS HasPendingSampleFinalResult
-                    FROM dbo.Im_CheckRequest request
-                    INNER JOIN dbo.Im_RequestCommittee committee ON committee.ImCheckRequest_ID = request.ID
-                    INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = committee.ID
-                        AND employee.Employee_Id = @UserId
-                        AND employee.OperationType = 74
-                        AND employee.User_Deletion_Id IS NULL
-                    INNER JOIN dbo.CommitteeType type ON type.ID = committee.CommitteeType_ID
-                    LEFT JOIN dbo.Im_OpertaionType operation ON operation.ID = request.Im_OperationType
-                    OUTER APPLY
-                    (
-                        SELECT TOP (1) permission.ImporterName
-                        FROM dbo.View_List_Im_PermissionRequest permission
-                        WHERE permission.Im_CheckRequest_ID = request.ID
-                        ORDER BY permission.Im_PermissionRequest_ID DESC
-                    ) permissionImporter
-                    OUTER APPLY
-                    (
-                        SELECT TOP (1) requestData.DelegateName
-                        FROM dbo.Im_CheckRequest_Data requestData
-                        WHERE requestData.Im_CheckRequest_ID = request.ID
-                          AND requestData.User_Deletion_Id IS NULL
-                        ORDER BY requestData.ID DESC
-                    ) importer
-                    WHERE request.IsActive = 1
-                      AND committee.IsApproved = 1
-                      AND committee.User_Deletion_Id IS NULL
-                      AND committee.CommitteeType_ID IN (11, 13, 14)
-                      AND
-                      (
-                        (committee.CommitteeType_ID <> 13 AND committee.Delegation_Date = @SelectedDate)
-                        OR
-                        (committee.CommitteeType_ID = 13 AND
-                          (
-                            /* النتيجة النهائية تظهر للأدمن في أي يوم بعد رفع المرفق */
-                            (employee.ISAdmin = 1 AND EXISTS
-                              (SELECT 1 FROM dbo.Im_CheckRequest_SampleData pendingSample
-                               WHERE pendingSample.Im_RequestCommittee_ID = committee.ID
-                                 AND pendingSample.User_Deletion_Id IS NULL
-                                 AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData pendingAttachment
-                                             WHERE pendingAttachment.RowId = pendingSample.ID
-                                               AND pendingAttachment.A_AttachmentTableNameId = 12
-                                               AND pendingAttachment.User_Deletion_Id IS NULL)
-                                 AND (pendingSample.IsAccepted IS NULL OR pendingSample.Admin_Confirmation IS NULL)))
-                            OR
-                            (committee.Delegation_Date = @SelectedDate AND
-                              (
-                                /* مرحلة السحب الأولى */
-                                (ISNULL(committee.Status, 0) = 0 AND ISNULL(committee.IsFinishedAll, 0) = 0)
-                                /* يظل للمساعد حتى يسجل رأيه على السحب */
-                                OR (employee.ISAdmin = 0 AND EXISTS
-                                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData assistantSample
-                                   WHERE assistantSample.Im_RequestCommittee_ID = committee.ID
-                                     AND assistantSample.Sample_BarCode IS NOT NULL
-                                     AND assistantSample.User_Deletion_Id IS NULL
-                                     AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm assistantConfirm
-                                                     WHERE assistantConfirm.Im_CheckRequest_SampleData_ID = assistantSample.ID
-                                                       AND assistantConfirm.EmployeeId = @UserId)))
-                                /* بعد تسجيل النتيجة النهائية يظهر في يوم اللجنة كعرض فقط */
-                                OR (EXISTS
-                                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData completedSample
-                                   WHERE completedSample.Im_RequestCommittee_ID = committee.ID
-                                     AND completedSample.User_Deletion_Id IS NULL
-                                     AND completedSample.IsAccepted IS NOT NULL
-                                     AND completedSample.Admin_Confirmation IS NOT NULL
-                                     AND EXISTS (SELECT 1 FROM dbo.A_AttachmentData completedAttachment
-                                                 WHERE completedAttachment.RowId = completedSample.ID
-                                                   AND completedAttachment.A_AttachmentTableNameId = 12
-                                                   AND completedAttachment.User_Deletion_Id IS NULL)))
-                              ))
-                          ))
-                      )
-                )
-                SELECT ROW_NUMBER() OVER (ORDER BY CommitteeId) AS RowNum, *
-                FROM AssignedCommittees
-                ORDER BY CommitteeId
-                """;
-
+            await connection.OpenAsync(HttpContext.RequestAborted);
+            connectionMs = System.Diagnostics.Stopwatch.GetElapsedTime(loadStarted).TotalMilliseconds;
+            string sql = PlantMobile.Infrastructure.ImportRequestsSql.Build(checkRequestId.HasValue);
             await using var command = new SqlCommand(sql, connection);
             command.CommandTimeout = 90;
             command.Parameters.AddWithValue("@UserId", userId);
             command.Parameters.AddWithValue("@SelectedDate", selectedDate);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            command.Parameters.Add("@CheckRequestId", System.Data.SqlDbType.BigInt).Value = (object?)checkRequestId ?? DBNull.Value;
+            var queryStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            await using var reader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+            while (await reader.ReadAsync(HttpContext.RequestAborted))
             {
                 bool status = GetBool(reader, "Status");
                 bool finished = GetBool(reader, "IsFinishedAll");
@@ -195,18 +288,32 @@ public class ImportRequestsController : Controller
                     RequestCommittee_Status_Id = status ? (byte)1 : (byte)0,
                     WorkStatusKey = key,
                     WorkStatusName = name,
-                    IsReadOnly = key is "completed" or "canceled",
+                    IsReadOnly = key is "completed" or "canceled" || (isAdmin && Convert.ToByte(reader["CommitteeType_ID"]) == 13 && (status || finished)),
                     IsAdmin = isAdmin,
+                    InspectionComplete = GetBool(reader, "InspectionComplete"),
+                    WithdrawalComplete = GetBool(reader, "WithdrawalComplete"),
+                    CanShowLaboratoryResult = GetBool(reader, "CanShowLaboratoryResult"),
+                    PendingLabBarcodes = Convert.ToString(reader["PendingLabBarcodes"]) ?? string.Empty,
                     CommitteeMembers = reader["CommitteeMembers"] == DBNull.Value ? string.Empty : Convert.ToString(reader["CommitteeMembers"]) ?? string.Empty
                     ,SampleAttachmentUploaded = Convert.ToBoolean(reader["SampleAttachmentUploaded"])
                     ,HasPendingSampleFinalResult = pendingSampleFinalResult
+                    ,HasPendingLabResult = Convert.ToBoolean(reader["HasPendingLabResult"])
+                    ,SampleBarcodes = reader["SampleBarcodes"] == DBNull.Value ? string.Empty : Convert.ToString(reader["SampleBarcodes"]) ?? string.Empty
                 });
             }
 
+            queryMs = System.Diagnostics.Stopwatch.GetElapsedTime(queryStarted).TotalMilliseconds;
+            if (connectionMs + queryMs >= 1000)
+                _logger.LogWarning("Import requests timing: CommitteePage={CommitteePage}; ConnectionMs={ConnectionMs}; QueryAndReadMs={QueryMs}; Rows={Rows}; TraceId={TraceId}",
+                    checkRequestId.HasValue, connectionMs, queryMs, requests.Count, HttpContext.TraceIdentifier);
             ViewBag.SelectedDate = selectedDate.ToString("yyyy-MM-dd");
             ViewBag.UserId = userId;
             ViewBag.EmployeeId = employeeId;
             ViewBag.UserName = HttpContext.Session.GetString("UserName");
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -217,10 +324,21 @@ public class ImportRequestsController : Controller
             ViewBag.SelectedDate = selectedDate.ToString("yyyy-MM-dd");
         }
 
-        return View(requests);
+
+        if (checkRequestId.HasValue && requests.Count == 0 && ViewBag.PageError == null)
+            return RedirectToAction(nameof(Index), new { date = selectedDate.ToString("yyyy-MM-dd") });
+
+        ViewBag.CheckRequestId = checkRequestId;
+        return View("Index", requests);
     }
 
     private static int Ordinal(SqlDataReader reader, string name) => reader.GetOrdinal(name);
     private static bool IsDbNull(SqlDataReader reader, string name) => reader.IsDBNull(Ordinal(reader, name));
     private static bool GetBool(SqlDataReader reader, string name) => !IsDbNull(reader, name) && Convert.ToBoolean(reader[name]);
 }
+
+public class RequestQuarantineVm { public long CheckRequestId {get;set;} public string RequestNumber {get;set;}=string.Empty; public List<RequestQuarantineLotVm> Lots {get;set;}=new(); public List<RequestQuarantineStatusVm> Statuses {get;set;}=new(); }
+public class RequestQuarantineLotVm { public long RequestItemId {get;set;} public string PlantName {get;set;}=string.Empty; public long LotId {get;set;} public string LotNumber {get;set;}=string.Empty; public bool InspectionComplete {get;set;} public bool HasWithdrawal {get;set;} public bool WithdrawalComplete {get;set;} public bool LaboratoryResultComplete {get;set;} public int? ExistingStatusId {get;set;} public string ExistingStatusName {get;set;}=string.Empty; public bool? ExistingStatusContinues {get;set;} public bool IsReady=>InspectionComplete&&WithdrawalComplete&&(!HasWithdrawal||LaboratoryResultComplete); }
+public class RequestQuarantineStatusVm { public int Id {get;set;} public string Name {get;set;}=string.Empty; public bool IsContinue {get;set;} }
+public class RequestQuarantineSaveVm { public long CheckRequestId {get;set;} public List<RequestQuarantineSaveLotVm> Lots {get;set;}=new(); }
+public class RequestQuarantineSaveLotVm { public long LotId {get;set;} public int StatusId {get;set;} public string? Notes {get;set;} }

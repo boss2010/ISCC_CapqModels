@@ -1,0 +1,13 @@
+@model decimal?
+
+<span class="weight-control" data-weight-kg="@(Model?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")">
+    <bdi data-weight-value>
+        @(Model?.ToString("#,##0.######", System.Globalization.CultureInfo.InvariantCulture) ?? "—")
+    </bdi>
+
+    <select class="weight-unit" aria-label="وحدة الوزن">
+        <option value="1">كيلوجرام</option>
+        <option value="1000">طن</option>
+        <option value="0.001">جرام</option>
+    </select>
+</span>

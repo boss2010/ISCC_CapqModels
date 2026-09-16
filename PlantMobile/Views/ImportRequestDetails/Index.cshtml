@@ -2,8 +2,10 @@
 @{
     ViewData["Title"] = "تفاصيل طلب الوارد";
     var details = Model.Details;
+    bool isWorkReadOnly = Model.IsReadOnly || (Model.CommitteeTypeId == 11 && Model.IsAdmin && Model.InspectionComplete);
     string activityTitle = Model.CommitteeTypeId == 11 ? "الفحص" : Model.CommitteeTypeId == 13 ? "سحب العينات" : Model.CommitteeTypeId == 14 ? "المعالجة" : "اللجنة";
     int lotIndex = 0;
+    int plantIndex = 0;
     var allLots = details.Item_Data?.SelectMany(x => x.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).ToList() ?? new();
     decimal totalGrossWeight = allLots.Sum(x => x.Gross_Weight ?? 0);
     int totalPackageCount = allLots.Sum(x => x.Package_Count);
@@ -11,14 +13,23 @@
         .Where(x => x.LotId > 0)
         .GroupBy(x => x.LotId)
         .ToDictionary(x => x.Key, x => x.Last());
+    var totalInspectionResultsByItem = Model.AssistantResults
+        .Where(x => x.IsTotal && x.RequestItemId > 0)
+        .GroupBy(x => x.RequestItemId)
+        .ToDictionary(x => x.Key, x => x.Last());
     bool isTotalInspection = allLots.Any() && allLots.Any(x => x.is_Total);
     bool hasSavedWithdrawal = details.Item_Data?
         .SelectMany(x => x.Sample_Data ?? Enumerable.Empty<ViewModels.Itemsample_data>())
         .Any(x => x.SampleSize > 0) == true;
     string infectionItemsJson = System.Text.Json.JsonSerializer.Serialize(Model.InfectionItems);
     string analysisLabOptionsJson = System.Text.Json.JsonSerializer.Serialize(Model.AnalysisLabOptions);
+    var completedInspectionLots = inspectionResultsByLot.Keys.ToHashSet();
+    foreach (var owner in details.Item_Data ?? Enumerable.Empty<ViewModels._x0040_Item_Data>())
+        if (totalInspectionResultsByItem.ContainsKey(owner.ID))
+            completedInspectionLots.UnionWith((owner.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).Select(x => x.ID));
 }
 
+<link rel="stylesheet" href="~/css/inspection-refinements.css" asp-append-version="true" />
 <style>
     .lots-heading { background:#e9f8f7; border-right:5px solid #178b91; border-radius:10px; padding:14px 18px; color:#176d72; }
     .lot-card { background:#fff; border:1px solid #d7eeee; border-radius:14px; overflow:hidden; }
@@ -43,6 +54,15 @@
     .inspection-field { min-width:0; }
     .inspection-field-notes { grid-column:1 / -1; }
     .inspection-field .form-label { color:#176f75; display:flex; gap:7px; margin-bottom:7px; }
+    .workflow-steps { display:grid; gap:10px; grid-template-columns:repeat(3,1fr); margin-bottom:22px; }
+    .workflow-step { background:#f1f4f4; border:1px solid #d9e4e4; border-radius:12px; color:#778487; padding:13px; text-align:center; }
+    .workflow-step.active { background:#eaf9f7; border-color:#178b91; color:#147d83; font-weight:800; }
+    .workflow-step.done { background:#dcf5e7; border-color:#a9dfc1; color:#187446; }
+    .plant-work-card { background:#fff; border:2px solid #d6ecea; border-radius:16px; margin-bottom:20px; overflow:hidden; }
+    .plant-work-header { background:linear-gradient(135deg,#147d83,#20a0a4); color:#fff; padding:18px 20px; }
+    .plant-work-header h3 { margin:0 0 10px; }
+    .plant-stats { display:flex; flex-wrap:wrap; gap:10px 22px; }
+    .plant-work-body { padding:16px; }
     .inspection-field .form-label::before { background:#1b9298; border-radius:50%; content:''; flex:0 0 7px; height:7px; margin-top:8px; }
     .inspection-field .form-select, .inspection-field .form-control { background-color:#fff; border:1px solid #b8deda; border-radius:9px; box-shadow:none; min-height:46px; }
     .inspection-field .form-select:focus, .inspection-field .form-control:focus { border-color:#178b91; box-shadow:0 0 0 .2rem rgba(23,139,145,.13); }
@@ -97,7 +117,17 @@
 
     @if (TempData["SaveSuccess"] is string success) { <div class="alert alert-success">@success</div> }
     @if (TempData["SaveError"] is string error) { <div class="alert alert-danger">@error</div> }
-    @if (Model.IsReadOnly) { <div class="alert alert-success"><strong>تم الانتهاء من اللجنة.</strong> البيانات معروضة للقراءة فقط ولا يمكن تعديلها.</div> }
+    @if (isWorkReadOnly) { <div class="alert alert-success"><strong>تم الانتهاء من العمل.</strong> بيانات الفحص والسحب معروضة للقراءة فقط.</div> }
+
+    @if (Model.CommitteeTypeId == 11)
+    {
+        bool withdrawalDone = !Model.HasSamples || Model.SamplesComplete;
+        <div class="workflow-steps">
+            <div class="workflow-step @(Model.InspectionComplete ? "done" : "active")">1. الفحص @(Model.InspectionComplete ? "✓" : "")</div>
+            <div class="workflow-step @(!Model.InspectionComplete ? "" : withdrawalDone ? "done" : "active")">2. السحب @(withdrawalDone && Model.InspectionComplete ? "✓" : "")</div>
+            <div class="workflow-step @(Model.InspectionComplete && withdrawalDone && !Model.IsReadOnly ? "active" : Model.IsReadOnly ? "done" : "")">3. موقف الحجر</div>
+        </div>
+    }
 
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-dark text-white">بيانات الطلب</div>
@@ -107,22 +137,20 @@
             <div class="col-md-4 mb-3"><strong>حالة اللجنة</strong><div>@details.RequestCommittee_Status</div></div>
             <div class="col-md-4 mb-3"><strong>الجهة المستوردة</strong><div>@details.Reciever_Name</div></div>
             <div class="col-md-4 mb-3"><strong>بلد المنشأ</strong><div>@details.ExportCountry_Name</div></div>
-            <div class="col-md-4 mb-3"><strong>المنفذ</strong><div>@details.Outlet_Name</div></div>
+            <div class="col-md-4 mb-3"><strong>المنفذ</strong><div>@details.Outlet_Name</div></div><div class="col-md-6 mb-3"><strong>إجمالي الوزن القائم</strong><div>@await Html.PartialAsync("_Weight", (decimal?)totalGrossWeight)</div></div><div class="col-md-6 mb-3"><strong>إجمالي عدد الطرود</strong><div>@totalPackageCount</div></div><div class="col-12">            @if (Model.CommitteeTypeId == 11 && Model.IsAdmin && !isWorkReadOnly && !Model.InspectionComplete)
+            {
+                <div class="inspection-mode-inline">
+                    
+                    <div class="inspection-mode-options">
+                        <div class="inspection-mode-option"><input type="radio" name="InspectionModeChoice" form="inspectionSaveForm" id="inspectionTotal" value="total" checked="@isTotalInspection" /><label for="inspectionTotal">فحص كلي</label></div>
+                        <div class="inspection-mode-option"><input type="radio" name="InspectionModeChoice" form="inspectionSaveForm" id="inspectionPartial" value="partial" checked="@(!isTotalInspection)" /><label for="inspectionPartial">فحص جزئي</label></div>
+                    </div>
+                </div>
+            }
+
+</div>
         </div></div>
     </div>
-
-    @if (Model.CommitteeTypeId is 11 or 13 && allLots.Count > 0)
-    {
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white"><h4 class="mb-0 text-primary">ملخص الأوزان والأعداد</h4></div>
-            <div class="card-body">
-                <div class="request-totals">
-                    <div class="request-total"><span>إجمالي الوزن القائم</span><strong>@totalGrossWeight.ToString("0.###") كيلوجرام</strong></div>
-                    <div class="request-total"><span>إجمالي عدد الطرود</span><strong>@totalPackageCount</strong></div>
-                </div>
-            </div>
-        </div>
-    }
 
     @if (details.Item_Data == null || details.Item_Data.Count == 0)
     {
@@ -181,7 +209,7 @@
                             }
                         </div>
                     }
-                    @if (!Model.IsReadOnly)
+                    @if (!isWorkReadOnly)
                     {
                         <div class="text-start mb-4"><button type="submit" class="btn btn-success px-5">حفظ رأي المساعد</button></div>
                     }
@@ -196,18 +224,9 @@
             <input type="hidden" name="CommitteeId" value="@Model.CommitteeId" />
             <input type="hidden" name="CommitteeTypeId" value="@Model.CommitteeTypeId" />
             <input type="hidden" name="ApplyToAll" id="applyToAll" value="@isTotalInspection.ToString().ToLowerInvariant()" />
+            <input type="hidden" name="IsFinishedAll" value="true" />
 
-            <div class="card shadow-sm mb-4" id="withdrawalDecisionCard">
-                <div class="card-header bg-white"><h4 class="mb-0 text-primary">سحب عينة أثناء لجنة الفحص</h4></div>
-                <div class="card-body">
-                    <div class="fw-bold mb-3">هل تريد تنفيذ عملية سحب عينات؟</div>
-                    <div class="inspection-mode-options">
-                        <div class="inspection-mode-option"><input type="radio" name="PerformWithdrawal" id="withdrawalYes" value="true" @(hasSavedWithdrawal ? "checked" : null) disabled="@Model.IsReadOnly" /><label for="withdrawalYes">نعم، تنفيذ السحب</label></div>
-                        <div class="inspection-mode-option"><input type="radio" name="PerformWithdrawal" id="withdrawalNo" value="false" @(!hasSavedWithdrawal ? "checked" : null) disabled="@Model.IsReadOnly" /><label for="withdrawalNo">لا، فحص فقط</label></div>
-                    </div>
-                </div>
-            </div>
-
+<input type="hidden" name="PerformWithdrawal" id="performWithdrawal" value="@hasSavedWithdrawal.ToString().ToLowerInvariant()" />
             <div class="lots-heading mb-3">
                 <div class="lots-heading-row">
                     <h4>بيانات اللوطات</h4>
@@ -216,48 +235,46 @@
                 </div>
             </div>
 
-            @if (isTotalInspection && !Model.IsReadOnly)
+            @foreach (var plantGroup in details.Item_Data.GroupBy(x => x.Item_ShortName_id > 0 ? $"id:{x.Item_ShortName_id}" : $"name:{x.Item_Name}|{x.Item_ShortName_Name}"))
             {
-                <div class="inspection-mode shadow-sm mb-3">
-                    <div class="form-label fw-bold text-info">طريقة تنفيذ الفحص</div>
-                    <div class="inspection-mode-options">
-                        <div class="inspection-mode-option"><input type="radio" id="inspectionTotal" name="InspectionModeChoice" value="total" checked /><label for="inspectionTotal">كلي</label></div>
-                        <div class="inspection-mode-option"><input type="radio" id="inspectionPartial" name="InspectionModeChoice" value="partial" /><label for="inspectionPartial">جزئي</label></div>
+                var item = plantGroup.First();
+                var lotOwners = plantGroup.SelectMany(owner => (owner.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).Select(lot => new { Lot = lot, Owner = owner })).GroupBy(x => x.Lot.ID).ToDictionary(x => x.Key, x => x.First().Owner.ID);
+                var itemLots = plantGroup.SelectMany(x => x.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).GroupBy(x => x.ID).Select(x => x.First()).ToList();
+                if (itemLots.Count == 0) { continue; }
+                <section class="plant-work-card">
+                    <div class="plant-work-header">
+                        <h3>@item.Item_Name — @item.Item_ShortName_Name</h3>
+                        <div class="plant-stats"><span>الوزن القائم: <strong>@await Html.PartialAsync("_Weight", (decimal?)itemLots.Sum(x => x.Gross_Weight ?? 0))</strong></span><span>عدد الطرود: <strong>@itemLots.Sum(x => x.Package_Count)</strong></span><span>اللوطات المطلوبة: <strong>@itemLots.Count</strong></span></div>
                     </div>
-                </div>
-            }
-
-            @foreach (var item in details.Item_Data)
-            {
-                @foreach (var lot in item.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>())
+                    <div class="plant-work-body">
+                @if (totalInspectionResultsByItem.TryGetValue(item.ID, out var plantSavedResult))
                 {
+                    <div class="inspection-panel mb-3">
+                        <div class="inspection-panel-title">نتيجة الفحص الكلي المحفوظة للنبات</div>
+                        <div class="lot-data-grid">
+                            <div><span>نتيجة الفحص</span><strong>@plantSavedResult.ResultName</strong></div>
+                            <div><span>موقف الحجر</span><strong>@(plantSavedResult.CanShowQuarantine ? plantSavedResult.QuarantineStatus : "يظهر بعد انتهاء الفحص والسحب")</strong></div>
+                            <div style="grid-column:1/-1"><span>الملاحظات</span><strong>@(string.IsNullOrWhiteSpace(plantSavedResult.AdminNotes) ? "لا توجد ملاحظات" : plantSavedResult.AdminNotes)</strong></div>
+                        </div>
+                    </div>
+                }
+                @foreach (var lot in itemLots)
+                {
+                    if (!isWorkReadOnly && completedInspectionLots.Contains(lot.ID)) { continue; }
                     <details class="lot-card shadow-sm mb-3">
                         <summary>
                             <span class="lot-number">اللوط رقم @lot.Lot_Number</span>
                             <span class="lot-summary-item">@item.Item_Name</span>
-                            <span class="lot-summary-weight">إجمالي الوزن: @(lot.Gross_Weight?.ToString("0.###") ?? "—") كيلوجرام — عدد الطرود: @lot.Package_Count</span>
+                            <span class="lot-summary-weight">إجمالي الوزن: @await Html.PartialAsync("_Weight", lot.Gross_Weight) — عدد الطرود: @lot.Package_Count</span>
                         </summary>
                         <div class="lot-card-body">
                             <input type="hidden" name="Lots[@lotIndex].LotCategoryId" value="@lot.ID" />
+                            <input type="hidden" name="Lots[@lotIndex].RequestItemId" value="@lotOwners[lot.ID]" />
                             <input type="hidden" name="Lots[@lotIndex].IsTotal" value="@lot.is_Total.ToString().ToLowerInvariant()" />
                             <input type="hidden" name="Lots[@lotIndex].Weight" value="@lot.Net_Weight" />
                             <input type="hidden" name="Lots[@lotIndex].QuantitySize" value="@lot.Size" />
 
-                            <div class="lot-data-grid">
-                                <div><span>رقم الطلب</span><strong>@details.CheckRequest_Number</strong></div>
-                                <div><span>رقم اللوط</span><strong>@lot.Lot_Number</strong></div>
-                            <div><span>عدد الطرود</span><strong>@lot.Package_Count</strong></div>
-                                <div><span>وزن العبوة</span><strong>@(!string.IsNullOrWhiteSpace(lot.PackageWeight) && lot.PackageWeight != "---------" ? lot.PackageWeight : lot.Package_Weight?.ToString("0.###") ?? "—")</strong></div>
-                                <div><span>نوع العبوة</span><strong>@(lot.Package_Type_Name == "---------" ? "—" : lot.Package_Type_Name)</strong></div>
-                                <div><span>إجمالي الوزن القائم</span><strong>@(lot.Gross_Weight?.ToString("0.###") ?? "—")</strong></div>
-                                <div><span>عدد الوحدات</span><strong>@(lot.Units_Number?.ToString() ?? "—")</strong></div>
-                                <div><span>عدد البالتات</span><strong>@(string.IsNullOrWhiteSpace(lot.Number_Wooden_Package) ? "—" : lot.Number_Wooden_Package)</strong></div>
-                                <div><span>الصنف</span><strong>@item.Item_Name — @item.Item_ShortName_Name</strong></div>
-                                <div><span>رقم المزارع</span><strong>@(string.IsNullOrWhiteSpace(lot.Grower_Number) ? "—" : lot.Grower_Number)</strong></div>
-                                <div><span>اللجنة</span><strong>@details.Committee_Type</strong></div>
-                            </div>
-
-                            @if (Model.IsReadOnly && inspectionResultsByLot.TryGetValue(lot.ID, out var savedResult))
+                            @if (isWorkReadOnly && inspectionResultsByLot.TryGetValue(lot.ID, out var savedResult))
                             {
                                 <div class="inspection-panel mt-4">
                                     <div class="inspection-panel-title">نتيجة الفحص المحفوظة — اللوط رقم @lot.Lot_Number</div>
@@ -276,18 +293,14 @@
                                 </div>
                             }
 
-                            @if (!Model.IsReadOnly)
+                            @if (!isWorkReadOnly)
                             {
                             <div class="inspection-panel partial-inspection-panel mt-4" style="@(isTotalInspection ? "display:none" : null)">
-                                    <div class="inspection-panel-title">بيانات نتيجة الفحص — اللوط رقم @lot.Lot_Number</div>
+                                    
                                     <div class="inspection-fields">
                                         <div class="inspection-field">
                                             <label class="form-label fw-bold">نتيجة الفحص</label>
-                                            <select class="form-select partial-required" name="Lots[@lotIndex].CommitteeResultTypeId" required="@(!isTotalInspection ? "required" : null)"><option value="">— اختر نتيجة الفحص —</option><option value="1">مقبول</option><option value="3">مرفوض</option></select>
-                                        </div>
-                                        <div class="inspection-field">
-                                            <label class="form-label fw-bold">موقف الحجر</label>
-                                            <select class="form-select partial-required" name="Lots[@lotIndex].QuarantineStatusId" required="@(!isTotalInspection ? "required" : null)"><option value="">— اختر موقف الحجر —</option>@foreach (var status in Model.QuarantineStatuses) { <option value="@status.Value">@status.DisplayText</option> }</select>
+                                            <select class="form-select partial-required" name="Lots[@lotIndex].CommitteeResultTypeId" required="@(!isTotalInspection ? "required" : null)"><option value="">— اختر نتيجة الفحص —</option>@foreach (var resultType in Model.CommitteeResultTypes) { <option value="@resultType.Id">@resultType.Name</option> }</select>
                                         </div>
                                         <div class="inspection-field inspection-field-notes">
                                             <label class="form-label fw-bold">الملاحظات</label>
@@ -308,59 +321,80 @@
                     </details>
                     lotIndex++;
                 }
-            }
-
-            @if (isTotalInspection && !Model.IsReadOnly)
-            {
-                <div class="inspection-panel total-inspection-panel mb-4">
-                    <div class="inspection-panel-title">بيانات نتيجة الفحص — فحص كلي على جميع اللوطات</div>
-                    <div class="alert alert-info py-2">سيتم تطبيق النتيجة وموقف الحجر والملاحظات على كل اللوطات مرة واحدة.</div>
-                    <div class="inspection-fields">
-                        <div class="inspection-field">
-                            <label class="form-label fw-bold">نتيجة الفحص</label>
-                            <select class="form-select total-required" name="SharedCommitteeResultTypeId" required><option value="">— اختر نتيجة الفحص —</option><option value="1">مقبول</option><option value="3">مرفوض</option></select>
-                        </div>
-                        <div class="inspection-field">
-                            <label class="form-label fw-bold">موقف الحجر</label>
-                            <select class="form-select total-required" name="SharedQuarantineStatusId" required><option value="">— اختر موقف الحجر —</option>@foreach (var status in Model.QuarantineStatuses) { <option value="@status.Value">@status.DisplayText</option> }</select>
-                        </div>
-                        <div class="inspection-field inspection-field-notes">
-                            <label class="form-label fw-bold">الملاحظات</label>
-                            <textarea class="form-control total-required" name="SharedNotes" rows="3" placeholder="اكتب ملاحظات الفحص لكل اللوطات..." required></textarea>
-                        </div>
-                        <div class="infection-panel" data-infection-panel>
-                            <div class="infection-title">نوع الإصابة</div>
-                            <div class="infection-fields">
-                                <div><label class="form-label fw-bold">المجموعة</label><select class="form-select infection-group"><option value="">— اختر المجموعة —</option>@foreach (var group in Model.InfectionItems.GroupBy(x => new { x.GroupId, x.GroupName }).OrderBy(x => x.Key.GroupName)) { <option value="@group.Key.GroupId">@group.Key.GroupName</option> }</select></div>
-                                <div><label class="form-label fw-bold">العائلة</label><select class="form-select infection-family" disabled><option value="">— اختر العائلة —</option></select></div>
-                                <div><label class="form-label fw-bold">النوع</label><select class="form-select infection-item" name="SharedInfectionItemId" disabled><option value="">— اختر نوع الإصابة —</option></select></div>
+                @if (itemLots.Any(x => inspectionResultsByLot.ContainsKey(x.ID)))
+                {
+                    var completedItemLots = itemLots.Where(x => inspectionResultsByLot.ContainsKey(x.ID)).ToList();
+                    if (completedItemLots.Count > 0)
+                    {
+                        <details class="mt-3">
+                            <summary class="fw-bold text-success">تم الانتهاء من @completedItemLots.Count لوط — عرض النتائج المحفوظة</summary>
+                            <div class="mt-3">
+                            @foreach (var completedLot in completedItemLots)
+                            {
+                                var completedResult = inspectionResultsByLot[completedLot.ID];
+                                <div class="inspection-panel mb-2">
+                                    <div class="inspection-panel-title">اللوط @completedLot.Lot_Number</div>
+                                    <div class="lot-data-grid">
+                                        <div><span>نتيجة الفحص</span><strong>@completedResult.ResultName</strong></div>
+                                        <div><span>موقف الحجر</span><strong>@(completedResult.CanShowQuarantine ? completedResult.QuarantineStatus : "يظهر بعد انتهاء الفحص والسحب")</strong></div>
+                                        <div style="grid-column:1/-1"><span>الملاحظات</span><strong>@(string.IsNullOrWhiteSpace(completedResult.AdminNotes) ? "لا توجد ملاحظات" : completedResult.AdminNotes)</strong></div>
+                                    </div>
+                                </div>
+                            }
+                            </div>
+                        </details>
+                    }
+                }
+                @if (!isWorkReadOnly && !Model.InspectionComplete && itemLots.Any(x => !completedInspectionLots.Contains(x.ID)))
+                {
+                    <div class="inspection-panel plant-total-panel total-inspection-panel mt-3 mb-2">
+                        <input type="hidden" name="PlantTotals[@plantIndex].RequestItemId" value="@item.ID" />
+                        @foreach (var owner in plantGroup) { <input type="hidden" name="PlantTotals[@plantIndex].RequestItemIds" value="@owner.ID" /> }
+                        <div class="inspection-panel-title">نتيجة الفحص الكلي للنبات: @item.Item_Name</div>
+                        <div class="alert alert-info py-2">تُطبق النتيجة على اللوطات غير المكتملة لهذا النبات في اللجنة.</div>
+                        <div class="inspection-fields">
+                            <div class="inspection-field"><label class="form-label fw-bold">نتيجة الفحص</label><select class="form-select total-required" name="PlantTotals[@plantIndex].CommitteeResultTypeId" required><option value="">— اختر نتيجة الفحص —</option>@foreach (var resultType in Model.CommitteeResultTypes) { <option value="@resultType.Id">@resultType.Name</option> }</select></div>
+                            <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control total-required" name="PlantTotals[@plantIndex].Notes" rows="3" required></textarea></div>
+                            <div class="infection-panel" data-infection-panel>
+                                <div class="infection-title">نوع الإصابة</div>
+                                <div class="infection-fields">
+                                    <div><label class="form-label fw-bold">المجموعة</label><select class="form-select infection-group"><option value="">— اختر المجموعة —</option>@foreach (var group in Model.InfectionItems.GroupBy(x => new { x.GroupId, x.GroupName }).OrderBy(x => x.Key.GroupName)) { <option value="@group.Key.GroupId">@group.Key.GroupName</option> }</select></div>
+                                    <div><label class="form-label fw-bold">العائلة</label><select class="form-select infection-family" disabled><option value="">— اختر العائلة —</option></select></div>
+                                    <div><label class="form-label fw-bold">النوع</label><select class="form-select infection-item" name="PlantTotals[@plantIndex].InfectionItemId" disabled><option value="">— اختر نوع الإصابة —</option></select></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                    plantIndex++;
+                }
+                    </div>
+                </section>
             }
 
-            @if (!Model.IsReadOnly)
+            @if (!isWorkReadOnly)
             {
             <div class="card shadow-sm mb-4"><div class="card-body d-flex justify-content-between align-items-center save-bar">
-                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="IsFinishedAll" value="true" id="finishAll" /><label class="form-check-label fw-bold" for="finishAll">إنهاء عمل اللجنة بعد استكمال الفحص والسحب</label></div>
-                <button type="submit" class="btn btn-success px-5" id="saveInspectionButton">حفظ نتيجة الفحص وموقف الحجر</button>
+                <div class="fw-bold text-primary">حفظ الفحص وأي عينات سحب مضافة معًا.</div>
+                <div class="d-flex flex-wrap" style="gap:10px"><button type="button" class="btn btn-outline-primary" id="openWithdrawal" aria-controls="withdrawalSection">سحب عينة</button>@if (!Model.InspectionComplete) { <button type="submit" class="btn btn-success px-5" id="saveInspectionButton">حفظ الفحص والسحب</button> }</div>
             </div></div>
             }
         </form>
+
     }
     @if (Model.CommitteeTypeId is 11 or 13)
     {
         int sampleIndex = 0;
         bool hasPendingAssistantSamples = !Model.IsAdmin && details.Item_Data.SelectMany(x => x.Sample_Data ?? Enumerable.Empty<ViewModels.Itemsample_data>()).Any(x => x.AssistantAccepted == null && x.SampleSize > 0);
-        <div id="withdrawalSection" style="@(Model.CommitteeTypeId == 11 && Model.IsAdmin && !Model.IsReadOnly && !hasSavedWithdrawal ? "display:none" : null)">
+        <div id="withdrawalSection" style="@(Model.CommitteeTypeId == 11 && Model.IsAdmin && !isWorkReadOnly && !hasSavedWithdrawal ? "display:none" : null)">
         <form asp-controller="ImportRequestDetails" asp-action="@(Model.IsAdmin ? "SaveSamples" : "SaveSampleAssistantOpinion")" method="post" id="samplesSaveForm">
             @Html.AntiForgeryToken()
             <input type="hidden" name="CheckRequestId" value="@Model.CheckRequestId" />
             <input type="hidden" name="CommitteeId" value="@Model.CommitteeId" />
             <input type="hidden" name="CommitteeTypeId" value="@Model.CommitteeTypeId" />
-            @if (Model.IsAdmin && !Model.IsReadOnly)
+                @if (Model.IsAdmin && !isWorkReadOnly && Model.CommitteeTypeId == 11)
             {
+                
+              
                 <div class="card shadow-sm mb-4">
                     <div class="card-header bg-white"><h4 class="mb-0 text-primary">إضافة تحليل للسحب</h4></div>
                     <div class="card-body">
@@ -372,36 +406,38 @@
                                     {
                                         foreach (var lot in item.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>())
                                         {
-                                            <option value="@lot.ID" data-request-item="@item.ID" data-short-name="@item.Item_ShortName_id" data-item-name="@item.Item_Name" data-lot-number="@lot.Lot_Number" data-gross-weight="@(lot.Gross_Weight?.ToString("0.###") ?? "—")" data-package-count="@lot.Package_Count" data-units-count="@(lot.Units_Number?.ToString() ?? "—")" data-pallet-count="@(string.IsNullOrWhiteSpace(lot.Number_Wooden_Package) ? "—" : lot.Number_Wooden_Package)">@item.Item_Name — اللوط @lot.Lot_Number</option>
+                                            <option value="@lot.ID" data-request-item="@item.ID" data-short-name="@item.Item_ShortName_id" data-item-name="@item.Item_Name" data-lot-number="@lot.Lot_Number" data-gross-weight="@(lot.Gross_Weight?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" data-package-count="@lot.Package_Count" data-units-count="@(lot.Units_Number?.ToString() ?? "—")" data-pallet-count="@(string.IsNullOrWhiteSpace(lot.Number_Wooden_Package) ? "—" : lot.Number_Wooden_Package)">@item.Item_Name — اللوط @lot.Lot_Number</option>
                                         }
                                     }
                                 </select>
                             </div>
                             <div class="inspection-field"><label class="form-label fw-bold">نوع التحليل</label><select class="form-select" id="sampleAnalysisType"><option value="">— اختر نوع التحليل —</option></select></div>
                             <div class="inspection-field"><label class="form-label fw-bold">معمل التحليل</label><select class="form-select" id="sampleAnalysisLab" disabled><option value="">— اختر معمل التحليل —</option></select></div>
-                            <div class="inspection-field d-flex align-items-end"><button type="button" class="btn btn-primary w-100" id="addSampleAnalysis">إضافة التحليل وبيانات السحب</button></div>
+                            <div class="inspection-field"><label for="newSampleSize">كمية العينة</label><input id="newSampleSize" class="form-control" type="number" min="0.001" step="0.001" /></div><div class="inspection-field"><label for="newSampleSeal">رقم الختم أو الرصاصة</label><input id="newSampleSeal" class="form-control" /></div><div class="inspection-field inspection-field-notes"><label for="newSampleNotes">الملاحظات</label><textarea id="newSampleNotes" class="form-control" rows="3"></textarea></div><div class="inspection-field d-flex align-items-end"><button type="button" class="btn btn-primary w-100" id="addSampleAnalysis">إضافة التحليل وبيانات السحب</button></div>
                         </div>
                     </div>
                 </div>
+               
                 <div id="newSamplesContainer"></div>
             }
-            <div class="lots-heading mb-3"><div class="lots-heading-row"><h4>بيانات سحب العينات</h4><span class="lots-count">تم توليد الباركود تلقائيًا عند فتح الطلب</span></div></div>
+            <div class="lots-heading mb-3"><div class="lots-heading-row"><h4>بيانات سحب العينات</h4><span class="lots-count">@(Model.CommitteeTypeId == 11 ? "يتم توليد باركود جديد عند حفظ الفحص والسحب" : "باركود عينات السحب")</span></div></div>
             @foreach (var item in details.Item_Data)
             {
                 @foreach (var sample in item.Sample_Data ?? Enumerable.Empty<ViewModels.Itemsample_data>())
                 {
                     var sampleLot = (item.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>())
                         .FirstOrDefault(x => x.ID == sample.LotData_ID);
-                    <div class="inspection-panel shadow-sm mb-3">
+                    <details class="inspection-panel sample-result-card shadow-sm mb-3" open="@(sample.SampleSize == null || sample.SampleSize <= 0)">
+                        <summary class="inspection-panel-title">@item.Item_Name — @(string.IsNullOrWhiteSpace(sample.Lotnum) ? "سحب كلي" : $"اللوط {sample.Lotnum}") <span class="status-badge">@(sample.SampleSize > 0 ? "تم السحب — عرض البيانات" : "استكمال السحب")</span></summary>
                         <input type="hidden" name="Samples[@sampleIndex].SampleId" value="@sample.Sample_dataId" />
                         <input type="hidden" name="Samples[@sampleIndex].LotDataId" value="@sample.LotData_ID" />
                         <input type="hidden" name="Samples[@sampleIndex].HasAttachment" value="@sample.HasAttachment.ToString().ToLowerInvariant()" />
                         @if (!Model.IsAdmin) { <input type="hidden" name="Opinions[@sampleIndex].SampleId" value="@sample.Sample_dataId" /> }
-                        <div class="inspection-panel-title">@item.Item_Name — @(string.IsNullOrWhiteSpace(sample.Lotnum) ? "سحب كلي" : $"اللوط {sample.Lotnum}")</div>
+                        
                         @if (sampleLot != null)
                         {
                             <div class="request-totals mb-3">
-                                <div class="request-total"><span>الوزن القائم للوط</span><strong>@(sampleLot.Gross_Weight?.ToString("0.###") ?? "—")</strong></div>
+                                <div class="request-total"><span>الوزن القائم للوط</span><strong>@await Html.PartialAsync("_Weight", sampleLot.Gross_Weight)</strong></div>
                                 <div class="request-total"><span>عدد العبوات للوط</span><strong>@sampleLot.Package_Count</strong></div>
                                 <div class="request-total"><span>عدد الوحدات للوط</span><strong>@(sampleLot.Units_Number?.ToString() ?? "—")</strong></div>
                                 <div class="request-total"><span>عدد البالتات للوط</span><strong>@(string.IsNullOrWhiteSpace(sampleLot.Number_Wooden_Package) ? "—" : sampleLot.Number_Wooden_Package)</strong></div>
@@ -415,12 +451,12 @@
                             <div><span>مرفق نتيجة العينة</span>@if (sample.AttachmentId != null) { <a asp-controller="ImportRequestDetails" asp-action="ViewSampleAttachment" asp-route-id="@sample.AttachmentId" target="_blank" class="btn btn-sm btn-outline-primary">عرض المرفق</a> } else { <strong class="text-danger">لم يتم رفع المرفق</strong> }</div>
                         </div>
                         <div class="inspection-fields">
-                            <div class="inspection-field"><label class="form-label fw-bold">حجم العينة</label><div class="input-group"><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[@sampleIndex].SampleSize" value="@sample.SampleSize" required disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /><span class="input-group-text">كيلوجرام</span></div></div>
+                            <div class="inspection-field"><label class="form-label fw-bold">كمية العينة</label><div class="input-group"><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[@sampleIndex].SampleSize" value="@sample.SampleSize" data-quantity-unit="@sample.QuantityUnit" required disabled="@(!Model.IsAdmin || isWorkReadOnly)" /></div></div>
                             <input type="hidden" name="Samples[@sampleIndex].SampleRatio" value="0" />
-                            <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو السيل الملاحي</label><input class="form-control" name="Samples[@sampleIndex].SealNumber" value="@sample.Syl_ALkhatima_Number" disabled="@(!Model.IsAdmin || Model.IsReadOnly)" /></div>
+                            <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو الرصاصة</label><input class="form-control" name="Samples[@sampleIndex].SealNumber" value="@sample.Syl_ALkhatima_Number" disabled="@(!Model.IsAdmin || isWorkReadOnly)" /></div>
                             @if (!sample.HasAttachment)
                             {
-                                <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" rows="2" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات السحب..." required disabled="@(!Model.IsAdmin || Model.IsReadOnly)">@sample.Notes_Ar</textarea></div>
+                                <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" rows="2" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات السحب..." required disabled="@(!Model.IsAdmin || isWorkReadOnly)">@sample.Notes_Ar</textarea></div>
                             }
                         </div>
                         @if (Model.IsAdmin && sample.HasAttachment)
@@ -438,7 +474,7 @@
                                 <div class="inspection-fields">
                                     <div class="inspection-field">
                                         <label class="form-label fw-bold">نتيجة الفحص</label>
-                                        <select class="form-select" name="Samples[@sampleIndex].LabResultAccepted" required disabled="@Model.IsReadOnly">
+                                        <select class="form-select" name="Samples[@sampleIndex].LabResultAccepted" required disabled="@isWorkReadOnly">
                                             <option value="">— اختر النتيجة —</option>
                                             <option value="true" selected="@(sample.LabResultAccepted == true)">مقبول</option>
                                             <option value="false" selected="@(sample.LabResultAccepted == false)">مرفوض</option>
@@ -446,7 +482,7 @@
                                     </div>
                                     <div class="inspection-field">
                                         <label class="form-label fw-bold">موقف الحجر</label>
-                                        <select class="form-select" name="Samples[@sampleIndex].QuarantineStatusId" required disabled="@Model.IsReadOnly">
+                                        <select class="form-select" name="Samples[@sampleIndex].QuarantineStatusId" required disabled="@isWorkReadOnly">
                                             <option value="">— اختر موقف الحجر —</option>
                                             @foreach (var status in Model.SampleQuarantineStatuses)
                                             {
@@ -456,7 +492,7 @@
                                     </div>
                                     <div class="inspection-field inspection-field-notes">
                                         <label class="form-label fw-bold">الملاحظات</label>
-                                        <textarea class="form-control" rows="3" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات نتيجة السحب هنا..." required disabled="@Model.IsReadOnly">@sample.Notes_Ar</textarea>
+                                        <textarea class="form-control" rows="3" name="Samples[@sampleIndex].Notes" placeholder="اكتب ملاحظات نتيجة السحب هنا..." required disabled="@isWorkReadOnly">@sample.Notes_Ar</textarea>
                                     </div>
                                 </div>
                             </div>
@@ -488,12 +524,12 @@
                                 <div class="alert alert-warning mt-3 mb-0">لم يسجل أدمن اللجنة بيانات سحب العينة بعد.</div>
                             }
                         }
-                    </div>
+                    </details>
                     sampleIndex++;
                 }
             }
             @if (sampleIndex == 0) { <div class="alert alert-info text-center" id="noSamplesMessage">اختر اللوط ونوع التحليل ومعمل التحليل، ثم أضف بيانات السحب.</div> }
-            @if (Model.IsAdmin && !Model.IsReadOnly)
+            @if (Model.IsAdmin && !isWorkReadOnly && Model.CommitteeTypeId == 13)
             {
                 <div class="card shadow-sm mb-4"><div class="card-body d-flex justify-content-between align-items-center save-bar">
                     <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="IsFinishedAll" value="true" id="finishSamples" @(Model.CommitteeTypeId == 13 ? "checked" : null) /><label class="form-check-label fw-bold" for="finishSamples">إنهاء عمل اللجنة بعد استكمال الفحص والسحب</label></div>
@@ -528,11 +564,11 @@
                         <div class="fw-bold text-primary mb-3">طريقة تسجيل بيان المعالجة</div>
                         <div class="inspection-mode-options">
                             <div class="inspection-mode-option">
-                                <input type="radio" name="TreatmentModeChoice" id="treatmentTotal" value="total" @(totalTreatment ? "checked" : null) disabled="@(Model.IsReadOnly || !Model.IsAdmin)" />
+                                <input type="radio" name="TreatmentModeChoice" id="treatmentTotal" value="total" @(totalTreatment ? "checked" : null) disabled="@(isWorkReadOnly || !Model.IsAdmin)" />
                                 <label for="treatmentTotal">بيان معالجة للشحنة</label>
                             </div>
                             <div class="inspection-mode-option">
-                                <input type="radio" name="TreatmentModeChoice" id="treatmentLots" value="lots" @(!totalTreatment ? "checked" : null) disabled="@(Model.IsReadOnly || !Model.IsAdmin)" />
+                                <input type="radio" name="TreatmentModeChoice" id="treatmentLots" value="lots" @(!totalTreatment ? "checked" : null) disabled="@(isWorkReadOnly || !Model.IsAdmin)" />
                                 <label for="treatmentLots">بيان معالجة للوطات</label>
                             </div>
                         </div>
@@ -563,20 +599,20 @@
                             </div>
                             <div class="inspection-panel">
                                 <div class="inspection-fields">
-                                    <div class="inspection-field"><label class="form-label fw-bold">حجم الرسالة (م³)</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].Size" value="@treatment.size" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /></div>
-                                    <div class="inspection-field"><label class="form-label fw-bold">كمية المادة (كيلوجرام)</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].MaterialAmount" value="@treatment.treatmentMat_Amount" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /></div>
-                                    <div class="inspection-field"><label class="form-label fw-bold">الجرعة (جم/م³)</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].Dose" value="@treatment.dose" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /></div>
-                                    <div class="inspection-field"><label class="form-label fw-bold">درجة الحرارة (°م)</label><input class="form-control" type="number" step="0.01" name="Records[@treatmentIndex].Temperature" value="@treatment.temperature" readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /></div>
-                                    <div class="inspection-field"><label class="form-label fw-bold">رقم الختم الحراري</label><input class="form-control" type="number" step="1" name="Records[@treatmentIndex].ThermalSealNumber" value="@treatment.thermalSealNumber" readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /></div>
+                                    <div class="inspection-field"><label class="form-label fw-bold">حجم الرسالة (م³)</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].Size" value="@treatment.size" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /></div>
+                                    <div class="inspection-field"><label class="form-label fw-bold">كمية المادة</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].MaterialAmount" value="@treatment.treatmentMat_Amount" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /></div>
+                                    <div class="inspection-field"><label class="form-label fw-bold">الجرعة (جم/م³)</label><input class="form-control" type="number" step="0.001" min="0.001" name="Records[@treatmentIndex].Dose" value="@treatment.dose" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /></div>
+                                    <div class="inspection-field"><label class="form-label fw-bold">درجة الحرارة (°م)</label><input class="form-control" type="number" step="0.01" name="Records[@treatmentIndex].Temperature" value="@treatment.temperature" readonly="@(isWorkReadOnly || !Model.IsAdmin)" /></div>
+                                    <div class="inspection-field"><label class="form-label fw-bold">رقم الختم الحراري</label><input class="form-control" type="number" step="1" name="Records[@treatmentIndex].ThermalSealNumber" value="@treatment.thermalSealNumber" readonly="@(isWorkReadOnly || !Model.IsAdmin)" /></div>
                                     <div class="inspection-field">
                                         <label class="form-label fw-bold">مدة التعرض</label>
                                         <div class="d-flex gap-2">
-                                            <div class="input-group"><input class="form-control" type="number" min="0" name="Records[@treatmentIndex].ExposureDay" value="@(treatment.exposure_Day ?? 0)" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /><span class="input-group-text">يوم</span></div>
-                                            <div class="input-group"><input class="form-control" type="number" min="0" max="23" name="Records[@treatmentIndex].ExposureHour" value="@(treatment.exposure_Hour ?? 0)" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /><span class="input-group-text">س</span></div>
-                                            <div class="input-group"><input class="form-control" type="number" min="0" max="59" name="Records[@treatmentIndex].ExposureMinute" value="@(treatment.exposure_Minute ?? 0)" required readonly="@(Model.IsReadOnly || !Model.IsAdmin)" /><span class="input-group-text">د</span></div>
+                                            <div class="input-group"><input class="form-control" type="number" min="0" name="Records[@treatmentIndex].ExposureDay" value="@(treatment.exposure_Day ?? 0)" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /><span class="input-group-text">يوم</span></div>
+                                            <div class="input-group"><input class="form-control" type="number" min="0" max="23" name="Records[@treatmentIndex].ExposureHour" value="@(treatment.exposure_Hour ?? 0)" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /><span class="input-group-text">س</span></div>
+                                            <div class="input-group"><input class="form-control" type="number" min="0" max="59" name="Records[@treatmentIndex].ExposureMinute" value="@(treatment.exposure_Minute ?? 0)" required readonly="@(isWorkReadOnly || !Model.IsAdmin)" /><span class="input-group-text">د</span></div>
                                         </div>
                                     </div>
-                                    <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">إضافة تعليق</label><textarea class="form-control" name="Records[@treatmentIndex].Notes" rows="3" readonly="@(Model.IsReadOnly || !Model.IsAdmin)">@treatment.Notes</textarea></div>
+                                    <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">إضافة تعليق</label><textarea class="form-control" name="Records[@treatmentIndex].Notes" rows="3" readonly="@(isWorkReadOnly || !Model.IsAdmin)">@treatment.Notes</textarea></div>
                                 </div>
                             </div>
                         </div>
@@ -588,7 +624,7 @@
             {
                 <div class="alert alert-warning text-center">لا توجد سجلات معالجة مجهزة لهذه اللجنة.</div>
             }
-            @if (Model.IsAdmin && !Model.IsReadOnly && treatmentIndex > 0)
+            @if (Model.IsAdmin && !isWorkReadOnly && treatmentIndex > 0)
             {
                 <div class="card shadow-sm mb-4"><div class="card-body d-flex justify-content-between align-items-center save-bar">
                     <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="IsFinishedAll" value="true" id="finishTreatment" checked /><label class="form-check-label fw-bold" for="finishTreatment">إنهاء لجنة المعالجة بعد الحفظ</label></div>
@@ -610,6 +646,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/weight-units.js" asp-append-version="true"></script>
     <script>
         (() => {
             const treatmentForm = document.getElementById('treatmentSaveForm');
@@ -632,16 +669,18 @@
             document.querySelector('input[name="TreatmentModeChoice"]:checked')?.dispatchEvent(new Event('change'));
 
             const withdrawalSection = document.getElementById('withdrawalSection');
-            const updateWithdrawalDecision = () => {
-                if (!withdrawalSection) return;
-                const decision = document.querySelector('input[name="PerformWithdrawal"]:checked');
-                if (decision) withdrawalSection.style.display = decision.value === 'true' ? '' : 'none';
-            };
-            document.querySelectorAll('input[name="PerformWithdrawal"]').forEach(option =>
-                option.addEventListener('change', updateWithdrawalDecision));
-            updateWithdrawalDecision();
-
+            const inspectionForm = document.getElementById('inspectionSaveForm');
+            function bindInspectionSamples(root) {
+                if (!inspectionForm || document.getElementById('performWithdrawal')?.value !== 'true') return;
+                root?.querySelectorAll('[name^="Samples["]').forEach(field => field.setAttribute('form', 'inspectionSaveForm'));
+            }
+document.getElementById('openWithdrawal')?.addEventListener('click', () => {
+ document.getElementById('performWithdrawal').value = 'true';
+ bindInspectionSamples(withdrawalSection);
+ if (withdrawalSection) { withdrawalSection.style.display = ''; withdrawalSection.scrollIntoView({behavior:'smooth'}); document.getElementById('sampleLot')?.focus({preventScroll:true}); }
+});
             const samplesForm = document.getElementById('samplesSaveForm');
+            bindInspectionSamples(samplesForm);
             const samplesButton = document.getElementById('saveSamplesButton');
             const analysisLabOptions = @Html.Raw(analysisLabOptionsJson);
             const analysisTypeSelect = document.getElementById('sampleAnalysisType');
@@ -650,6 +689,18 @@
             const newSamplesContainer = document.getElementById('newSamplesContainer');
             let nextSampleIndex = samplesForm?.querySelectorAll('input[name$=".SampleId"]').length ?? 0;
             const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
+                    const formatWeight = value => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return '—';
+            }
+
+            return number.toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 6
+            });
+        };
 
             if (analysisTypeSelect) {
                 [...new Map(analysisLabOptions.map(x => [x.AnalysisTypeId, x.AnalysisTypeName])).entries()]
@@ -669,6 +720,10 @@
                     alert('يجب اختيار اللوط ونوع التحليل ومعمل التحليل.');
                     return;
                 }
+const draftSize=document.getElementById('newSampleSize'),draftSeal=document.getElementById('newSampleSeal'),draftNotes=document.getElementById('newSampleNotes');
+if (!draftSize.value || !draftSize.checkValidity() || !draftSeal.value.trim() || !draftNotes.value.trim()) { alert('استكمل كمية العينة ورقم الختم أو الرصاصة والملاحظات قبل الإضافة.'); return; }
+const sampleKg=Number(draftSize.value)*Number(draftSize.dataset.weightFactor || 1);
+const sampleUnit=draftSize.dataset.quantityUnit === 'count' ? 'count' : 'kg';
                 const key = `${lotOption.value}-${labOption.value}`;
                 if (samplesForm.querySelector(`[data-sample-key="${key}"]`)) {
                     alert('تمت إضافة هذا التحليل لنفس اللوط من قبل.');
@@ -690,31 +745,44 @@
                         <button type="button" class="btn btn-sm btn-outline-danger remove-new-sample">حذف</button>
                     </div>
                     <div class="request-totals mb-3">
-                        <div class="request-total"><span>الوزن القائم للوط</span><strong>${escapeHtml(lotOption.dataset.grossWeight)}</strong></div>
+                        <div class="request-total"><span>الوزن القائم للوط</span><strong class="weight-control" data-weight-kg="${escapeHtml(lotOption.dataset.grossWeight)}">
+        <bdi data-weight-value>${formatWeight(lotOption.dataset.grossWeight)}</bdi>
+
+                                <select class="weight-unit" aria-label="وحدة الوزن"><option value="1">كيلوجرام</option><option value="1000">طن</option><option value="0.001">جرام</option></select></strong></div>
                         <div class="request-total"><span>عدد العبوات للوط</span><strong>${escapeHtml(lotOption.dataset.packageCount)}</strong></div>
                         <div class="request-total"><span>عدد الوحدات للوط</span><strong>${escapeHtml(lotOption.dataset.unitsCount)}</strong></div>
                         <div class="request-total"><span>عدد البالتات للوط</span><strong>${escapeHtml(lotOption.dataset.palletCount)}</strong></div>
                     </div>
                     <div class="lot-data-grid mb-3"><div><span>نوع التحليل</span><strong>${escapeHtml(analysisTypeSelect.selectedOptions[0].text)}</strong></div><div><span>معمل التحليل</span><strong>${escapeHtml(labOption.text)}</strong></div><div><span>رقم السحب</span><strong>يتولد عند الحفظ</strong></div></div>
                     <div class="inspection-fields">
-                        <div class="inspection-field"><label class="form-label fw-bold">حجم العينة</label><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[${index}].SampleSize" required /></div>
+                        <div class="inspection-field"><label class="form-label fw-bold">كمية العينة</label><input class="form-control" type="number" step="0.001" min="0.001" name="Samples[${index}].SampleSize" required /></div>
                         <input type="hidden" name="Samples[${index}].SampleRatio" value="0" />
-                        <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو السيل الملاحي</label><input class="form-control" name="Samples[${index}].SealNumber" /></div>
+                        <div class="inspection-field"><label class="form-label fw-bold">رقم الختم أو الرصاصة</label><input class="form-control" name="Samples[${index}].SealNumber" /></div>
                         <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control" name="Samples[${index}].Notes" rows="2" required placeholder="اكتب ملاحظات السحب..."></textarea></div>
                     </div>`;
                 card.querySelector('.remove-new-sample').addEventListener('click', () => card.remove());
-                newSamplesContainer.appendChild(card);
+card.querySelector('input[name$=".SampleSize"]').value=Number(sampleKg.toFixed(12)).toString();
+card.querySelector('input[name$=".SealNumber"]').value=draftSeal.value.trim();
+card.querySelector('textarea[name$=".Notes"]').value=draftNotes.value.trim();
+card.querySelector('input[name$=".SampleSize"]') .dataset.quantityUnit=sampleUnit;
+newSamplesContainer.appendChild(card);
+bindInspectionSamples(card);
+draftSize.value='';draftSeal.value='';draftNotes.value='';
                 document.getElementById('noSamplesMessage')?.remove();
                 card.querySelector('input[name$=".SampleSize"]')?.focus();
                 analysisTypeSelect.value = '';
                 analysisTypeSelect.dispatchEvent(new Event('change'));
             });
-            samplesForm?.addEventListener('submit', () => {
+            samplesForm?.addEventListener('invalid', event => event.target.closest('details')?.setAttribute('open', 'open'), true);
+            function reindexSamples() {
                 [...samplesForm.querySelectorAll('input[name$=".SampleId"]')].forEach((sampleId, index) => {
                     const card = sampleId.closest('.inspection-panel');
                     card?.querySelectorAll('[name^="Samples["]').forEach(field =>
                         field.name = field.name.replace(/^Samples\[\d+\]/, `Samples[${index}]`));
                 });
+            }
+            samplesForm?.addEventListener('submit', () => {
+                reindexSamples();
                 if (!samplesForm.checkValidity() || !samplesButton) return;
                 samplesButton.disabled = true;
                 samplesButton.textContent = 'جارٍ حفظ العينات وتوليد الباركود...';
@@ -751,13 +819,10 @@
             document.querySelectorAll('[data-infection-panel]').forEach(initializeInfectionPanel);
 
             const updateInfectionPanels = () => {
-                document.querySelectorAll('select[name$="CommitteeResultTypeId"]').forEach(result => {
-                    const panel = result.closest('.inspection-panel')?.querySelector('[data-infection-panel]');
-                    if (!panel) return;
-                    const item = panel.querySelector('.infection-item');
-                    const rejected = result.value === '3';
-                    panel.classList.toggle('visible', rejected);
-                    item.required = rejected && (result.name === 'SharedCommitteeResultTypeId' ? currentMode() === 'total' : currentMode() === 'partial');
+                document.querySelectorAll('[data-infection-panel]').forEach(panel => {
+                    panel.hidden = true;
+                    panel.classList.remove('visible');
+                    panel.querySelectorAll('select').forEach(field => { field.required = false; field.disabled = true; });
                 });
             };
 
@@ -780,6 +845,8 @@
                 if (!applyToAll) return;
                 const isTotal = currentMode() === 'total';
                 applyToAll.value = isTotal ? 'true' : 'false';
+                form.classList.toggle('total-mode', isTotal);
+                if (isTotal) form.querySelectorAll('.lot-card').forEach(card => card.open = false);
                 document.querySelectorAll('.total-inspection-panel').forEach(x => x.style.display = isTotal ? '' : 'none');
                 document.querySelectorAll('.partial-inspection-panel').forEach(x => x.style.display = isTotal ? 'none' : '');
                 document.querySelectorAll('.total-required').forEach(x => x.required = isTotal);
@@ -787,14 +854,27 @@
                 updateInfectionPanels();
                 updateProgress();
             };
+            form.querySelectorAll('.lot-card > summary').forEach(summary => summary.addEventListener('click', event => {
+                if (currentMode() === 'total' && !event.target.closest('.weight-unit')) event.preventDefault();
+            }));
             modes.forEach(x => x.addEventListener('change', setInspectionMode));
             form.addEventListener('input', updateProgress);
             form.addEventListener('change', updateProgress);
             form.addEventListener('change', updateInfectionPanels);
             setInspectionMode();
 
-            form.addEventListener('submit', () => {
+            form.addEventListener('invalid', event => event.target.closest('details')?.setAttribute('open', 'open'), true);
+            form.addEventListener('submit', event => {
+                if (document.getElementById('performWithdrawal')?.value === 'true') {
+                    if (!samplesForm?.querySelector('input[name$=".SampleId"]')) {
+                        event.preventDefault();
+                        alert('أضف تحليلًا وبيانات السحب قبل الحفظ.');
+                        return;
+                    }
+                    reindexSamples();
+                }
                 if (!form.checkValidity()) {
+                    event.preventDefault();
                     const invalidField = form.querySelector(':invalid');
                     invalidField?.closest('details')?.setAttribute('open', 'open');
                     return;

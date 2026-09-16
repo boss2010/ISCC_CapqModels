@@ -8,6 +8,7 @@
         public string Sample_BarCode { get; set; }
         public double? SampleRatio { get; set; }
         public double? SampleSize { get; set; }
+        public string QuantityUnit { get; set; } = "kg";
         public bool? IS_From_Android { get; set; }
         public bool? IS_Total { get; set; }
         public long? LotData_ID { get; set; }

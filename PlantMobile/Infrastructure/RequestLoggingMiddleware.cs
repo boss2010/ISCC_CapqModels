@@ -13,6 +13,13 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
         {
             await next(context);
 
+            double durationMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            if (context.Response.StatusCode < 400 && durationMs >= 2000)
+            {
+                logger.LogWarning("Slow request: {Method} {Path}; DurationMs={DurationMs}; TraceId={TraceId}",
+                    context.Request.Method, context.Request.Path, durationMs, traceId);
+            }
+
             if (context.Response.StatusCode >= 400)
             {
                 logger.LogWarning(
@@ -26,6 +33,10 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
                     traceId,
                     Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             }
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The client disconnected; no response or server-error log is needed.
         }
         catch (Exception exception)
         {

@@ -40,9 +40,11 @@ namespace PlantMobile.Controllers
 
             try
             {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var connectionString = _configuration.GetConnectionString("PrivilegeDBConnection");
                 await using var connection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
-                await connection.OpenAsync();
+                await connection.OpenAsync(HttpContext.RequestAborted);
+                double connectionMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
                 await using var command = connection.CreateCommand();
                 command.CommandText = @"
@@ -54,8 +56,14 @@ namespace PlantMobile.Controllers
                 command.Parameters.AddWithValue("@LoginName", userName.Trim());
                 command.Parameters.AddWithValue("@Password", password);
 
-                await using var reader = await command.ExecuteReaderAsync();
-                if (!await reader.ReadAsync() || reader.IsDBNull(0) || reader.IsDBNull(1))
+                var queryStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                await using var reader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+                bool found = await reader.ReadAsync(HttpContext.RequestAborted);
+                double queryMs = System.Diagnostics.Stopwatch.GetElapsedTime(queryStarted).TotalMilliseconds;
+                if (connectionMs + queryMs >= 1000)
+                    _logger.LogWarning("Login timing: ConnectionMs={ConnectionMs}; QueryMs={QueryMs}; TraceId={TraceId}",
+                        connectionMs, queryMs, HttpContext.TraceIdentifier);
+                if (!found || reader.IsDBNull(0) || reader.IsDBNull(1))
                 {
                     ViewBag.LoginError = "اسم المستخدم أو كلمة السر غير صحيحة، أو الحساب غير نشط";
                     return View("Index");
@@ -69,6 +77,10 @@ namespace PlantMobile.Controllers
                 HttpContext.Session.SetString("UserId", userId.ToString());
                 HttpContext.Session.SetString("EmployeeId", employeeId.ToString());
                 return RedirectToAction("Index", "ImportRequests");
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
