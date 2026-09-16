@@ -5,9 +5,35 @@ internal static class ImportRequestsSql
 {
     public static string Build(bool committeePage) => ImportCommitteeEligibility.Filter(Selection) + "\n" + WithdrawalVisibility + "\n" +
         (committeePage ? "AND request.ID = @CheckRequestId\n" : DateFilter + "\n") +
-        PrepareSelection + "\n" + WorkflowData + "\n" +
+        PrepareSelection + "\n" + WorkflowData + "\n" + ImportCommitteeEligibility.Filter(RequestCompletion) + "\n" +
         Companies + "\n" + Details + "\n" + Result +
-        "\nDROP TABLE #Samples, #Attachments, #Results, #SampleConfirmations, #ResultConfirmations, #Members;";
+        "\nDROP TABLE #Samples, #Attachments, #Results, #SampleConfirmations, #ResultConfirmations, #Members, #RequestCompletion;";
+
+    private const string RequestCompletion = """
+        SELECT shipping.Im_CheckRequest_ID AS CheckRequestId,
+               CAST(MIN(CASE WHEN latestStatus.Is_Continue = 0 THEN 1 ELSE 0 END) AS bit) AS RequestQuarantineComplete
+        INTO #RequestCompletion
+        FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+        JOIN dbo.Im_CheckRequest_Items item ON item.ID = lot.Im_CheckRequest_Items_ID AND item.User_Deletion_Id IS NULL
+        JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID AND shipping.User_Deletion_Id IS NULL
+        OUTER APPLY (
+            SELECT TOP (1) status.Is_Continue, lr.ID
+            FROM dbo.Im_CheckRequest_Items_Lot_Result lr
+            JOIN dbo.Im_CheckRequest_Lot_Result_Status status ON status.ID = lr.IS_Status
+            WHERE lr.Im_CheckRequest_Items_Lot_Category_ID = lot.ID AND lr.IS_Status_Committee = 1
+            ORDER BY lr.ID DESC
+        ) latestStatus
+        WHERE lot.User_Deletion_Id IS NULL
+          AND EXISTS (SELECT 1 FROM #SelectedCommittees selected WHERE selected.CheckRequestId = shipping.Im_CheckRequest_ID)
+          AND (latestStatus.ID IS NOT NULL OR EXISTS (
+              SELECT 1 FROM dbo.Im_CommitteeResult inspection
+              JOIN dbo.Im_RequestCommittee assigned ON assigned.ID = inspection.Committee_ID
+              WHERE assigned.ImCheckRequest_ID = shipping.Im_CheckRequest_ID
+                AND assigned.CommitteeType_ID = 11 AND assigned.User_Deletion_Id IS NULL
+                AND inspection.User_Deletion_Id IS NULL
+                AND (inspection.LotData_ID = lot.ID OR (inspection.LotData_ID IS NULL AND inspection.Im_Request_Item_Id = item.ID))))
+        GROUP BY shipping.Im_CheckRequest_ID;
+        """;
 
     private const string Selection = """
         SET NOCOUNT ON;
@@ -161,7 +187,7 @@ internal static class ImportRequestsSql
         CREATE UNIQUE CLUSTERED INDEX IX_RequestCompanies ON #RequestCompanies (CheckRequestId);
         
         SELECT ROW_NUMBER() OVER (ORDER BY committee.CommitteeId) AS RowNum,
-               committee.*, company.CompanyName,
+               committee.*, company.CompanyName, ISNULL(completion.RequestQuarantineComplete, CAST(0 AS bit)) AS RequestQuarantineComplete,
         """;
     private const string Details = """
         (SELECT STRING_AGG(CONVERT(nvarchar(max), LTRIM(RTRIM(sample.Sample_BarCode))), '|')
@@ -250,6 +276,7 @@ internal static class ImportRequestsSql
     private const string Result = """
         FROM #SelectedCommittees committee
         JOIN #RequestCompanies company ON company.CheckRequestId = committee.CheckRequestId
+        LEFT JOIN #RequestCompletion completion ON completion.CheckRequestId = committee.CheckRequestId
         ORDER BY committee.CommitteeId
         OPTION (RECOMPILE);
         DROP TABLE #RequestCompanies;

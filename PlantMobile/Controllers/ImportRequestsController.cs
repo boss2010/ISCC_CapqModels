@@ -273,6 +273,12 @@ public class ImportRequestsController : Controller
                         ? sampleCount > 0 && sampleConfirmCount >= sampleCount ? "completed" : sampleConfirmCount > 0 ? "working" : "new"
                         : resultCount > 0 && confirmCount >= resultCount ? "completed" : confirmCount > 0 ? "working" : "new";
                 string name = key switch { "completed" => "تم الانتهاء", "working" => "جاري العمل", "canceled" => "ملغي", _ => "جديد" };
+                bool quarantineComplete = GetBool(reader, "RequestQuarantineComplete");
+                if (quarantineComplete && !canceled)
+                {
+                    key = "completed";
+                    name = "تم الانتهاء";
+                }
 
                 requests.Add(new Ex_Im_CheckRequest_GetAllByUser_DateVM
                 {
@@ -291,6 +297,7 @@ public class ImportRequestsController : Controller
                     IsReadOnly = key is "completed" or "canceled" || (isAdmin && Convert.ToByte(reader["CommitteeType_ID"]) == 13 && (status || finished)),
                     IsAdmin = isAdmin,
                     InspectionComplete = GetBool(reader, "InspectionComplete"),
+                    RequestQuarantineComplete = quarantineComplete,
                     WithdrawalComplete = GetBool(reader, "WithdrawalComplete"),
                     CanShowLaboratoryResult = GetBool(reader, "CanShowLaboratoryResult"),
                     PendingLabBarcodes = Convert.ToString(reader["PendingLabBarcodes"]) ?? string.Empty,

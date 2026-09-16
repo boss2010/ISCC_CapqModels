@@ -9,6 +9,7 @@
     int canceledCount = Model.Count(x => x.WorkStatusKey == "canceled");
     var requestGroups = Model.GroupBy(x => new { x.checkRequest_Id, x.CheckRequest_Number, x.CompanyName }).ToList();
     string RequestCategory(IEnumerable<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM> group) =>
+        group.Any(x => x.RequestQuarantineComplete) ? "completed" :
         group.Any(x => x.Committee_Type_Id == 13 && x.HasPendingLabResult) ? "pending-lab" :
         group.All(x => x.WorkStatusKey is "completed" or "canceled") ? "completed" : "today";
     var todayRequestGroups = requestGroups.Where(g => RequestCategory(g) == "today").ToList();
