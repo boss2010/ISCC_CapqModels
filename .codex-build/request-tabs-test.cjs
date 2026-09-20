@@ -9,9 +9,9 @@ const {chromium}=require('C:/Users/pc/.cache/codex-runtimes/codex-primary-runtim
  try{
   const page=await browser.newPage();
   await page.setContent(`<style>${view.match(/<style>([\s\S]*?)<\/style>/)[1]}</style>`+
-   ['today','completed','pending-lab'].map(c=>`<button class="request-tab" data-request-filter="${c}">${c}</button><a class="request-choice" data-category="${c}">${c}</a>`).join(''));
+   ['today','completed','pending-lab','pending-quarantine'].map(c=>`<button class="request-tab" data-request-filter="${c}">${c}</button><a class="request-choice" data-category="${c}">${c}</a>`).join(''));
   await page.addScriptTag({content:view.slice(start,end)});
-  for(const category of ['today','completed','pending-lab','today']){
+  for(const category of ['today','completed','pending-lab','pending-quarantine','today']){
    if(category!=='today'||await page.locator('.request-tab.active').getAttribute('data-request-filter')!=='today')
     await page.locator(`[data-request-filter="${category}"]`).click();
    assert.deepEqual(await page.locator('.request-choice:visible').allTextContents(),[category]);

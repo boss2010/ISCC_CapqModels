@@ -34,6 +34,8 @@ namespace ViewModels
             public bool IsAdmin { get; set; }
             public bool InspectionComplete { get; set; }
             public bool RequestQuarantineComplete { get; set; }
+            public bool RequiresCommitteeCompletion { get; set; }
+            public bool HasPendingQuarantine { get; set; }
             public bool WithdrawalComplete { get; set; }
             public bool CanShowLaboratoryResult { get; set; }
             public string ActionText => IsReadOnly ? "عرض اللجنة" : !IsAdmin ? "إبداء الرأي"

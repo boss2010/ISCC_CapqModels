@@ -21,6 +21,8 @@
     bool hasSavedWithdrawal = details.Item_Data?
         .SelectMany(x => x.Sample_Data ?? Enumerable.Empty<ViewModels.Itemsample_data>())
         .Any(x => x.SampleSize > 0) == true;
+    var assignedSamples = details.Item_Data?.SelectMany(x => x.Sample_Data ?? Enumerable.Empty<ViewModels.Itemsample_data>()).ToList() ?? new();
+    bool totalWithdrawalMode = assignedSamples.Count > 0 && assignedSamples.All(x => x.IS_Total == true);
     string infectionItemsJson = System.Text.Json.JsonSerializer.Serialize(Model.InfectionItems);
     string analysisLabOptionsJson = System.Text.Json.JsonSerializer.Serialize(Model.AnalysisLabOptions);
     var completedInspectionLots = inspectionResultsByLot.Keys.ToHashSet();
@@ -398,6 +400,11 @@
                 <div class="card shadow-sm mb-4">
                     <div class="card-header bg-white"><h4 class="mb-0 text-primary">إضافة تحليل للسحب</h4></div>
                     <div class="card-body">
+                        <div class="mb-3" role="group" aria-label="نطاق السحب">
+                            <label class="ms-3"><input type="radio" name="WithdrawalModeChoice" value="partial" checked="@(!totalWithdrawalMode)" /> سحب جزئي</label>
+                            <label><input type="radio" name="WithdrawalModeChoice" value="total" checked="@totalWithdrawalMode" /> سحب كلي</label>
+                            <div class="text-muted" id="withdrawalModeHelp">الجزئي يطبق على اللوط المختار. الكلي يطبق نفس البيانات على كل لوطات اللجنة.</div>
+                        </div>
                         <div class="inspection-fields">
                             <div class="inspection-field">
                                 <label class="form-label fw-bold">اللوط</label>
@@ -420,6 +427,23 @@
                
                 <div id="newSamplesContainer"></div>
             }
+            @if (Model.IsAdmin && !isWorkReadOnly && Model.CommitteeTypeId == 13)
+            {
+                <section class="card shadow-sm mb-4" id="existingWithdrawalMode">
+                    <div class="card-body">
+                        <div class="mb-3" role="group" aria-label="نطاق السحب">
+                            <label class="ms-3"><input type="radio" name="WithdrawalModeChoice" value="partial" checked="@(!totalWithdrawalMode)" /> سحب جزئي</label>
+                            <label><input type="radio" name="WithdrawalModeChoice" value="total" checked="@totalWithdrawalMode" /> سحب كلي</label>
+                        </div>
+                        <div class="text-muted mb-3">الكلي يطبق نفس بيانات السحب على العينات المسندة للجنة، والجزئي يتيح إدخال بيانات كل لوط على حدة.</div>
+                        <div class="inspection-fields" id="sharedWithdrawalFields" hidden>
+                            <div class="inspection-field"><label for="newSampleSize">كمية العينة لكل عينة مسندة</label><input id="newSampleSize" class="form-control" type="number" min="0.001" step="0.001" /></div>
+                            <div class="inspection-field"><label for="newSampleSeal">رقم الختم أو الرصاصة</label><input id="newSampleSeal" class="form-control" /></div>
+                            <div class="inspection-field inspection-field-notes"><label for="newSampleNotes">الملاحظات</label><textarea id="newSampleNotes" class="form-control" rows="3"></textarea></div>
+                        </div>
+                    </div>
+                </section>
+            }
             <div class="lots-heading mb-3"><div class="lots-heading-row"><h4>بيانات سحب العينات</h4><span class="lots-count">@(Model.CommitteeTypeId == 11 ? "يتم توليد باركود جديد عند حفظ الفحص والسحب" : "باركود عينات السحب")</span></div></div>
             @foreach (var item in details.Item_Data)
             {
@@ -427,9 +451,11 @@
                 {
                     var sampleLot = (item.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>())
                         .FirstOrDefault(x => x.ID == sample.LotData_ID);
-                    <details class="inspection-panel sample-result-card shadow-sm mb-3" open="@(sample.SampleSize == null || sample.SampleSize <= 0)">
+                    <details class="inspection-panel sample-result-card shadow-sm mb-3" data-sample-key="@sample.LotData_ID-@sample.AnalysisLabTypeId" data-sample-item="@item.ID" data-sample-attached="@sample.HasAttachment.ToString().ToLowerInvariant()" open="@(sample.SampleSize == null || sample.SampleSize <= 0)">
                         <summary class="inspection-panel-title">@item.Item_Name — @(string.IsNullOrWhiteSpace(sample.Lotnum) ? "سحب كلي" : $"اللوط {sample.Lotnum}") <span class="status-badge">@(sample.SampleSize > 0 ? "تم السحب — عرض البيانات" : "استكمال السحب")</span></summary>
                         <input type="hidden" name="Samples[@sampleIndex].SampleId" value="@sample.Sample_dataId" />
+                        <input type="hidden" name="Samples[@sampleIndex].AnalysisLabTypeId" value="@sample.AnalysisLabTypeId" />
+                        <input type="hidden" name="Samples[@sampleIndex].IsTotal" value="@((sample.IS_Total == true).ToString().ToLowerInvariant())" />
                         <input type="hidden" name="Samples[@sampleIndex].LotDataId" value="@sample.LotData_ID" />
                         <input type="hidden" name="Samples[@sampleIndex].HasAttachment" value="@sample.HasAttachment.ToString().ToLowerInvariant()" />
                         @if (!Model.IsAdmin) { <input type="hidden" name="Opinions[@sampleIndex].SampleId" value="@sample.Sample_dataId" /> }
@@ -686,6 +712,58 @@ document.getElementById('openWithdrawal')?.addEventListener('click', () => {
             const analysisTypeSelect = document.getElementById('sampleAnalysisType');
             const analysisLabSelect = document.getElementById('sampleAnalysisLab');
             const sampleLotSelect = document.getElementById('sampleLot');
+            const withdrawalModes = document.querySelectorAll('input[name="WithdrawalModeChoice"]');
+            const isTotalWithdrawal = () => document.querySelector('input[name="WithdrawalModeChoice"]:checked')?.value === 'total';
+            const existingMode = document.getElementById('existingWithdrawalMode');
+            const sharedFields = document.getElementById('sharedWithdrawalFields');
+            const assignedCards = () => [...(samplesForm?.querySelectorAll('.sample-result-card') ?? [])].filter(card => card.dataset.sampleAttached !== 'true');
+            function syncAssignedWithdrawal() {
+                if (!existingMode) return;
+                const total = isTotalWithdrawal();
+                sharedFields.hidden = !total;
+                sharedFields.style.display = total ? '' : 'none';
+                const amount = document.getElementById('newSampleSize');
+                const seal = document.getElementById('newSampleSeal');
+                const notes = document.getElementById('newSampleNotes');
+                amount.required = total; notes.required = total;
+                assignedCards().forEach(card => {
+                    card.querySelector('input[name$=".IsTotal"]').value = String(total);
+                    const size = card.querySelector('input[name$=".SampleSize"]');
+                    const sampleSeal = card.querySelector('input[name$=".SealNumber"]');
+                    const sampleNotes = card.querySelector('textarea[name$=".Notes"]');
+                    [size,sampleSeal,sampleNotes].forEach(field => { if (field) field.readOnly = total; });
+                    const unit = size.closest('.weight-editor')?.querySelector('select');
+                    if (unit) unit.disabled = total;
+                    if (!total) return;
+                    const count = amount.dataset.quantityUnit === 'count';
+                    if (unit) { unit.value = count ? 'count' : '1'; unit.dispatchEvent(new Event('change', {bubbles:true})); }
+                    size.value = amount.value === '' ? '' : String(Number(amount.value) * Number(amount.dataset.weightFactor || 1));
+                    size.dataset.quantityUnit = count ? 'count' : 'kg'; size.dataset.weightFactor = '1';
+                    size.min = count ? '1' : '0.001'; size.step = count ? '1' : '0.001';
+                    if (sampleSeal) sampleSeal.value = seal.value;
+                    if (sampleNotes) sampleNotes.value = notes.value;
+                });
+            }
+            if (existingMode) {
+                const first = assignedCards()[0];
+                if (first && isTotalWithdrawal()) {
+                    const amount = document.getElementById('newSampleSize');
+                    const source = first.querySelector('input[name$=".SampleSize"]');
+                    const unit = amount.closest('.weight-editor')?.querySelector('select');
+                    if (unit) { unit.value = source.dataset.quantityUnit === 'count' ? 'count' : '1'; unit.dispatchEvent(new Event('change', {bubbles:true})); }
+                    amount.value = source.value;
+                    document.getElementById('newSampleSeal').value = first.querySelector('input[name$=".SealNumber"]')?.value ?? '';
+                    document.getElementById('newSampleNotes').value = first.querySelector('textarea[name$=".Notes"]')?.value ?? '';
+                }
+                sharedFields.addEventListener('input', syncAssignedWithdrawal);
+                sharedFields.addEventListener('change', syncAssignedWithdrawal);
+                syncAssignedWithdrawal();
+            }
+            if (sampleLotSelect) sampleLotSelect.disabled = isTotalWithdrawal();
+            withdrawalModes.forEach(mode => mode.addEventListener('change', () => {
+                if (sampleLotSelect) sampleLotSelect.disabled = isTotalWithdrawal();
+                syncAssignedWithdrawal();
+            }));
             const newSamplesContainer = document.getElementById('newSamplesContainer');
             let nextSampleIndex = samplesForm?.querySelectorAll('input[name$=".SampleId"]').length ?? 0;
             const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
@@ -714,9 +792,11 @@ document.getElementById('openWithdrawal')?.addEventListener('click', () => {
             }
 
             document.getElementById('addSampleAnalysis')?.addEventListener('click', () => {
-                const lotOption = sampleLotSelect?.selectedOptions[0];
+                const totalWithdrawal = isTotalWithdrawal();
+                const selectedLots = totalWithdrawal ? [...(sampleLotSelect?.options ?? [])].filter(option => option.value)
+                    : [...(sampleLotSelect?.selectedOptions ?? [])].filter(option => option.value);
                 const labOption = analysisLabSelect?.selectedOptions[0];
-                if (!lotOption?.value || !analysisTypeSelect?.value || !labOption?.value || !newSamplesContainer || !samplesForm) {
+                if (!selectedLots.length || !analysisTypeSelect?.value || !labOption?.value || !newSamplesContainer || !samplesForm) {
                     alert('يجب اختيار اللوط ونوع التحليل ومعمل التحليل.');
                     return;
                 }
@@ -724,10 +804,28 @@ const draftSize=document.getElementById('newSampleSize'),draftSeal=document.getE
 if (!draftSize.value || !draftSize.checkValidity() || !draftSeal.value.trim() || !draftNotes.value.trim()) { alert('استكمل كمية العينة ورقم الختم أو الرصاصة والملاحظات قبل الإضافة.'); return; }
 const sampleKg=Number(draftSize.value)*Number(draftSize.dataset.weightFactor || 1);
 const sampleUnit=draftSize.dataset.quantityUnit === 'count' ? 'count' : 'kg';
-                const key = `${lotOption.value}-${labOption.value}`;
-                if (samplesForm.querySelector(`[data-sample-key="${key}"]`)) {
-                    alert('تمت إضافة هذا التحليل لنفس اللوط من قبل.');
+                const findExistingSample = lot => samplesForm.querySelector(`[data-sample-key="${lot.value}-${labOption.value}"]`)
+                    ?? (totalWithdrawal ? samplesForm.querySelector(`[data-sample-key="-${labOption.value}"][data-sample-item="${lot.dataset.requestItem}"]`) : null);
+                if (selectedLots.some(lot => findExistingSample(lot)?.dataset.sampleAttached === 'true')) {
+                    alert('لا يمكن تعديل عينة لها نتيجة معمل محفوظة.');
                     return;
+                }
+                for (const lotOption of selectedLots) {
+                const key = `${lotOption.value}-${labOption.value}`;
+                const existingCard = findExistingSample(lotOption);
+                if (existingCard) {
+                    const size = existingCard.querySelector('input[name$=".SampleSize"]');
+                    const unit = size.closest('.weight-editor')?.querySelector('select');
+                    if (unit) { unit.value = sampleUnit === 'count' ? 'count' : '1'; unit.dispatchEvent(new Event('change', {bubbles:true})); }
+                    size.value = String(sampleKg);
+                    size.dataset.quantityUnit = sampleUnit;
+                    size.dataset.weightFactor = '1';
+                    existingCard.querySelector('input[name$=".SealNumber"]').value = draftSeal.value.trim();
+                    existingCard.querySelector('textarea[name$=".Notes"]').value = draftNotes.value.trim();
+                    existingCard.querySelector('input[name$=".IsTotal"]').value = String(totalWithdrawal);
+                    existingCard.setAttribute('open', 'open');
+                    bindInspectionSamples(existingCard);
+                    continue;
                 }
                 const index = nextSampleIndex++;
                 const card = document.createElement('div');
@@ -735,13 +833,14 @@ const sampleUnit=draftSize.dataset.quantityUnit === 'count' ? 'count' : 'kg';
                 card.dataset.sampleKey = key;
                 card.innerHTML = `
                     <input type="hidden" name="Samples[${index}].SampleId" value="0" />
+                    <input type="hidden" name="Samples[${index}].IsTotal" value="${totalWithdrawal}" />
                     <input type="hidden" name="Samples[${index}].LotDataId" value="${lotOption.value}" />
                     <input type="hidden" name="Samples[${index}].RequestItemId" value="${lotOption.dataset.requestItem}" />
                     <input type="hidden" name="Samples[${index}].ItemShortNameId" value="${lotOption.dataset.shortName}" />
                     <input type="hidden" name="Samples[${index}].AnalysisLabTypeId" value="${labOption.value}" />
                     <input type="hidden" name="Samples[${index}].HasAttachment" value="false" />
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div class="inspection-panel-title mb-0">${escapeHtml(lotOption.dataset.itemName)} — اللوط ${escapeHtml(lotOption.dataset.lotNumber)}</div>
+                        <div class="inspection-panel-title mb-0">${escapeHtml(lotOption.dataset.itemName)} — اللوط ${escapeHtml(lotOption.dataset.lotNumber)} — ${totalWithdrawal ? 'سحب كلي' : 'سحب جزئي'}</div>
                         <button type="button" class="btn btn-sm btn-outline-danger remove-new-sample">حذف</button>
                     </div>
                     <div class="request-totals mb-3">
@@ -767,9 +866,10 @@ card.querySelector('textarea[name$=".Notes"]').value=draftNotes.value.trim();
 card.querySelector('input[name$=".SampleSize"]') .dataset.quantityUnit=sampleUnit;
 newSamplesContainer.appendChild(card);
 bindInspectionSamples(card);
+                }
 draftSize.value='';draftSeal.value='';draftNotes.value='';
                 document.getElementById('noSamplesMessage')?.remove();
-                card.querySelector('input[name$=".SampleSize"]')?.focus();
+                newSamplesContainer.querySelector('input[name$=".SampleSize"]')?.focus();
                 analysisTypeSelect.value = '';
                 analysisTypeSelect.dispatchEvent(new Event('change'));
             });

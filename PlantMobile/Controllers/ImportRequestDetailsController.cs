@@ -28,7 +28,7 @@ public class ImportRequestDetailsController : Controller
                 UPDATE dbo.Im_CheckRequest_SampleData
                 SET WithdrawDate = CONVERT(date, GETDATE()),
                     Sample_BarCode = CASE WHEN @RegenerateBarcode = 1 THEN @Barcode ELSE COALESCE(NULLIF(Sample_BarCode, ''), @Barcode) END,
-                    SampleSize = @SampleSize, SampleRatio = @SampleRatio, SampleQuantityUnit = @QuantityUnit,
+                    SampleSize = @SampleSize, SampleRatio = @SampleRatio, SampleQuantityUnit = @QuantityUnit, IS_Total = @IsTotal,
                     Notes_Ar = @Notes, Syl_ALkhatima_Number = @SealNumber,
                     IsAccepted = CASE WHEN @HasAttachment = 1 THEN @LabResultAccepted ELSE IsAccepted END,
                     Admin_Confirmation = CASE WHEN @HasAttachment = 1 THEN (SELECT Is_Continue FROM dbo.Im_CheckRequest_Lot_Result_Status WHERE ID = @QuarantineStatusId) ELSE Admin_Confirmation END,
@@ -36,6 +36,7 @@ public class ImportRequestDetailsController : Controller
                     Admin_Date = CASE WHEN @HasAttachment = 1 THEN GETDATE() ELSE Admin_Date END,
                     IS_From_Android = 1, User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
                 WHERE ID = @SampleId AND Im_RequestCommittee_ID = @CommitteeId
+                  AND (LotData_ID = @LotDataId OR (LotData_ID IS NULL AND @LotDataId IS NULL))
                   AND User_Deletion_Id IS NULL
                 """;
             foreach (var group in input.Samples.GroupBy(x => x.LotDataId))
@@ -59,7 +60,7 @@ public class ImportRequestDetailsController : Controller
                             SELECT NEXT VALUE FOR dbo.Im_CheckRequest_SampleData_SEQ,
                                    @AnalysisLabTypeId, @CommitteeId, @RequestItemId, @LotDataId,
                                    CONVERT(date, GETDATE()), @Barcode, @SampleSize, @SampleRatio,
-                                   @Notes, @UserId, GETDATE(), 0, @ItemShortNameId, 1, @SealNumber,
+                                   @Notes, @UserId, GETDATE(), @IsTotal, @ItemShortNameId, 1, @SealNumber,
                                    (SELECT TOP 1 Amount FROM dbo.Fees_Action WHERE ID = 9), @QuantityUnit
                             WHERE EXISTS
                                 (SELECT 1 FROM dbo.AnalysisLabType
@@ -73,6 +74,7 @@ public class ImportRequestDetailsController : Controller
                         insert.Parameters.AddWithValue("@Barcode", barcode);
                         insert.Parameters.AddWithValue("@SampleSize", sample.SampleSize);
                         insert.Parameters.AddWithValue("@QuantityUnit", sample.QuantityUnit);
+                        insert.Parameters.AddWithValue("@IsTotal", sample.IsTotal);
                         insert.Parameters.AddWithValue("@SampleRatio", sample.SampleRatio);
                         insert.Parameters.AddWithValue("@Notes", (object?)sample.Notes?.Trim() ?? DBNull.Value);
                         insert.Parameters.AddWithValue("@UserId", userId);
@@ -88,6 +90,7 @@ public class ImportRequestDetailsController : Controller
                     command.Parameters.AddWithValue("@RegenerateBarcode", regenerateBarcodes);
                     command.Parameters.AddWithValue("@SampleSize", sample.SampleSize);
                     command.Parameters.AddWithValue("@QuantityUnit", sample.QuantityUnit);
+                    command.Parameters.AddWithValue("@IsTotal", sample.IsTotal);
                     command.Parameters.AddWithValue("@SampleRatio", sample.SampleRatio);
                     command.Parameters.AddWithValue("@Notes", (object?)sample.Notes?.Trim() ?? DBNull.Value);
                     command.Parameters.AddWithValue("@SealNumber", (object?)sample.SealNumber?.Trim() ?? DBNull.Value);
@@ -96,6 +99,7 @@ public class ImportRequestDetailsController : Controller
                     command.Parameters.AddWithValue("@QuarantineStatusId", (object?)sample.QuarantineStatusId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@UserId", userId);
                     command.Parameters.AddWithValue("@SampleId", sample.SampleId);
+                    command.Parameters.AddWithValue("@LotDataId", (object?)sample.LotDataId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
                     if (await command.ExecuteNonQueryAsync() != 1)
                         throw new InvalidOperationException($"تعذر حفظ بيانات العينة رقم {sample.SampleId}.");
@@ -259,6 +263,7 @@ public class ImportRequestDetailsController : Controller
 
             if (input.PerformWithdrawal)
             {
+                await ValidateSampleScopeAsync(input.CheckRequestId, input.CommitteeId, input.CommitteeTypeId, input.Samples);
                 if (input.Samples.Count == 0 || input.Samples.Any(x => !double.IsFinite(x.SampleSize)
                     || x.SampleSize <= 0 || string.IsNullOrWhiteSpace(x.Notes) || x.HasAttachment))
                     throw new InvalidOperationException("أضف بيانات السحب واستكمل كمية العينة والملاحظات قبل الحفظ.");
@@ -404,6 +409,11 @@ public class ImportRequestDetailsController : Controller
             return RedirectToAction(nameof(Index), route);
         }
         input.Samples.ForEach(x => x.SampleRatio = 0);
+        if (input.Samples.Any(x => x.SampleId <= 0))
+        {
+            TempData["SaveError"] = "لجنة السحب تسجل بيانات العينات المسندة إليها فقط؛ إضافة التحاليل متاحة من الفحص.";
+            return RedirectToAction(nameof(Index), route);
+        }
         if (input.Samples.Count == 0 || input.Samples.Any(x => (x.SampleId <= 0 &&
                 (x.AnalysisLabTypeId <= 0 || x.LotDataId <= 0 || x.RequestItemId <= 0 || x.ItemShortNameId <= 0))
             || x.SampleSize <= 0
@@ -415,6 +425,15 @@ public class ImportRequestDetailsController : Controller
         }
 
         var newSamples = input.Samples.Where(x => x.SampleId <= 0).ToList();
+        try
+        {
+            await ValidateSampleScopeAsync(input.CheckRequestId, input.CommitteeId, input.CommitteeTypeId, input.Samples);
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["SaveError"] = ex.Message;
+            return RedirectToAction(nameof(Index), route);
+        }
         if (newSamples.Count > 0)
         {
             var lotItems = await ResolveLotItemsAsync(input.CheckRequestId, newSamples.Select(x => x.LotDataId!.Value));
@@ -953,6 +972,10 @@ public class ImportRequestDetailsController : Controller
                      AND (assignedResult.LotData_ID = lot.ID
                           OR (assignedResult.LotData_ID IS NULL
                               AND assignedResult.Im_Request_Item_Id = item.ID))))
+              AND (@CommitteeTypeId <> 13 OR EXISTS
+                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData assignedSample
+                   WHERE assignedSample.Im_RequestCommittee_ID = @CommitteeId AND assignedSample.User_Deletion_Id IS NULL
+                     AND (assignedSample.LotData_ID = lot.ID OR (assignedSample.LotData_ID IS NULL AND assignedSample.Im_Request_Item_Id = item.ID))))
             ORDER BY lot.ID
             """;
         await using (var command = new SqlCommand(lotsSql, connection))
@@ -992,7 +1015,7 @@ public class ImportRequestDetailsController : Controller
                    COALESCE(lab.Name_Ar, N''), COALESCE(analysis.Name_Ar, N''),
                    COALESCE(sample.Sample_BarCode, N''), sample.SampleRatio, sample.SampleSize,
                    sample.IS_From_Android, sample.IS_Total, COALESCE(lot.Lot_Number, N''),
-                   COALESCE(sample.Syl_ALkhatima_Number, N''), COALESCE(sample.Notes_Ar, N'')
+                   COALESCE(sample.Syl_ALkhatima_Number, N''), COALESCE(sample.Notes_Ar, N''), sample.AnalysisLabType_ID
             FROM dbo.Im_CheckRequest_SampleData sample
             LEFT JOIN dbo.AnalysisLabType labType ON labType.ID = sample.AnalysisLabType_ID
             LEFT JOIN dbo.AnalysisLab lab ON lab.ID = labType.AnalysisLabID
@@ -1016,7 +1039,7 @@ public class ImportRequestDetailsController : Controller
                 SampleSize = reader.IsDBNull(7) ? null : Convert.ToDouble(reader.GetValue(7)),
                 IS_From_Android = reader.IsDBNull(8) ? null : reader.GetBoolean(8),
                 IS_Total = reader.IsDBNull(9) ? null : reader.GetBoolean(9), Lotnum = DbString(reader, 10),
-                Syl_ALkhatima_Number = DbString(reader, 11), Notes_Ar = DbString(reader, 12)
+                Syl_ALkhatima_Number = DbString(reader, 11), Notes_Ar = DbString(reader, 12), AnalysisLabTypeId = reader.GetInt32(13)
             });
         }
     }
@@ -1316,6 +1339,57 @@ public class ImportRequestDetailsController : Controller
         }
 
         return result;
+    }
+
+    private async Task ValidateSampleScopeAsync(long checkRequestId, long committeeId, byte committeeTypeId, List<ImportSampleSaveVm> samples)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        const string sql = """
+            SELECT lot.ID, item.ID, item.Item_ShortName_ID
+            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
+            JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID AND item.User_Deletion_Id IS NULL
+            JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID AND shipping.User_Deletion_Id IS NULL
+            WHERE shipping.Im_CheckRequest_ID=@RequestId AND lot.User_Deletion_Id IS NULL
+              AND ((@Type=11 AND EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult r
+                    WHERE r.Committee_ID=@CommitteeId AND r.User_Deletion_Id IS NULL
+                      AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=item.ID))))
+                OR (@Type=13 AND EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData s
+                    WHERE s.Im_RequestCommittee_ID=@CommitteeId AND s.User_Deletion_Id IS NULL
+                      AND (s.LotData_ID=lot.ID OR (s.LotData_ID IS NULL AND s.Im_Request_Item_Id=item.ID)))))
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@RequestId", checkRequestId);
+        command.Parameters.AddWithValue("@CommitteeId", committeeId);
+        command.Parameters.AddWithValue("@Type", committeeTypeId);
+        var allowed = new Dictionary<long, LotItemIdentity>();
+        await using (var reader = await command.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) allowed[reader.GetInt64(0)] = new(reader.GetInt64(1), reader.GetInt64(2));
+        await using var existingCommand = new SqlCommand("SELECT ID, LotData_ID, Im_Request_Item_Id, AnalysisLabType_ID FROM dbo.Im_CheckRequest_SampleData WHERE Im_RequestCommittee_ID=@CommitteeId AND User_Deletion_Id IS NULL", connection);
+        existingCommand.Parameters.AddWithValue("@CommitteeId", committeeId);
+        var existingSamples = new Dictionary<long, (long? LotId, long ItemId, int AnalysisId)>();
+        await using (var reader = await existingCommand.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) existingSamples[reader.GetInt64(0)] = (reader.IsDBNull(1) ? null : reader.GetInt64(1), reader.GetInt64(2), reader.GetInt32(3));
+        foreach (var sample in samples.Where(s => s.SampleId > 0))
+        {
+            if (!existingSamples.TryGetValue(sample.SampleId, out var existing) || existing.LotId != sample.LotDataId)
+                throw new InvalidOperationException("العينة أو اللوط لا يتبع لجنة السحب الحالية.");
+            sample.RequestItemId = existing.ItemId;
+            sample.AnalysisLabTypeId = existing.AnalysisId;
+        }
+        foreach (var sample in samples.Where(s => s.SampleId <= 0))
+            if (!allowed.TryGetValue(sample.LotDataId ?? 0, out var item)
+                || item.RequestItemId != sample.RequestItemId || item.ItemShortNameId != sample.ItemShortNameId)
+                throw new InvalidOperationException("السحب متاح فقط على اللوطات المسندة إلى هذه اللجنة.");
+        foreach (var analysis in samples.Where(s => s.IsTotal && s.SampleId <= 0).GroupBy(s => s.AnalysisLabTypeId))
+        {
+            var covered = samples.Where(s => s.IsTotal && s.AnalysisLabTypeId == analysis.Key && s.LotDataId.HasValue)
+                .Select(s => s.LotDataId!.Value).ToHashSet();
+            foreach (var wholeItem in samples.Where(s => s.IsTotal && s.AnalysisLabTypeId == analysis.Key && s.SampleId > 0 && !s.LotDataId.HasValue))
+                covered.UnionWith(allowed.Where(lot => lot.Value.RequestItemId == wholeItem.RequestItemId).Select(lot => lot.Key));
+            if (!covered.SetEquals(allowed.Keys))
+                throw new InvalidOperationException("السحب الكلي يجب أن يشمل جميع لوطات اللجنة للتحليل المختار.");
+        }
     }
 
     private async Task<CommitteeAccess> GetCommitteeAccessAsync(long checkRequestId, long committeeId)
@@ -1887,6 +1961,7 @@ public class ImportSamplesSaveVm
 
 public class ImportSampleSaveVm
 {
+    public bool IsTotal { get; set; }
     public long SampleId { get; set; }
     public int AnalysisLabTypeId { get; set; }
     public long RequestItemId { get; set; }

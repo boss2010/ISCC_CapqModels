@@ -9,12 +9,15 @@
     int canceledCount = Model.Count(x => x.WorkStatusKey == "canceled");
     var requestGroups = Model.GroupBy(x => new { x.checkRequest_Id, x.CheckRequest_Number, x.CompanyName }).ToList();
     string RequestCategory(IEnumerable<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM> group) =>
+        group.Any(x => x.RequiresCommitteeCompletion) ? "today" :
         group.Any(x => x.RequestQuarantineComplete) ? "completed" :
         group.Any(x => x.Committee_Type_Id == 13 && x.HasPendingLabResult) ? "pending-lab" :
+        group.Any(x => x.HasPendingQuarantine) ? "pending-quarantine" :
         group.All(x => x.WorkStatusKey is "completed" or "canceled") ? "completed" : "today";
     var todayRequestGroups = requestGroups.Where(g => RequestCategory(g) == "today").ToList();
     var completedRequestGroups = requestGroups.Where(g => RequestCategory(g) == "completed").ToList();
     var pendingLabRequestGroups = requestGroups.Where(g => RequestCategory(g) == "pending-lab").ToList();
+    var pendingQuarantineRequestGroups = requestGroups.Where(g => RequestCategory(g) == "pending-quarantine").ToList();
 }
 
 <style>
@@ -154,6 +157,7 @@
                         <button type="button" class="request-tab active" data-request-filter="today">طلبات اليوم <span>@todayRequestGroups.Count</span></button>
                         <button type="button" class="request-tab" data-request-filter="completed">تم الانتهاء <span>@completedRequestGroups.Count</span></button>
                         <button type="button" class="request-tab" data-request-filter="pending-lab">تنتظر نتيجة المعمل <span>@pendingLabRequestGroups.Count</span></button>
+                        <button type="button" class="request-tab" data-request-filter="pending-quarantine">تنتظر موقف الحجر <span>@pendingQuarantineRequestGroups.Count</span></button>
                     </div>
                     <div class="request-list" id="requestList">
                     @foreach (var request in requestGroups)

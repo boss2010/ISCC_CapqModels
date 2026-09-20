@@ -274,7 +274,16 @@ public class ImportRequestsController : Controller
                         : resultCount > 0 && confirmCount >= resultCount ? "completed" : confirmCount > 0 ? "working" : "new";
                 string name = key switch { "completed" => "تم الانتهاء", "working" => "جاري العمل", "canceled" => "ملغي", _ => "جديد" };
                 bool quarantineComplete = GetBool(reader, "RequestQuarantineComplete");
-                if (quarantineComplete && !canceled)
+                byte committeeType = Convert.ToByte(reader["CommitteeType_ID"]);
+                bool requiresCompletion = !canceled && (isAdmin
+                    ? committeeType switch
+                    {
+                        11 => !GetBool(reader, "InspectionComplete") && !finished,
+                        13 => !GetBool(reader, "WithdrawalComplete") || !finished,
+                        _ => !status && !finished
+                    }
+                    : key is not ("completed" or "canceled"));
+                if (quarantineComplete && !canceled && !requiresCompletion)
                 {
                     key = "completed";
                     name = "تم الانتهاء";
@@ -298,6 +307,8 @@ public class ImportRequestsController : Controller
                     IsAdmin = isAdmin,
                     InspectionComplete = GetBool(reader, "InspectionComplete"),
                     RequestQuarantineComplete = quarantineComplete,
+                    RequiresCommitteeCompletion = requiresCompletion,
+                    HasPendingQuarantine = GetBool(reader, "HasPendingQuarantine"),
                     WithdrawalComplete = GetBool(reader, "WithdrawalComplete"),
                     CanShowLaboratoryResult = GetBool(reader, "CanShowLaboratoryResult"),
                     PendingLabBarcodes = Convert.ToString(reader["PendingLabBarcodes"]) ?? string.Empty,

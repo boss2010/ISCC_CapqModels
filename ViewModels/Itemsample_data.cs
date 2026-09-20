@@ -3,6 +3,7 @@
     public class Itemsample_data
     {
         public long Sample_dataId { get; set; }
+        public int AnalysisLabTypeId { get; set; }
         public string AnalysisLab_Name { get; set; }
         public string AnalysisType_Name { get; set; }
         public string Sample_BarCode { get; set; }

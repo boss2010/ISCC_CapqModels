@@ -5,6 +5,28 @@ var config = new ConfigurationBuilder().SetBasePath(root).AddJsonFile("appsettin
     .AddJsonFile("appsettings.Development.json", optional: true).AddEnvironmentVariables().Build();
 await using var connection = new SqlConnection(config.GetConnectionString("DBConnection"));
 await connection.OpenAsync();
+if (args.Contains("--sample-scope-check"))
+{
+    var controller = new PlantMobile.Controllers.ImportRequestDetailsController(config,
+        Microsoft.Extensions.Logging.Abstractions.NullLogger<PlantMobile.Controllers.ImportRequestDetailsController>.Instance);
+    var validate = controller.GetType().GetMethod("ValidateSampleScopeAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    var lots = new List<PlantMobile.Controllers.ImportSampleSaveVm>();
+    await using (var query = new SqlCommand("SELECT lot.ID,item.ID,item.Item_ShortName_ID FROM dbo.Im_CheckRequest_Items_Lot_Category lot JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID WHERE lot.ID IN (628644,628645,628646)", connection))
+    await using (var reader = await query.ExecuteReaderAsync())
+        while (await reader.ReadAsync()) lots.Add(new() {LotDataId=reader.GetInt64(0),RequestItemId=reader.GetInt64(1),ItemShortNameId=reader.GetInt64(2),AnalysisLabTypeId=1});
+    async Task Check(List<PlantMobile.Controllers.ImportSampleSaveVm> samples, bool shouldPass)
+    {
+        try { await (Task)validate.Invoke(controller,new object[]{326745L,155236L,(byte)11,samples})!; if(!shouldPass) throw new Exception("Out-of-scope/incomplete sample was accepted."); }
+        catch(InvalidOperationException) { if(shouldPass) throw; }
+    }
+    await Check(lots.Where(x=>x.LotDataId==628645).ToList(),true);
+    await Check(lots.Where(x=>x.LotDataId==628644).ToList(),false);
+    lots.ForEach(x=>x.IsTotal=true);
+    await Check(lots.Where(x=>x.LotDataId==628645).ToList(),false);
+    await Check(lots.Where(x=>x.LotDataId!=628644).ToList(),true);
+    Console.WriteLine("PASS: partial assigned lot, foreign lot rejection, incomplete total rejection, and total coverage. No data modified.");
+    return;
+}
 if (args.Contains("--old-check"))
 {
     await using var query = new SqlCommand("""
@@ -21,13 +43,16 @@ if (args.Contains("--completion-check"))
 {
     var queryType = typeof(PlantMobile.Controllers.ImportRequestsController).Assembly.GetType("PlantMobile.Infrastructure.ImportRequestsSql")!;
     string sql = (string)queryType.GetMethod("Build")!.Invoke(null, new object[] {false})!;
+    foreach (var marker in new[] {"CREATE CLUSTERED INDEX IX_SelectedCommittees ON #SelectedCommittees (CommitteeId);", "CREATE INDEX IX_Members ON #Members (Committee_ID);", "CREATE UNIQUE CLUSTERED INDEX IX_CompletionLots ON #CompletionLots(ID);", "CREATE UNIQUE CLUSTERED INDEX IX_RequestCompanies ON #RequestCompanies (CheckRequestId);"})
+        sql = sql.Replace(marker, marker + "\nRAISERROR(N'" + marker.Split(' ')[3] + "', 0, 1) WITH NOWAIT;\n");
+    connection.InfoMessage += (_, e) => Console.WriteLine($"{DateTime.Now:HH:mm:ss}: {e.Message}");
     await using var query = new SqlCommand(sql, connection) { CommandTimeout = 90 };
     query.Parameters.AddWithValue("@UserId", 354);
     query.Parameters.AddWithValue("@SelectedDate", DateTime.Today);
     query.Parameters.AddWithValue("@CheckRequestId", DBNull.Value);
     await using var rows = await query.ExecuteReaderAsync();
     while (await rows.ReadAsync())
-        Console.WriteLine($"Request={rows["CheckRequest_Number"]}, Committee={rows["CommitteeId"]}, FinalQuarantine={rows["RequestQuarantineComplete"]}");
+        Console.WriteLine($"Request={rows["CheckRequest_Number"]}, Committee={rows["CommitteeId"]}, FinalQuarantine={rows["RequestQuarantineComplete"]}, PendingQuarantine={rows["HasPendingQuarantine"]}");
     await rows.CloseAsync();
     await using var lots = new SqlCommand("""
         SELECT lot.ID, lot.Lot_Number, latest.Name_AR, latest.Is_Continue
