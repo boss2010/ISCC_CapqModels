@@ -948,7 +948,7 @@ public class ImportRequestDetailsController : Controller
 
         const string lotsSql = """
             SELECT lot.ID, lot.Im_CheckRequest_Items_ID, COALESCE(lot.Lot_Number, CONVERT(nvarchar(30), lot.ID)),
-                   COALESCE(lot.PackagesCount, 0),
+                   COALESCE(CONVERT(decimal(28, 10), NULLIF(LTRIM(RTRIM(lot.PackagesCount)), N'')), 0),
                    COALESCE(lot.Net_Weight, item.Net_Weight), COALESCE(lot.GrossWeight, item.GrossWeight),
                    COALESCE(lot.Package_Weight, item.Package_Weight), COALESCE(lot.Units_Number, item.Units_Number),
                    lot.Size, COALESCE(packageType.Ar_Name, N''), COALESCE(lot.Grower_Number, N''),
@@ -991,7 +991,7 @@ public class ImportRequestDetailsController : Controller
                 ((List<_x0040_temp_table_Lot>)item.Lot_Data).Add(new _x0040_temp_table_Lot
                 {
                     ID = reader.GetInt64(0), Lot_ID = reader.GetInt64(0), Lot_Number = DbString(reader, 2),
-                    Package_Count = reader.GetInt32(3), Net_Weight = reader.IsDBNull(4) ? null : reader.GetDecimal(4),
+                    Package_Count = reader.GetDecimal(3), Net_Weight = reader.IsDBNull(4) ? null : reader.GetDecimal(4),
                     Gross_Weight = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
                     Package_Weight = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
                     Units_Number = reader.IsDBNull(7) ? null : reader.GetInt32(7),

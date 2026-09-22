@@ -8,7 +8,7 @@
     int plantIndex = 0;
     var allLots = details.Item_Data?.SelectMany(x => x.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).ToList() ?? new();
     decimal totalGrossWeight = allLots.Sum(x => x.Gross_Weight ?? 0);
-    int totalPackageCount = allLots.Sum(x => x.Package_Count);
+    decimal totalPackageCount = allLots.Sum(x => x.Package_Count);
     var inspectionResultsByLot = Model.AssistantResults
         .Where(x => x.LotId > 0)
         .GroupBy(x => x.LotId)

@@ -6,7 +6,7 @@
         public bool is_Total { get; set; }
         public long Lot_ID { get; set; }
         public string Lot_Number { get; set; }
-        public int Package_Count { get; set; }
+        public decimal Package_Count { get; set; }
         public decimal? Net_Weight { get; set; }
         public decimal? Gross_Weight { get; set; }
         public double Package_Based_Weight { get; set; }
