@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using PlantMobile.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddPooledDbContextFactory<EF.Imports.ImportDbContext>(options =>
+    PlantMobile.Data.ImportDatabase.Configure(options, builder.Configuration));
 builder.Services.AddHttpClient();
 builder.Logging.AddProvider(new DailyFileLoggerProvider(
     Path.Combine(builder.Environment.ContentRootPath, "Logs")));

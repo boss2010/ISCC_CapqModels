@@ -13,7 +13,7 @@ public class LaboratoryResultController : Controller
     {
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
-        _attachmentRoot = Path.Combine(environment.ContentRootPath, "App_Data", "LaboratoryResults");
+        _attachmentRoot = @"\\" + (configuration["Path_NetworkShare"] ?? throw new InvalidOperationException("Path_NetworkShare is not configured.")).Trim('\\', '/');
     }
 
     [HttpGet]
@@ -117,9 +117,9 @@ public class LaboratoryResultController : Controller
             "image/webp" => ".webp", "image/bmp" => ".bmp", _ => ".img"
         };
         string storedName = $"{Guid.NewGuid():N}{extension}";
-        Directory.CreateDirectory(_attachmentRoot);
-        string storedPath = Path.Combine(_attachmentRoot, storedName);
-        await using (var stream = System.IO.File.Create(storedPath)) await input.Attachment.CopyToAsync(stream);
+        var now = DateTime.Now;
+        string relativePath = $@"\plant\Import\SampleData\{now.Year}\{now.Month}\{storedName}";
+        string storedPath = _attachmentRoot + relativePath;
 
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -145,6 +145,9 @@ public class LaboratoryResultController : Controller
                 if(value==null||value==DBNull.Value) throw new InvalidOperationException("العينة غير موجودة أو غير مسموح بتعديلها.");
                 if(Convert.ToBoolean(value)) throw new InvalidOperationException("تم حفظ نتيجة المعمل من قبل وأصبحت متاحة للعرض فقط.");
             }
+            Directory.CreateDirectory(Path.GetDirectoryName(storedPath)!);
+            await using (var stream = System.IO.File.Create(storedPath))
+                await input.Attachment.CopyToAsync(stream);
             const string saveSql="""
                 DECLARE @Targets TABLE (ID bigint PRIMARY KEY);
                 INSERT @Targets(ID)
@@ -172,7 +175,7 @@ public class LaboratoryResultController : Controller
             save.Parameters.AddWithValue("@Accepted",input.Accepted.Value);
             save.Parameters.AddWithValue("@Notes",input.Notes.Trim()); save.Parameters.AddWithValue("@UserId",userId); save.Parameters.AddWithValue("@SampleId",input.SampleId);
             save.Parameters.AddWithValue("@FileName",Path.GetFileName(input.Attachment.FileName)); save.Parameters.AddWithValue("@ContentType",input.Attachment.ContentType);
-            save.Parameters.AddWithValue("@Path",storedPath);
+            save.Parameters.AddWithValue("@Path",relativePath);
             await save.ExecuteNonQueryAsync(); await transaction.CommitAsync();
             return Ok(new { saved=true, sampleId=input.SampleId, message="تم حفظ نتيجة المعمل بنجاح." });
         }

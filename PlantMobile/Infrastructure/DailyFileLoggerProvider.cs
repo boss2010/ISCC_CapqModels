@@ -11,7 +11,6 @@ public sealed class DailyFileLoggerProvider : ILoggerProvider
     public DailyFileLoggerProvider(string logsDirectory)
     {
         _logsDirectory = logsDirectory;
-        Directory.CreateDirectory(_logsDirectory);
     }
 
     public ILogger CreateLogger(string categoryName) =>
@@ -23,6 +22,7 @@ public sealed class DailyFileLoggerProvider : ILoggerProvider
         {
             lock (_writeLock)
             {
+                Directory.CreateDirectory(_logsDirectory);
                 var path = Path.Combine(_logsDirectory, $"application-{DateTime.Now:yyyy-MM-dd}.log");
                 File.AppendAllText(path, message + Environment.NewLine);
             }

@@ -31,7 +31,7 @@
             completedInspectionLots.UnionWith((owner.Lot_Data ?? Enumerable.Empty<ViewModels._x0040_temp_table_Lot>()).Select(x => x.ID));
 }
 
-<link rel="stylesheet" href="~/css/inspection-refinements.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/inspection-refinements.css"  />
 <style>
     .lots-heading { background:#e9f8f7; border-right:5px solid #178b91; border-radius:10px; padding:14px 18px; color:#176d72; }
     .lot-card { background:#fff; border:1px solid #d7eeee; border-radius:14px; overflow:hidden; }
@@ -672,7 +672,7 @@
 </div>
 
 @section Scripts {
-    <script src="~/js/weight-units.js" asp-append-version="true"></script>
+    <script src="~/js/weight-units.js" ></script>
     <script>
         (() => {
             const treatmentForm = document.getElementById('treatmentSaveForm');

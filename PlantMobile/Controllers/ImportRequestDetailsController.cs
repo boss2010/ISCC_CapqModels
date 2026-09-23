@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using EF.Imports;
+using Microsoft.EntityFrameworkCore;
+using PlantMobile.Data;
 using ViewModels;
 
 namespace PlantMobile.Controllers;
@@ -7,13 +10,18 @@ namespace PlantMobile.Controllers;
 public class ImportRequestDetailsController : Controller
 {
     private readonly string _connectionString;
+    private readonly string _attachmentServer;
     private readonly ILogger<ImportRequestDetailsController> _logger;
+    private readonly IDbContextFactory<ImportDbContext> _dbFactory;
 
     public ImportRequestDetailsController(
         IConfiguration configuration,
-        ILogger<ImportRequestDetailsController> logger)
+        ILogger<ImportRequestDetailsController> logger,
+        IDbContextFactory<ImportDbContext>? dbFactory = null)
     {
+        _attachmentServer = @"\\" + (configuration["Path_NetworkShare"] ?? throw new InvalidOperationException("Path_NetworkShare is not configured.")).Trim('\\', '/');
         _logger = logger;
+        _dbFactory = dbFactory ?? ImportDatabase.CreateFactory(configuration);
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
     }
@@ -498,6 +506,9 @@ public class ImportRequestDetailsController : Controller
         if (!reader.IsDBNull(0)) return File((byte[])reader[0], contentType);
         string path = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
         if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") return Redirect(path);
+        // Legacy attachments store a path relative to the network server.
+        if (path.StartsWith(@"\plant\", StringComparison.OrdinalIgnoreCase))
+            path = _attachmentServer + path;
         if (!string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)) return PhysicalFile(path, contentType);
         return NotFound("ملف المرفق غير متاح على الخادم.");
     }
@@ -822,227 +833,29 @@ public class ImportRequestDetailsController : Controller
 
     private async Task<CommitteeWorkflowState> LoadWorkflowStateAsync(long committeeId)
     {
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT
-                (SELECT COUNT(*) FROM dbo.Im_CommitteeResult WHERE Committee_ID=@CommitteeId AND User_Deletion_Id IS NULL),
-                (SELECT COUNT(*) FROM dbo.Im_CommitteeResult WHERE Committee_ID=@CommitteeId AND User_Deletion_Id IS NULL AND CommitteeResultType_ID IS NULL),
-                (SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData WHERE Im_RequestCommittee_ID=@CommitteeId AND User_Deletion_Id IS NULL),
-                (SELECT COUNT(*) FROM dbo.Im_CheckRequest_SampleData WHERE Im_RequestCommittee_ID=@CommitteeId AND User_Deletion_Id IS NULL AND (SampleSize IS NULL OR SampleSize<=0))
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@CommitteeId", committeeId);
-        await using var reader = await command.ExecuteReaderAsync();
-        await reader.ReadAsync();
-        return new CommitteeWorkflowState(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var inspection = await db.Im_CommitteeResult.AsNoTracking()
+            .Where(r => r.Committee_ID == committeeId && r.User_Deletion_Id == null).GroupBy(r => 1)
+            .Select(g => new { Count = g.Count(), Incomplete = g.Count(r => r.CommitteeResultType_ID == null) }).FirstOrDefaultAsync();
+        var samples = await db.Im_CheckRequest_SampleData.AsNoTracking()
+            .Where(s => s.Im_RequestCommittee_ID == committeeId && s.User_Deletion_Id == null).GroupBy(s => 1)
+            .Select(g => new { Count = g.Count(), Incomplete = g.Count(s => s.SampleSize == null || s.SampleSize <= 0) }).FirstOrDefaultAsync();
+        return new CommitteeWorkflowState(inspection?.Count ?? 0, inspection?.Incomplete ?? 0, samples?.Count ?? 0, samples?.Incomplete ?? 0);
     }
 
     private async Task<Ex_CheckRequest_GetData_Android_V2_VM> LoadDetailsFromDatabaseAsync(
         long checkRequestId, long committeeId, byte committeeTypeId)
     {
+        var details = await new ImportDetailsReader(_dbFactory).LoadAsync(checkRequestId, committeeId, committeeTypeId,
+            HttpContext?.RequestAborted ?? default);
+        // Treatment screens remain on their existing reader during the import rollout.
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
-
-        const string headerSql = """
-            SELECT request.ID, request.CheckRequest_Number, request.IsAccepted,
-                   data.ImporterType_Id,
-                   COALESCE(
-                       NULLIF(permissionImporter.ImporterName COLLATE Arabic_CI_AS, N''),
-                       NULLIF(data.DelegateName COLLATE Arabic_CI_AS, N''),
-                       N'غير محدد') COLLATE Arabic_CI_AS,
-                   COALESCE(data.DelegateAddress, N''),
-                   COALESCE(country.Ar_Name, N''), COALESCE(outlet.Ar_Name, N''),
-                   COALESCE(outlet.Address_Ar, N''), COALESCE(type.Name_Ar, N''),
-                   committee.Delegation_Date,
-                   CASE WHEN committee.Is_Cancel IS NOT NULL THEN N'ملغي'
-                        WHEN committee.Status = 1 OR committee.IsFinishedAll = 1 THEN N'تم الانتهاء'
-                        WHEN committee.Is_Start_Android = 1 OR committee.User_Updation_Date IS NOT NULL THEN N'جاري العمل'
-                        ELSE N'جديد' END,
-                   operation.ID, COALESCE(operation.Name_Ar, N''), COALESCE(data.Ship_Name, N'')
-            FROM dbo.Im_CheckRequest request
-            INNER JOIN dbo.Im_RequestCommittee committee ON committee.ID = @CommitteeId
-                AND committee.ImCheckRequest_ID = request.ID AND committee.User_Deletion_Id IS NULL
-            LEFT JOIN dbo.Im_CheckRequest_Data data ON data.Im_CheckRequest_ID = request.ID
-                AND data.User_Deletion_Id IS NULL
-            LEFT JOIN dbo.Country country ON country.ID = data.ExportCountry_Id
-            LEFT JOIN dbo.Outlet outlet ON outlet.ID = request.Outlet_ID
-            LEFT JOIN dbo.CommitteeType type ON type.ID = committee.CommitteeType_ID
-            LEFT JOIN dbo.Im_OpertaionType operation ON operation.ID = request.Im_OperationType
-            OUTER APPLY
-            (
-                SELECT TOP (1) permission.ImporterName
-                FROM dbo.View_List_Im_PermissionRequest permission
-                WHERE permission.Im_CheckRequest_ID = request.ID
-                ORDER BY permission.Im_PermissionRequest_ID DESC
-            ) permissionImporter
-            WHERE request.ID = @CheckRequestId AND committee.CommitteeType_ID = @CommitteeTypeId
-            """;
-        var details = new Ex_CheckRequest_GetData_Android_V2_VM();
-        await using (var command = new SqlCommand(headerSql, connection))
-        {
-            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
-            command.Parameters.AddWithValue("@CommitteeId", committeeId);
-            command.Parameters.AddWithValue("@CommitteeTypeId", committeeTypeId);
-            await using var reader = await command.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
-                throw new InvalidOperationException("الطلب غير موجود أو غير مسموح بعرض هذه اللجنة.");
-
-            details.CheckRequest_Id = reader.GetInt64(0);
-            details.CheckRequest_Number = DbString(reader, 1);
-            details.IsAcceppted = reader.IsDBNull(2) ? null : reader.GetBoolean(2);
-            details.ImporterType_Id = reader.IsDBNull(3) ? null : reader.GetInt32(3);
-            details.Reciever_Name = DbString(reader, 4);
-            details.ImportCompany_Address = DbString(reader, 5);
-            details.ExportCountry_Name = DbString(reader, 6);
-            details.Outlet_Name = DbString(reader, 7);
-            details.Outlet_Address = DbString(reader, 8);
-            details.Committee_Type = DbString(reader, 9);
-            details.Check_Date = reader.IsDBNull(10) ? null : Convert.ToDateTime(reader.GetValue(10));
-            details.RequestCommittee_Status = DbString(reader, 11);
-            details.Opreration_type_Id = reader.IsDBNull(12) ? null : Convert.ToInt32(reader.GetValue(12));
-            details.Opreration_type_Name = DbString(reader, 13);
-            details.Ship_Name = DbString(reader, 14);
-            details.IsExport = 2;
-        }
-
-        const string itemsSql = """
-            SELECT item.ID, item.Item_ShortName_ID, shortName.Item_Type_ID,
-                   COALESCE(plant.Name_Ar, shortName.ShortName_Ar, N''),
-                   COALESCE(plant.Scientific_Name, N''), COALESCE(shortName.ShortName_Ar, N''),
-                   item.Im_CheckRequset_Shipping_Method_ID
-            FROM dbo.Im_CheckRequest_Items item
-            INNER JOIN dbo.Im_CheckRequset_Shipping_Method shipping
-                ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID
-            LEFT JOIN dbo.Item_ShortName shortName ON shortName.ID = item.Item_ShortName_ID
-            LEFT JOIN dbo.Item plant ON plant.ID = shortName.Item_ID
-            WHERE shipping.Im_CheckRequest_ID = @CheckRequestId
-              AND shipping.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL
-            ORDER BY item.ID
-            """;
-        var itemMap = new Dictionary<long, _x0040_Item_Data>();
-        await using (var command = new SqlCommand(itemsSql, connection))
-        {
-            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                var item = new _x0040_Item_Data
-                {
-                    ID = reader.GetInt64(0),
-                    Item_ShortName_id = reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
-                    Item_Type_ID = reader.IsDBNull(2) ? null : reader.GetByte(2),
-                    Item_Name = DbString(reader, 3),
-                    Scientific_Name = DbString(reader, 4),
-                    Item_ShortName_Name = DbString(reader, 5),
-                    Im_CheckRequset_Shipping_Method_ID = reader.IsDBNull(6) ? null : reader.GetInt64(6),
-                    IsExport = 2,
-                    Lot_Data = new List<_x0040_temp_table_Lot>(),
-                    Sample_Data = new List<Itemsample_data>(),
-                    TreatmentLot = new List<TreatmentDataDTO>()
-                };
-                itemMap[item.ID] = item;
-                details.Item_Data.Add(item);
-            }
-        }
-
-        const string lotsSql = """
-            SELECT lot.ID, lot.Im_CheckRequest_Items_ID, COALESCE(lot.Lot_Number, CONVERT(nvarchar(30), lot.ID)),
-                   COALESCE(CONVERT(decimal(28, 10), NULLIF(LTRIM(RTRIM(lot.PackagesCount)), N'')), 0),
-                   COALESCE(lot.Net_Weight, item.Net_Weight), COALESCE(lot.GrossWeight, item.GrossWeight),
-                   COALESCE(lot.Package_Weight, item.Package_Weight), COALESCE(lot.Units_Number, item.Units_Number),
-                   lot.Size, COALESCE(packageType.Ar_Name, N''), COALESCE(lot.Grower_Number, N''),
-                   COALESCE(lot.Number_Wooden_Package, N''),
-                   CAST(CASE WHEN result.IS_Total = 1 THEN 1 ELSE 0 END AS bit)
-            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
-            INNER JOIN dbo.Im_CheckRequest_Items item ON item.ID = lot.Im_CheckRequest_Items_ID
-            INNER JOIN dbo.Im_CheckRequset_Shipping_Method shipping
-                ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID
-            LEFT JOIN dbo.Package_Type packageType ON packageType.ID = COALESCE(lot.Package_Type_ID, item.Package_Type_ID)
-            OUTER APPLY (SELECT TOP 1 r.IS_Total FROM dbo.Im_CommitteeResult r
-                         WHERE r.Committee_ID = @CommitteeId AND (r.LotData_ID = lot.ID OR r.Im_Request_Item_Id = item.ID)
-                         ORDER BY r.ID DESC) result
-            WHERE shipping.Im_CheckRequest_ID = @CheckRequestId
-              AND lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL
-              AND (@CommitteeTypeId <> 11 OR EXISTS
-                  (SELECT 1
-                   FROM dbo.Im_CommitteeResult assignedResult
-                   WHERE assignedResult.Committee_ID = @CommitteeId
-                     AND assignedResult.User_Deletion_Id IS NULL
-                     AND (assignedResult.LotData_ID = lot.ID
-                          OR (assignedResult.LotData_ID IS NULL
-                              AND assignedResult.Im_Request_Item_Id = item.ID))))
-              AND (@CommitteeTypeId <> 13 OR EXISTS
-                  (SELECT 1 FROM dbo.Im_CheckRequest_SampleData assignedSample
-                   WHERE assignedSample.Im_RequestCommittee_ID = @CommitteeId AND assignedSample.User_Deletion_Id IS NULL
-                     AND (assignedSample.LotData_ID = lot.ID OR (assignedSample.LotData_ID IS NULL AND assignedSample.Im_Request_Item_Id = item.ID))))
-            ORDER BY lot.ID
-            """;
-        await using (var command = new SqlCommand(lotsSql, connection))
-        {
-            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
-            command.Parameters.AddWithValue("@CommitteeId", committeeId);
-            command.Parameters.AddWithValue("@CommitteeTypeId", committeeTypeId);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                long requestItemId = reader.GetInt64(1);
-                if (!itemMap.TryGetValue(requestItemId, out var item)) continue;
-                ((List<_x0040_temp_table_Lot>)item.Lot_Data).Add(new _x0040_temp_table_Lot
-                {
-                    ID = reader.GetInt64(0), Lot_ID = reader.GetInt64(0), Lot_Number = DbString(reader, 2),
-                    Package_Count = reader.GetDecimal(3), Net_Weight = reader.IsDBNull(4) ? null : reader.GetDecimal(4),
-                    Gross_Weight = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-                    Package_Weight = reader.IsDBNull(6) ? null : reader.GetDecimal(6),
-                    Units_Number = reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                    Size = reader.IsDBNull(8) ? null : Convert.ToDouble(reader.GetValue(8)),
-                    Package_Type_Name = DbString(reader, 9), Grower_Number = DbString(reader, 10),
-                    Number_Wooden_Package = DbString(reader, 11), is_Total = reader.GetBoolean(12)
-                });
-            }
-        }
-
-        await LoadSamplesFromDatabaseAsync(connection, committeeId, itemMap);
-        await LoadTreatmentsFromDatabaseAsync(connection, committeeId, itemMap);
+        await LoadTreatmentsFromDatabaseAsync(connection, committeeId, details.Item_Data.ToDictionary(i => i.ID));
         return details;
     }
 
-    private async Task LoadSamplesFromDatabaseAsync(
-        SqlConnection connection, long committeeId, Dictionary<long, _x0040_Item_Data> itemMap)
-    {
-        const string sql = """
-            SELECT sample.ID, sample.Im_Request_Item_Id, sample.LotData_ID,
-                   COALESCE(lab.Name_Ar, N''), COALESCE(analysis.Name_Ar, N''),
-                   COALESCE(sample.Sample_BarCode, N''), sample.SampleRatio, sample.SampleSize,
-                   sample.IS_From_Android, sample.IS_Total, COALESCE(lot.Lot_Number, N''),
-                   COALESCE(sample.Syl_ALkhatima_Number, N''), COALESCE(sample.Notes_Ar, N''), sample.AnalysisLabType_ID
-            FROM dbo.Im_CheckRequest_SampleData sample
-            LEFT JOIN dbo.AnalysisLabType labType ON labType.ID = sample.AnalysisLabType_ID
-            LEFT JOIN dbo.AnalysisLab lab ON lab.ID = labType.AnalysisLabID
-            LEFT JOIN dbo.AnalysisType analysis ON analysis.ID = labType.AnalysisTypeID
-            LEFT JOIN dbo.Im_CheckRequest_Items_Lot_Category lot ON lot.ID = sample.LotData_ID
-            WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
-            ORDER BY sample.ID
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@CommitteeId", committeeId);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            long requestItemId = reader.GetInt64(1);
-            if (!itemMap.TryGetValue(requestItemId, out var item)) continue;
-            ((List<Itemsample_data>)item.Sample_Data).Add(new Itemsample_data
-            {
-                Sample_dataId = reader.GetInt64(0), LotData_ID = reader.IsDBNull(2) ? null : reader.GetInt64(2),
-                AnalysisLab_Name = DbString(reader, 3), AnalysisType_Name = DbString(reader, 4),
-                Sample_BarCode = DbString(reader, 5), SampleRatio = reader.IsDBNull(6) ? null : Convert.ToDouble(reader.GetValue(6)),
-                SampleSize = reader.IsDBNull(7) ? null : Convert.ToDouble(reader.GetValue(7)),
-                IS_From_Android = reader.IsDBNull(8) ? null : reader.GetBoolean(8),
-                IS_Total = reader.IsDBNull(9) ? null : reader.GetBoolean(9), Lotnum = DbString(reader, 10),
-                Syl_ALkhatima_Number = DbString(reader, 11), Notes_Ar = DbString(reader, 12), AnalysisLabTypeId = reader.GetInt32(13)
-            });
-        }
-    }
+
 
     private async Task LoadTreatmentsFromDatabaseAsync(
         SqlConnection connection, long committeeId, Dictionary<long, _x0040_Item_Data> itemMap)
@@ -1093,52 +906,24 @@ public class ImportRequestDetailsController : Controller
 
     private async Task<List<QuarantineStatusVm>> LoadQuarantineStatusesAsync(byte committeeTypeId)
     {
-        var statuses = new List<QuarantineStatusVm>();
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT ID, Is_Continue, COALESCE(Name_AR, Name_En, CONVERT(nvarchar(20), ID))
-            FROM dbo.Im_CheckRequest_Lot_Result_Status
-            WHERE ID > 0 AND ISNULL(IsActive, 1) = 1
-            ORDER BY ID
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            statuses.Add(new QuarantineStatusVm
-            {
-                Value = reader.GetInt32(0),
-                Value2 = reader.IsDBNull(1) ? null : reader.GetBoolean(1),
-                DisplayText = DbString(reader, 2)
-            });
-        return statuses;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.Im_CheckRequest_Lot_Result_Status.AsNoTracking()
+            .Where(s => s.ID > 0 && (s.IsActive ?? true)).OrderBy(s => s.ID)
+            .Select(s => new QuarantineStatusVm { Value = s.ID, Value2 = s.Is_Continue, DisplayText = s.Name_AR ?? s.Name_En ?? s.ID.ToString() }).ToListAsync();
     }
 
     private async Task<List<AnalysisLabOptionVm>> LoadAnalysisLabOptionsAsync()
     {
-        var options = new List<AnalysisLabOptionVm>();
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT link.ID, analysis.ID, COALESCE(analysis.Name_Ar, analysis.Name_En, N''),
-                   lab.ID, COALESCE(lab.Name_Ar, lab.Name_En, N'')
-            FROM dbo.AnalysisLabType link
-            INNER JOIN dbo.AnalysisType analysis ON analysis.ID = link.AnalysisTypeID
-            INNER JOIN dbo.AnalysisLab lab ON lab.ID = link.AnalysisLabID
-            WHERE link.User_Deletion_Id IS NULL AND analysis.User_Deletion_Id IS NULL
-              AND lab.User_Deletion_Id IS NULL AND analysis.IsActive = 1 AND lab.IsActive = 1
-            ORDER BY analysis.Name_Ar, lab.Name_Ar
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            options.Add(new AnalysisLabOptionVm
-            {
-                AnalysisLabTypeId = reader.GetInt32(0), AnalysisTypeId = reader.GetInt32(1),
-                AnalysisTypeName = DbString(reader, 2), AnalysisLabId = reader.GetInt32(3),
-                AnalysisLabName = DbString(reader, 4)
-            });
-        return options;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await (from link in db.AnalysisLabType.AsNoTracking()
+                      join analysis in db.AnalysisType on link.AnalysisTypeID equals analysis.ID
+                      join lab in db.AnalysisLab on link.AnalysisLabID equals lab.ID
+                      where link.User_Deletion_Id == null && analysis.User_Deletion_Id == null && lab.User_Deletion_Id == null
+                          && analysis.IsActive == true && lab.IsActive == true
+                      orderby analysis.Name_Ar, lab.Name_Ar
+                      select new AnalysisLabOptionVm { AnalysisLabTypeId = link.ID, AnalysisTypeId = analysis.ID,
+                          AnalysisTypeName = analysis.Name_Ar ?? analysis.Name_En ?? "", AnalysisLabId = lab.ID,
+                          AnalysisLabName = lab.Name_Ar ?? lab.Name_En ?? "" }).ToListAsync();
     }
 
     private static string DbString(SqlDataReader reader, int ordinal) =>
@@ -1146,59 +931,44 @@ public class ImportRequestDetailsController : Controller
 
     private async Task MergeSavedSampleDataAsync(Ex_CheckRequest_GetData_Android_V2_VM details, long committeeId)
     {
-        var samples = details.Item_Data?
-            .SelectMany(x => x.Sample_Data ?? Enumerable.Empty<Itemsample_data>())
-            .ToDictionary(x => x.Sample_dataId) ?? new Dictionary<long, Itemsample_data>();
+        var samples = details.Item_Data.SelectMany(i => i.Sample_Data ?? Enumerable.Empty<Itemsample_data>()).ToDictionary(s => s.Sample_dataId);
         if (samples.Count == 0) return;
-
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT sample.ID, sample.Sample_BarCode, sample.SampleSize, sample.SampleRatio,
-                   sample.Syl_ALkhatima_Number, sample.Notes_Ar, sample.LotData_ID, sample.WithdrawDate,
-                   confirm.IsAccepted, confirm.Notes,
-                   CAST(CASE WHEN attachment.Id IS NULL THEN 0 ELSE 1 END AS bit),
-                   sample.IsAccepted, sample.Admin_Confirmation,
-                   attachment.Id, COALESCE(attachment.Attachment_Number, attachment.Attachment_TypeName),
-                   lotStatus.IS_Status, lotStatus.Name_AR, COALESCE(sample.SampleQuantityUnit, N'kg')
-            FROM dbo.Im_CheckRequest_SampleData sample
-            LEFT JOIN dbo.Im_CheckRequest_SampleData_Confirm confirm
-              ON confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId
-            OUTER APPLY (SELECT TOP 1 a.Id, a.Attachment_Number, a.Attachment_TypeName
-                         FROM dbo.A_AttachmentData a
-                         WHERE a.RowId = sample.ID AND a.A_AttachmentTableNameId = 12
-                           AND a.User_Deletion_Id IS NULL ORDER BY a.Id DESC) attachment
-            OUTER APPLY (SELECT TOP 1 lr.IS_Status, status.Name_AR
-                         FROM dbo.Im_CheckRequest_Items_Lot_Result lr
-                         LEFT JOIN dbo.Im_CheckRequest_Lot_Result_Status status ON status.ID = lr.IS_Status
-                         WHERE lr.Im_CheckRequest_Items_Lot_Category_ID = sample.LotData_ID
-                           AND lr.IS_Status_Committee = 1 ORDER BY lr.ID DESC) lotStatus
-            WHERE sample.Im_RequestCommittee_ID = @CommitteeId AND sample.User_Deletion_Id IS NULL
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@CommitteeId", committeeId);
-        command.Parameters.AddWithValue("@UserId", long.TryParse(HttpContext.Session.GetString("UserId"), out long currentUserId) ? currentUserId : 0);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        long.TryParse(HttpContext.Session.GetString("UserId"), out long userId);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var rows = await (from sample in db.Im_CheckRequest_SampleData.AsNoTracking()
+                          from opinion in db.Im_CheckRequest_SampleData_Confirm.Where(c => c.Im_CheckRequest_SampleData_ID == sample.ID && c.EmployeeId == userId).DefaultIfEmpty()
+                          where sample.Im_RequestCommittee_ID == committeeId && sample.User_Deletion_Id == null
+                          select new {
+                              sample.ID, sample.Sample_BarCode, sample.SampleSize, sample.SampleRatio, sample.Syl_ALkhatima_Number,
+                              sample.Notes_Ar, sample.LotData_ID, sample.IsAccepted, sample.Admin_Confirmation, sample.SampleQuantityUnit,
+                              AssistantAccepted = (bool?)opinion.IsAccepted, AssistantNotes = opinion.Notes,
+                              Attachment = db.A_AttachmentData.Where(a => a.RowId == sample.ID && a.A_AttachmentTableNameId == 12 && a.User_Deletion_Id == null)
+                                  .OrderByDescending(a => a.Id).Select(a => new { a.Id, Name = a.Attachment_Number ?? a.Attachment_TypeName }).FirstOrDefault(),
+                              Status = (from lr in db.Im_CheckRequest_Items_Lot_Result
+                                        from status in db.Im_CheckRequest_Lot_Result_Status.Where(s => s.ID == lr.IS_Status).DefaultIfEmpty()
+                                        where lr.Im_CheckRequest_Items_Lot_Category_ID == sample.LotData_ID && lr.IS_Status_Committee == true
+                                        orderby lr.ID descending
+                                        select new { lr.IS_Status, status.Name_AR }).FirstOrDefault()
+                          }).ToListAsync();
+        foreach (var row in rows)
         {
-            long id = reader.GetInt64(0);
-            if (!samples.TryGetValue(id, out var sample)) continue;
-            sample.Sample_BarCode = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-            sample.SampleSize = reader.IsDBNull(2) ? null : reader.GetDouble(2);
-            sample.QuantityUnit = reader.GetString(17);
-            sample.SampleRatio = reader.IsDBNull(3) ? null : reader.GetDouble(3);
-            sample.Syl_ALkhatima_Number = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
-            sample.Notes_Ar = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
-            sample.LotData_ID = reader.IsDBNull(6) ? null : reader.GetInt64(6);
-            sample.AssistantAccepted = reader.IsDBNull(8) ? null : reader.GetBoolean(8);
-            sample.AssistantNotes = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
-            sample.HasAttachment = reader.GetBoolean(10);
-            sample.LabResultAccepted = reader.IsDBNull(11) ? null : reader.GetBoolean(11);
-            sample.QuarantineAccepted = reader.IsDBNull(12) ? null : reader.GetBoolean(12);
-            sample.AttachmentId = reader.IsDBNull(13) ? null : reader.GetInt64(13);
-            sample.AttachmentName = reader.IsDBNull(14) ? string.Empty : reader.GetString(14);
-            sample.QuarantineStatusId = reader.IsDBNull(15) ? null : reader.GetInt32(15);
-            sample.QuarantineStatusName = reader.IsDBNull(16) ? string.Empty : reader.GetString(16);
+            if (!samples.TryGetValue(row.ID, out var sample)) continue;
+            sample.Sample_BarCode = row.Sample_BarCode ?? "";
+            sample.SampleSize = row.SampleSize;
+            sample.QuantityUnit = row.SampleQuantityUnit ?? "kg";
+            sample.SampleRatio = row.SampleRatio;
+            sample.Syl_ALkhatima_Number = row.Syl_ALkhatima_Number ?? "";
+            sample.Notes_Ar = row.Notes_Ar ?? "";
+            sample.LotData_ID = row.LotData_ID;
+            sample.AssistantAccepted = row.AssistantAccepted;
+            sample.AssistantNotes = row.AssistantNotes ?? "";
+            sample.HasAttachment = row.Attachment != null;
+            sample.LabResultAccepted = row.IsAccepted;
+            sample.QuarantineAccepted = row.Admin_Confirmation;
+            sample.AttachmentId = row.Attachment?.Id;
+            sample.AttachmentName = row.Attachment?.Name ?? "";
+            sample.QuarantineStatusId = row.Status?.IS_Status;
+            sample.QuarantineStatusName = row.Status?.Name_AR ?? "";
         }
     }
 
@@ -1258,51 +1028,23 @@ public class ImportRequestDetailsController : Controller
 
     private async Task<List<CommitteeResultTypeOptionVm>> LoadCommitteeResultTypesAsync()
     {
-        var options = new List<CommitteeResultTypeOptionVm>();
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT ID, COALESCE(NULLIF(Name_Ar, N''), NULLIF(Name_En, N''), CONVERT(nvarchar(10), ID))
-            FROM dbo.CommitteeResultType
-            WHERE IsActive = 1 AND User_Deletion_Id IS NULL AND ID > 0
-            ORDER BY ID
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            options.Add(new CommitteeResultTypeOptionVm { Id = reader.GetByte(0), Name = reader.GetString(1) });
-        return options;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.CommitteeResultType.AsNoTracking().Where(r => r.IsActive == true && r.User_Deletion_Id == null && r.ID > 0)
+            .OrderBy(r => r.ID).Select(r => new CommitteeResultTypeOptionVm { Id = r.ID,
+                Name = r.Name_Ar != null && r.Name_Ar != "" ? r.Name_Ar : r.Name_En != null && r.Name_En != "" ? r.Name_En : r.ID.ToString() }).ToListAsync();
     }
+
     private async Task<List<InfectionItemVm>> LoadInfectionItemsAsync()
     {
-        var items = new List<InfectionItemVm>();
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT item.ID, item.Name_Ar, item.Scientific_Name,
-                   item.Group_ID, grp.Name_Ar AS GroupName,
-                   item.Family_ID, family.Name_Ar AS FamilyName
-            FROM dbo.Item item
-            LEFT JOIN dbo.[Group] grp ON grp.ID = item.Group_ID
-            LEFT JOIN dbo.Family family ON family.ID = item.Family_ID
-            WHERE item.User_Deletion_Id IS NULL
-              AND NULLIF(LTRIM(RTRIM(item.Name_Ar)), '') IS NOT NULL
-            ORDER BY grp.Name_Ar, family.Name_Ar, item.Name_Ar
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            items.Add(new InfectionItemVm
-            {
-                ItemId = reader.GetInt64(0),
-                ItemName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                ScientificName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                GroupId = reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
-                GroupName = reader.IsDBNull(4) ? "غير محدد" : reader.GetString(4),
-                FamilyId = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
-                FamilyName = reader.IsDBNull(6) ? "غير محدد" : reader.GetString(6)
-            });
-        return items;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await (from item in db.Item.AsNoTracking()
+                      from groupItem in db.Group.Where(g => g.ID == item.Group_ID).DefaultIfEmpty()
+                      from family in db.Family.Where(f => f.ID == item.Family_ID).DefaultIfEmpty()
+                      where item.User_Deletion_Id == null && item.Name_Ar != null && item.Name_Ar.Trim() != ""
+                      orderby groupItem.Name_Ar, family.Name_Ar, item.Name_Ar
+                      select new InfectionItemVm { ItemId = item.ID, ItemName = item.Name_Ar ?? "", ScientificName = item.Scientific_Name ?? "",
+                          GroupId = item.Group_ID ?? 0, GroupName = groupItem.Name_Ar ?? "غير محدد", FamilyId = item.Family_ID ?? 0,
+                          FamilyName = family.Name_Ar ?? "غير محدد" }).ToListAsync();
     }
 
     private static object RouteValues(ImportInspectionSaveVm input) => new
@@ -1312,64 +1054,37 @@ public class ImportRequestDetailsController : Controller
         committeeTypeId = input.CommitteeTypeId
     };
 
-    private async Task<Dictionary<long, LotItemIdentity>> ResolveLotItemsAsync(
-        long checkRequestId, IEnumerable<long> lotIds)
+    private async Task<Dictionary<long, LotItemIdentity>> ResolveLotItemsAsync(long checkRequestId, IEnumerable<long> lotIds)
     {
-        var result = new Dictionary<long, LotItemIdentity>();
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-
-        const string sql = """
-            SELECT lot.ID, item.ID AS RequestItemId, item.Item_ShortName_ID
-            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
-            INNER JOIN dbo.Im_CheckRequest_Items item ON item.ID = lot.Im_CheckRequest_Items_ID
-            INNER JOIN dbo.Im_CheckRequset_Shipping_Method shipping
-                ON shipping.ID = item.Im_CheckRequset_Shipping_Method_ID
-            WHERE lot.ID = @LotId AND shipping.Im_CheckRequest_ID = @CheckRequestId
-            """;
-
-        foreach (long lotId in lotIds.Distinct())
-        {
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.AddWithValue("@LotId", lotId);
-            command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
-            await using var reader = await command.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
-                result[lotId] = new LotItemIdentity(reader.GetInt64(1), reader.GetInt64(2));
-        }
-
-        return result;
+        var ids = lotIds.Distinct().ToArray();
+        if (ids.Length == 0) return new();
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var rows = await (from lot in db.Im_CheckRequest_Items_Lot_Category.AsNoTracking()
+                          join item in db.Im_CheckRequest_Items on lot.Im_CheckRequest_Items_ID equals item.ID
+                          join shipping in db.Im_CheckRequset_Shipping_Method on item.Im_CheckRequset_Shipping_Method_ID equals shipping.ID
+                          where ids.Contains(lot.ID) && shipping.Im_CheckRequest_ID == checkRequestId
+                          select new { lot.ID, ItemId = item.ID, ShortNameId = item.Item_ShortName_ID }).ToListAsync();
+        return rows.ToDictionary(r => r.ID, r => new LotItemIdentity(r.ItemId, r.ShortNameId!.Value));
     }
 
     private async Task ValidateSampleScopeAsync(long checkRequestId, long committeeId, byte committeeTypeId, List<ImportSampleSaveVm> samples)
     {
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT lot.ID, item.ID, item.Item_ShortName_ID
-            FROM dbo.Im_CheckRequest_Items_Lot_Category lot
-            JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID AND item.User_Deletion_Id IS NULL
-            JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID AND shipping.User_Deletion_Id IS NULL
-            WHERE shipping.Im_CheckRequest_ID=@RequestId AND lot.User_Deletion_Id IS NULL
-              AND ((@Type=11 AND EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult r
-                    WHERE r.Committee_ID=@CommitteeId AND r.User_Deletion_Id IS NULL
-                      AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=item.ID))))
-                OR (@Type=13 AND EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData s
-                    WHERE s.Im_RequestCommittee_ID=@CommitteeId AND s.User_Deletion_Id IS NULL
-                      AND (s.LotData_ID=lot.ID OR (s.LotData_ID IS NULL AND s.Im_Request_Item_Id=item.ID)))))
-            """;
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@RequestId", checkRequestId);
-        command.Parameters.AddWithValue("@CommitteeId", committeeId);
-        command.Parameters.AddWithValue("@Type", committeeTypeId);
-        var allowed = new Dictionary<long, LotItemIdentity>();
-        await using (var reader = await command.ExecuteReaderAsync())
-            while (await reader.ReadAsync()) allowed[reader.GetInt64(0)] = new(reader.GetInt64(1), reader.GetInt64(2));
-        await using var existingCommand = new SqlCommand("SELECT ID, LotData_ID, Im_Request_Item_Id, AnalysisLabType_ID FROM dbo.Im_CheckRequest_SampleData WHERE Im_RequestCommittee_ID=@CommitteeId AND User_Deletion_Id IS NULL", connection);
-        existingCommand.Parameters.AddWithValue("@CommitteeId", committeeId);
-        var existingSamples = new Dictionary<long, (long? LotId, long ItemId, int AnalysisId)>();
-        await using (var reader = await existingCommand.ExecuteReaderAsync())
-            while (await reader.ReadAsync()) existingSamples[reader.GetInt64(0)] = (reader.IsDBNull(1) ? null : reader.GetInt64(1), reader.GetInt64(2), reader.GetInt32(3));
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var allowedRows = await (from lot in db.Im_CheckRequest_Items_Lot_Category.AsNoTracking()
+                                 join item in db.Im_CheckRequest_Items on lot.Im_CheckRequest_Items_ID equals item.ID
+                                 join shipping in db.Im_CheckRequset_Shipping_Method on item.Im_CheckRequset_Shipping_Method_ID equals shipping.ID
+                                 where shipping.Im_CheckRequest_ID == checkRequestId && shipping.User_Deletion_Id == null
+                                     && item.User_Deletion_Id == null && lot.User_Deletion_Id == null
+                                     && ((committeeTypeId == 11 && db.Im_CommitteeResult.Any(r => r.Committee_ID == committeeId && r.User_Deletion_Id == null
+                                         && (r.LotData_ID == lot.ID || (r.LotData_ID == null && r.Im_Request_Item_Id == item.ID))))
+                                         || (committeeTypeId == 13 && db.Im_CheckRequest_SampleData.Any(s => s.Im_RequestCommittee_ID == committeeId && s.User_Deletion_Id == null
+                                         && (s.LotData_ID == lot.ID || (s.LotData_ID == null && s.Im_Request_Item_Id == item.ID)))))
+                                 select new { lot.ID, ItemId = item.ID, ShortNameId = item.Item_ShortName_ID }).ToListAsync();
+        var allowed = allowedRows.ToDictionary(r => r.ID, r => new LotItemIdentity(r.ItemId, r.ShortNameId!.Value));
+        var existingRows = await db.Im_CheckRequest_SampleData.AsNoTracking()
+            .Where(s => s.Im_RequestCommittee_ID == committeeId && s.User_Deletion_Id == null)
+            .Select(s => new { s.ID, s.LotData_ID, s.Im_Request_Item_Id, s.AnalysisLabType_ID }).ToListAsync();
+        var existingSamples = existingRows.ToDictionary(s => s.ID, s => (LotId: s.LotData_ID, ItemId: s.Im_Request_Item_Id, AnalysisId: s.AnalysisLabType_ID));
         foreach (var sample in samples.Where(s => s.SampleId > 0))
         {
             if (!existingSamples.TryGetValue(sample.SampleId, out var existing) || existing.LotId != sample.LotDataId)
@@ -1395,52 +1110,23 @@ public class ImportRequestDetailsController : Controller
     private async Task<CommitteeAccess> GetCommitteeAccessAsync(long checkRequestId, long committeeId)
     {
         long.TryParse(HttpContext.Session.GetString("UserId"), out long userId);
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        const string sql = """
-            SELECT employee.ISAdmin,
-              CASE WHEN committee.Is_Cancel IS NOT NULL THEN 1
-                   WHEN employee.ISAdmin = 1 AND committee.CommitteeType_ID <> 13
-                        AND ((committee.CommitteeType_ID = 11 AND (committee.Status = 1 OR committee.IsFinishedAll = 1))
-                             OR (committee.CommitteeType_ID <> 11 AND (committee.Status = 1 OR committee.IsFinishedAll = 1))) THEN 1
-                   WHEN employee.ISAdmin = 1 AND committee.CommitteeType_ID = 13
-                        AND (committee.Status = 1 OR committee.IsFinishedAll = 1)
-                   THEN 1
-                   WHEN employee.ISAdmin = 0 AND NOT EXISTS
-                     (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
-                      WHERE committee.CommitteeType_ID = 13 AND sample.Im_RequestCommittee_ID = committee.ID
-                        AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL
-                        AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm confirm
-                                        WHERE confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId))
-                     AND committee.CommitteeType_ID = 13
-                     AND EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample WHERE sample.Im_RequestCommittee_ID = committee.ID AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL)
-                   THEN 1
-                   WHEN employee.ISAdmin = 0 AND committee.CommitteeType_ID <> 13 AND NOT EXISTS
-                     (SELECT 1 FROM dbo.Im_CommitteeResult result
-                      WHERE result.Committee_ID = committee.ID AND result.CommitteeResultType_ID IS NOT NULL
-                        AND NOT EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult_Confirm confirm
-                                        WHERE confirm.Im_CommitteeResult_ID = result.ID AND confirm.EmployeeId = @UserId))
-                     AND EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult result WHERE result.Committee_ID = committee.ID AND result.CommitteeResultType_ID IS NOT NULL)
-                     AND NOT EXISTS
-                       (SELECT 1 FROM dbo.Im_CheckRequest_SampleData sample
-                        WHERE committee.CommitteeType_ID = 11 AND sample.Im_RequestCommittee_ID = committee.ID
-                          AND sample.Sample_BarCode IS NOT NULL AND sample.User_Deletion_Id IS NULL
-                          AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData_Confirm confirm
-                                          WHERE confirm.Im_CheckRequest_SampleData_ID = sample.ID AND confirm.EmployeeId = @UserId))
-                   THEN 1 ELSE 0 END AS IsReadOnly
-            FROM dbo.Im_RequestCommittee committee
-            INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = committee.ID
-              AND employee.Employee_Id = @UserId AND employee.OperationType = 74 AND employee.User_Deletion_Id IS NULL
-            WHERE committee.ID = @CommitteeId AND committee.ImCheckRequest_ID = @CheckRequestId
-            """;
-        await using var command = new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(sql), connection);
-        command.Parameters.AddWithValue("@CommitteeId", committeeId);
-        command.Parameters.AddWithValue("@CheckRequestId", checkRequestId);
-        command.Parameters.AddWithValue("@UserId", userId);
-        await using var reader = await command.ExecuteReaderAsync();
-        return await reader.ReadAsync()
-            ? new CommitteeAccess(Convert.ToBoolean(reader[0]), Convert.ToBoolean(reader[1]))
-            : new CommitteeAccess(false, true);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var access = await (from c in db.EligibleCommittees()
+                            join e in db.CommitteeEmployee on c.ID equals e.Committee_ID
+                            where c.ID == committeeId && c.ImCheckRequest_ID == checkRequestId
+                                && e.Employee_Id == userId && e.OperationType == 74 && e.User_Deletion_Id == null
+                            select new { e.ISAdmin, c.Is_Cancel, c.Status, c.IsFinishedAll, c.CommitteeType_ID }).FirstOrDefaultAsync();
+        if (access == null) return new CommitteeAccess(false, true);
+        if (access.Is_Cancel != null) return new CommitteeAccess(access.ISAdmin, true);
+        if (access.ISAdmin) return new CommitteeAccess(true, access.Status == true || access.IsFinishedAll == true);
+        var samples = db.Im_CheckRequest_SampleData.Where(s => s.Im_RequestCommittee_ID == committeeId && s.User_Deletion_Id == null && s.Sample_BarCode != null);
+        bool pendingSamples = await samples.AnyAsync(s => !db.Im_CheckRequest_SampleData_Confirm.Any(c => c.Im_CheckRequest_SampleData_ID == s.ID && c.EmployeeId == userId));
+        if (access.CommitteeType_ID == 13)
+            return new CommitteeAccess(false, !pendingSamples && await samples.AnyAsync());
+        var results = db.Im_CommitteeResult.Where(r => r.Committee_ID == committeeId && r.CommitteeResultType_ID != null);
+        bool hasResults = await results.AnyAsync();
+        bool pendingResults = await results.AnyAsync(r => !db.Im_CommitteeResult_Confirm.Any(c => c.Im_CommitteeResult_ID == r.ID && c.EmployeeId == userId));
+        return new CommitteeAccess(false, hasResults && !pendingResults && !(access.CommitteeType_ID == 11 && pendingSamples));
     }
 
     private async Task<List<AssistantResultVm>> LoadAssistantResultsAsync(long committeeId, long userId)

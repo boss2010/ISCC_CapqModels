@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using EF.Imports;
+using Microsoft.EntityFrameworkCore;
+using PlantMobile.Data;
 using static ViewModels.ExportImportActivity_API;
 
 namespace PlantMobile.Controllers;
@@ -8,13 +11,16 @@ public class ImportRequestsController : Controller
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<ImportRequestsController> _logger;
+    private readonly IDbContextFactory<ImportDbContext> _dbFactory;
 
     public ImportRequestsController(
         IConfiguration configuration,
-        ILogger<ImportRequestsController> logger)
+        ILogger<ImportRequestsController> logger,
+        IDbContextFactory<ImportDbContext>? dbFactory = null)
     {
         _configuration = configuration;
         _logger = logger;
+        _dbFactory = dbFactory ?? ImportDatabase.CreateFactory(configuration);
     }
 
     [HttpGet]
@@ -235,51 +241,40 @@ public class ImportRequestsController : Controller
         if (checkRequestId.HasValue)
             HttpContext.Session.SetString($"ImportRequestDate:{checkRequestId.Value}", selectedDate.ToString("yyyy-MM-dd"));
         var requests = new List<Ex_Im_CheckRequest_GetAllByUser_DateVM>();
-        var loadStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-        double connectionMs = 0;
         double queryMs = 0;
 
         try
         {
-            await using var connection = new SqlConnection(_configuration.GetConnectionString("DBConnection"));
-            await connection.OpenAsync(HttpContext.RequestAborted);
-            connectionMs = System.Diagnostics.Stopwatch.GetElapsedTime(loadStarted).TotalMilliseconds;
-            string sql = PlantMobile.Infrastructure.ImportRequestsSql.Build(checkRequestId.HasValue);
-            await using var command = new SqlCommand(sql, connection);
-            command.CommandTimeout = 90;
-            command.Parameters.AddWithValue("@UserId", userId);
-            command.Parameters.AddWithValue("@SelectedDate", selectedDate);
-            command.Parameters.Add("@CheckRequestId", System.Data.SqlDbType.BigInt).Value = (object?)checkRequestId ?? DBNull.Value;
             var queryStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            await using var reader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
-            while (await reader.ReadAsync(HttpContext.RequestAborted))
+            var rows = await new ImportRequestReader(_dbFactory).LoadAsync(userId, selectedDate, checkRequestId, HttpContext.RequestAborted);
+            foreach (var row in rows)
             {
-                bool status = GetBool(reader, "Status");
-                bool finished = GetBool(reader, "IsFinishedAll");
-                bool started = GetBool(reader, "Is_Start_Android");
-                bool canceled = !IsDbNull(reader, "Is_Cancel");
-                bool isAdmin = GetBool(reader, "ISAdmin");
-                int resultCount = Convert.ToInt32(reader["ResultCount"]);
-                int confirmCount = Convert.ToInt32(reader["ConfirmCount"]);
-                int sampleCount = Convert.ToInt32(reader["SampleCount"]);
-                int sampleConfirmCount = Convert.ToInt32(reader["SampleConfirmCount"]);
-                bool pendingSampleFinalResult = Convert.ToBoolean(reader["HasPendingSampleFinalResult"]);
+                bool status = (row.Status ?? false);
+                bool finished = (row.IsFinishedAll ?? false);
+                bool started = (row.Is_Start_Android ?? false);
+                bool canceled = (row.Is_Cancel != null);
+                bool isAdmin = row.ISAdmin;
+                int resultCount = row.ResultCount;
+                int confirmCount = row.ConfirmCount;
+                int sampleCount = row.SampleCount;
+                int sampleConfirmCount = row.SampleConfirmCount;
+                bool pendingSampleFinalResult = row.HasPendingSampleFinalResult;
                 string key = isAdmin
                     ? canceled ? "canceled"
-                      : Convert.ToByte(reader["CommitteeType_ID"]) == 13 && pendingSampleFinalResult ? "working"
-                      : (status || finished) ? "completed" : started || !IsDbNull(reader, "User_Updation_Date") ? "working" : "new"
+                      : row.CommitteeType_ID == 13 && pendingSampleFinalResult ? "working"
+                      : (status || finished) ? "completed" : started || (row.User_Updation_Date != null) ? "working" : "new"
                     : canceled ? "canceled"
-                    : Convert.ToByte(reader["CommitteeType_ID"]) == 13
+                    : row.CommitteeType_ID == 13
                         ? sampleCount > 0 && sampleConfirmCount >= sampleCount ? "completed" : sampleConfirmCount > 0 ? "working" : "new"
                         : resultCount > 0 && confirmCount >= resultCount ? "completed" : confirmCount > 0 ? "working" : "new";
                 string name = key switch { "completed" => "تم الانتهاء", "working" => "جاري العمل", "canceled" => "ملغي", _ => "جديد" };
-                bool quarantineComplete = GetBool(reader, "RequestQuarantineComplete");
-                byte committeeType = Convert.ToByte(reader["CommitteeType_ID"]);
+                bool quarantineComplete = row.RequestQuarantineComplete;
+                byte committeeType = row.CommitteeType_ID;
                 bool requiresCompletion = !canceled && (isAdmin
                     ? committeeType switch
                     {
-                        11 => !GetBool(reader, "InspectionComplete") && !finished,
-                        13 => !GetBool(reader, "WithdrawalComplete") || !finished,
+                        11 => !row.InspectionComplete && !finished,
+                        13 => !row.WithdrawalComplete || !finished,
                         _ => !status && !finished
                     }
                     : key is not ("completed" or "canceled"));
@@ -291,39 +286,39 @@ public class ImportRequestsController : Controller
 
                 requests.Add(new Ex_Im_CheckRequest_GetAllByUser_DateVM
                 {
-                    Row_Num = Convert.ToInt32(reader["RowNum"]),
+                    Row_Num = Convert.ToInt32(row.RowNum),
                     IsExport = 2,
-                    CheckRequest_Number = Convert.ToString(reader["CheckRequest_Number"]) ?? string.Empty,
-                    CompanyName = Convert.ToString(reader["CompanyName"]) ?? "غير محدد",
-                    checkRequest_Id = Convert.ToInt64(reader["CheckRequestId"]),
-                    Committee_ID = Convert.ToInt64(reader["CommitteeId"]),
-                    Committee_Type_Name = $"{reader["CommitteeTypeName"]} {reader["OperationTypeName"]}".Trim(),
-                    Committee_Type_Id = Convert.ToByte(reader["CommitteeType_ID"]),
+                    CheckRequest_Number = row.CheckRequest_Number ?? string.Empty,
+                    CompanyName = row.CompanyName ?? "غير محدد",
+                    checkRequest_Id = row.CheckRequestId,
+                    Committee_ID = row.CommitteeId,
+                    Committee_Type_Name = $"{row.CommitteeTypeName} {row.OperationTypeName}".Trim(),
+                    Committee_Type_Id = row.CommitteeType_ID,
                     RequestCommittee_Status = name,
                     RequestCommittee_Status_Id = status ? (byte)1 : (byte)0,
                     WorkStatusKey = key,
                     WorkStatusName = name,
-                    IsReadOnly = key is "completed" or "canceled" || (isAdmin && Convert.ToByte(reader["CommitteeType_ID"]) == 13 && (status || finished)),
+                    IsReadOnly = key is "completed" or "canceled" || (isAdmin && row.CommitteeType_ID == 13 && (status || finished)),
                     IsAdmin = isAdmin,
-                    InspectionComplete = GetBool(reader, "InspectionComplete"),
+                    InspectionComplete = row.InspectionComplete,
                     RequestQuarantineComplete = quarantineComplete,
                     RequiresCommitteeCompletion = requiresCompletion,
-                    HasPendingQuarantine = GetBool(reader, "HasPendingQuarantine"),
-                    WithdrawalComplete = GetBool(reader, "WithdrawalComplete"),
-                    CanShowLaboratoryResult = GetBool(reader, "CanShowLaboratoryResult"),
-                    PendingLabBarcodes = Convert.ToString(reader["PendingLabBarcodes"]) ?? string.Empty,
-                    CommitteeMembers = reader["CommitteeMembers"] == DBNull.Value ? string.Empty : Convert.ToString(reader["CommitteeMembers"]) ?? string.Empty
-                    ,SampleAttachmentUploaded = Convert.ToBoolean(reader["SampleAttachmentUploaded"])
+                    HasPendingQuarantine = row.HasPendingQuarantine,
+                    WithdrawalComplete = row.WithdrawalComplete,
+                    CanShowLaboratoryResult = row.CanShowLaboratoryResult,
+                    PendingLabBarcodes = row.PendingLabBarcodes ?? string.Empty,
+                    CommitteeMembers = row.CommitteeMembers == null ? string.Empty : row.CommitteeMembers ?? string.Empty
+                    ,SampleAttachmentUploaded = row.SampleAttachmentUploaded
                     ,HasPendingSampleFinalResult = pendingSampleFinalResult
-                    ,HasPendingLabResult = Convert.ToBoolean(reader["HasPendingLabResult"])
-                    ,SampleBarcodes = reader["SampleBarcodes"] == DBNull.Value ? string.Empty : Convert.ToString(reader["SampleBarcodes"]) ?? string.Empty
+                    ,HasPendingLabResult = row.HasPendingLabResult
+                    ,SampleBarcodes = row.SampleBarcodes == null ? string.Empty : row.SampleBarcodes ?? string.Empty
                 });
             }
 
             queryMs = System.Diagnostics.Stopwatch.GetElapsedTime(queryStarted).TotalMilliseconds;
-            if (connectionMs + queryMs >= 1000)
-                _logger.LogWarning("Import requests timing: CommitteePage={CommitteePage}; ConnectionMs={ConnectionMs}; QueryAndReadMs={QueryMs}; Rows={Rows}; TraceId={TraceId}",
-                    checkRequestId.HasValue, connectionMs, queryMs, requests.Count, HttpContext.TraceIdentifier);
+            if (queryMs >= 1000)
+                _logger.LogWarning("Import requests timing: CommitteePage={CommitteePage}; EfReadAndMapMs={QueryMs}; Rows={Rows}; TraceId={TraceId}",
+                    checkRequestId.HasValue, queryMs, requests.Count, HttpContext.TraceIdentifier);
             ViewBag.SelectedDate = selectedDate.ToString("yyyy-MM-dd");
             ViewBag.UserId = userId;
             ViewBag.EmployeeId = employeeId;
@@ -350,9 +345,6 @@ public class ImportRequestsController : Controller
         return View("Index", requests);
     }
 
-    private static int Ordinal(SqlDataReader reader, string name) => reader.GetOrdinal(name);
-    private static bool IsDbNull(SqlDataReader reader, string name) => reader.IsDBNull(Ordinal(reader, name));
-    private static bool GetBool(SqlDataReader reader, string name) => !IsDbNull(reader, name) && Convert.ToBoolean(reader[name]);
 }
 
 public class RequestQuarantineVm { public long CheckRequestId {get;set;} public string RequestNumber {get;set;}=string.Empty; public List<RequestQuarantineLotVm> Lots {get;set;}=new(); public List<RequestQuarantineStatusVm> Statuses {get;set;}=new(); }
