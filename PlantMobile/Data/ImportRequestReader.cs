@@ -95,6 +95,9 @@ public sealed class ImportRequestReader(IDbContextFactory<ImportDbContext> facto
         var opinionLookup = opinions.ToLookup(o => o.Im_CheckRequest_SampleData_ID);
         var resultOpinionLookup = resultOpinions.ToLookup(id => id);
         var memberLookup = members.ToLookup(m => m.Committee_ID);
+        var unavailableResultTypes = (await db.CommitteeResultType.AsNoTracking()
+            .Where(t => t.Name_Ar != null && t.Name_Ar.Contains("تعذر"))
+            .Select(t => t.ID).ToListAsync(ct)).ToHashSet();
         var completion = new Dictionary<long, (bool Complete, bool Pending)>();
         foreach (long id in requestIds)
         {
@@ -110,6 +113,8 @@ public sealed class ImportRequestReader(IDbContextFactory<ImportDbContext> facto
                     .OrderByDescending(r => r.ID).FirstOrDefault();
                 if (lot.Status == null && inspection == null) continue;
                 any = true;
+                if (inspection?.CommitteeResultType_ID is byte resultType && unavailableResultTypes.Contains(resultType))
+                    continue;
                 complete &= lot.Status?.Continues == false;
                 bool pendingWithdrawal = withdrawal.Any(s => (s.LotData_ID == lot.ID || (s.LotData_ID == null && s.Im_Request_Item_Id == lot.ItemId))
                     && (s.SampleSize.GetValueOrDefault() <= 0 || committees[s.Im_RequestCommittee_ID].IsFinishedAll != true || s.IsAccepted == null || !s.HasAttachment));

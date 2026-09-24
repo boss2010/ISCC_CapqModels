@@ -11,6 +11,7 @@ public class ImportRequestDetailsController : Controller
 {
     private readonly string _connectionString;
     private readonly string _attachmentServer;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ImportRequestDetailsController> _logger;
     private readonly IDbContextFactory<ImportDbContext> _dbFactory;
 
@@ -19,6 +20,7 @@ public class ImportRequestDetailsController : Controller
         ILogger<ImportRequestDetailsController> logger,
         IDbContextFactory<ImportDbContext>? dbFactory = null)
     {
+        _configuration = configuration;
         _attachmentServer = @"\\" + (configuration["Path_NetworkShare"] ?? throw new InvalidOperationException("Path_NetworkShare is not configured.")).Trim('\\', '/');
         _logger = logger;
         _dbFactory = dbFactory ?? ImportDatabase.CreateFactory(configuration);
@@ -35,7 +37,7 @@ public class ImportRequestDetailsController : Controller
             const string updateSql = """
                 UPDATE dbo.Im_CheckRequest_SampleData
                 SET WithdrawDate = CONVERT(date, GETDATE()),
-                    Sample_BarCode = CASE WHEN @RegenerateBarcode = 1 THEN @Barcode ELSE COALESCE(NULLIF(Sample_BarCode, ''), @Barcode) END,
+                    Sample_BarCode = @Barcode,
                     SampleSize = @SampleSize, SampleRatio = @SampleRatio, SampleQuantityUnit = @QuantityUnit, IS_Total = @IsTotal,
                     Notes_Ar = @Notes, Syl_ALkhatima_Number = @SealNumber,
                     IsAccepted = CASE WHEN @HasAttachment = 1 THEN @LabResultAccepted ELSE IsAccepted END,
@@ -47,6 +49,7 @@ public class ImportRequestDetailsController : Controller
                   AND (LotData_ID = @LotDataId OR (LotData_ID IS NULL AND @LotDataId IS NULL))
                   AND User_Deletion_Id IS NULL
                 """;
+            var barcodes = new Dictionary<(int Lab, int Analysis, long Plant), string>();
             foreach (var group in input.Samples.GroupBy(x => x.LotDataId))
             {
                 foreach (var resultSample in group.Where(x => x.HasAttachment))
@@ -54,9 +57,58 @@ public class ImportRequestDetailsController : Controller
                     var blocked = await LaboratoryResultController.GetReadinessErrorAsync(connection, transaction, resultSample.SampleId);
                     if (blocked != null) throw new InvalidOperationException(blocked);
                 }
-                string barcode = await GenerateImportSampleBarcodeAsync(connection, transaction);
                 foreach (var sample in group)
                 {
+                    const string identitySql = """
+                        SELECT a.AnalysisLabID, a.AnalysisTypeID, p.Item_ID
+                        FROM dbo.AnalysisLabType a
+                        JOIN dbo.Im_CheckRequest_Items i ON i.ID=@ItemId
+                        JOIN dbo.Item_ShortName p ON p.ID=i.Item_ShortName_ID
+                        WHERE a.ID=@AnalysisId;
+                        """;
+                    await using var identity = new SqlCommand(identitySql, connection, transaction);
+                    identity.Parameters.AddWithValue("@ItemId", sample.RequestItemId);
+                    identity.Parameters.AddWithValue("@AnalysisId", sample.AnalysisLabTypeId);
+                    (int Lab, int Analysis, long Plant) key;
+                    await using (var reader = await identity.ExecuteReaderAsync())
+                    {
+                        if (!await reader.ReadAsync() || reader.IsDBNull(2))
+                            throw new InvalidOperationException("تعذر تحديد المعمل والتحليل والنبات للعينة.");
+                        key = (reader.GetInt32(0), reader.GetInt32(1), Convert.ToInt64(reader.GetValue(2)));
+                    }
+                    if (!barcodes.TryGetValue(key, out string? barcode))
+                    {
+                        // Reuse a saved code only when it belongs exclusively to this
+                        // laboratory, analysis and plant within the withdrawal committee.
+                        const string existingBarcodeSql = """
+                            SELECT TOP 1 s.Sample_BarCode
+                            FROM dbo.Im_CheckRequest_SampleData s WITH (UPDLOCK, HOLDLOCK)
+                            JOIN dbo.AnalysisLabType a ON a.ID=s.AnalysisLabType_ID
+                            JOIN dbo.Im_CheckRequest_Items i ON i.ID=s.Im_Request_Item_Id
+                            JOIN dbo.Item_ShortName p ON p.ID=i.Item_ShortName_ID
+                            WHERE s.Im_RequestCommittee_ID=@CommitteeId AND s.User_Deletion_Id IS NULL
+                              AND a.AnalysisLabID=@Lab AND a.AnalysisTypeID=@Analysis AND p.Item_ID=@Plant
+                              AND NULLIF(LTRIM(RTRIM(s.Sample_BarCode)), '') IS NOT NULL
+                              AND s.Sample_BarCode NOT LIKE '72%'
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.Im_CheckRequest_SampleData other
+                                  JOIN dbo.AnalysisLabType oa ON oa.ID=other.AnalysisLabType_ID
+                                  JOIN dbo.Im_CheckRequest_Items oi ON oi.ID=other.Im_Request_Item_Id
+                                  JOIN dbo.Item_ShortName op ON op.ID=oi.Item_ShortName_ID
+                                  WHERE other.Sample_BarCode=s.Sample_BarCode AND other.User_Deletion_Id IS NULL
+                                    AND (other.Im_RequestCommittee_ID<>@CommitteeId OR oa.AnalysisLabID<>@Lab
+                                      OR oa.AnalysisTypeID<>@Analysis OR op.Item_ID<>@Plant))
+                            ORDER BY s.ID;
+                            """;
+                        await using var existingBarcode = new SqlCommand(existingBarcodeSql, connection, transaction);
+                        existingBarcode.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
+                        existingBarcode.Parameters.AddWithValue("@Lab", key.Lab);
+                        existingBarcode.Parameters.AddWithValue("@Analysis", key.Analysis);
+                        existingBarcode.Parameters.AddWithValue("@Plant", key.Plant);
+                        barcode = regenerateBarcodes ? null : await existingBarcode.ExecuteScalarAsync() as string;
+                        barcode ??= await GenerateImportSampleBarcodeAsync(connection, transaction);
+                        barcodes.Add(key, barcode);
+                    }
                     if (sample.SampleId <= 0)
                     {
                         const string insertSql = """
@@ -95,7 +147,6 @@ public class ImportRequestDetailsController : Controller
 
                     await using var command = new SqlCommand(updateSql, connection, transaction);
                     command.Parameters.AddWithValue("@Barcode", barcode);
-                    command.Parameters.AddWithValue("@RegenerateBarcode", regenerateBarcodes);
                     command.Parameters.AddWithValue("@SampleSize", sample.SampleSize);
                     command.Parameters.AddWithValue("@QuantityUnit", sample.QuantityUnit);
                     command.Parameters.AddWithValue("@IsTotal", sample.IsTotal);
@@ -116,6 +167,7 @@ public class ImportRequestDetailsController : Controller
                 var attachedSamples = group.Where(x => x.HasAttachment).ToList();
                 if (group.Key != null && attachedSamples.Count > 0)
                 {
+                    await EnsureLotInspectionAvailableAsync(input.CheckRequestId, group.Key.Value, connection, transaction);
                     if (attachedSamples.Select(x => x.QuarantineStatusId).Distinct().Count() != 1)
                         throw new InvalidOperationException("يجب اختيار موقف حجر واحد لكل تحاليل اللوط نفسه.");
                     const string lotStatusSql = """
@@ -358,6 +410,7 @@ public class ImportRequestDetailsController : Controller
             foreach (var lot in input.Lots)
             {
                 await using var status = new SqlCommand(statusSql, connection, transaction);
+                await EnsureLotInspectionAvailableAsync(input.CheckRequestId, lot.LotCategoryId, connection, transaction);
                 status.Parameters.AddWithValue("@LotId", lot.LotCategoryId);
                 status.Parameters.AddWithValue("@Notes", (object?)lot.Notes?.Trim() ?? DBNull.Value);
                 status.Parameters.AddWithValue("@UserId", userId);
@@ -498,19 +551,49 @@ public class ImportRequestDetailsController : Controller
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return NotFound("المرفق غير موجود أو غير مسموح بعرضه.");
 
-        string contentType = reader.IsDBNull(2) ? "application/octet-stream" : reader.GetString(2);
-        if (!contentType.Contains('/')) contentType = contentType.ToLowerInvariant() switch
-        {
-            "jpg" or "jpeg" => "image/jpeg", "png" => "image/png", "pdf" => "application/pdf", _ => "application/octet-stream"
-        };
-        if (!reader.IsDBNull(0)) return File((byte[])reader[0], contentType);
         string path = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        string fileName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+        string contentType = PlantMobile.Infrastructure.ImportAttachmentFiles.ContentType(
+            string.IsNullOrWhiteSpace(path) ? fileName : path, reader.IsDBNull(2) ? null : reader.GetString(2));
+        if (!reader.IsDBNull(0) && ((byte[])reader[0]).Length > 0) return File((byte[])reader[0], contentType);
+        await reader.CloseAsync();
         if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") return Redirect(path);
-        // Legacy attachments store a path relative to the network server.
-        if (path.StartsWith(@"\plant\", StringComparison.OrdinalIgnoreCase))
-            path = _attachmentServer + path;
-        if (!string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)) return PhysicalFile(path, contentType);
-        return NotFound("ملف المرفق غير متاح على الخادم.");
+        if (string.IsNullOrWhiteSpace(path)) return NotFound("مسار المرفق غير مسجل.");
+        string resolvedPath = PlantMobile.Infrastructure.ImportAttachmentFiles.ResolvePath(path, _attachmentServer);
+        try
+        {
+            PlantMobile.Infrastructure.AttachmentShareConnection.Connect(resolvedPath, _configuration);
+            byte[] bytes = await System.IO.File.ReadAllBytesAsync(resolvedPath, HttpContext.RequestAborted);
+            if (contentType == "application/pdf" || contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return File(bytes, contentType);
+            return File(bytes, System.Net.Mime.MediaTypeNames.Application.Octet, Path.GetFileName(resolvedPath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Unable to open sample attachment {AttachmentId} at {AttachmentPath}", id, resolvedPath);
+            return NotFound("تعذر فتح المرفق من السيرفر. تأكد من وجود الملف وصلاحية الوصول للمجلد المشترك.");
+        }
+    }
+
+    private static async Task EnsureLotInspectionAvailableAsync(long requestId, long lotId,
+        SqlConnection connection, SqlTransaction transaction)
+    {
+        const string sql = """
+            SELECT TOP 1 type.Name_Ar
+            FROM dbo.Im_CommitteeResult result
+            JOIN dbo.Im_RequestCommittee committee ON committee.ID=result.Committee_ID
+            JOIN dbo.Im_CheckRequest_Items_Lot_Category lot ON lot.ID=@LotId
+            LEFT JOIN dbo.CommitteeResultType type ON type.ID=result.CommitteeResultType_ID
+            WHERE committee.ImCheckRequest_ID=@RequestId AND committee.CommitteeType_ID=11
+              AND committee.User_Deletion_Id IS NULL AND result.User_Deletion_Id IS NULL
+              AND (result.LotData_ID=lot.ID OR (result.LotData_ID IS NULL AND result.Im_Request_Item_Id=lot.Im_CheckRequest_Items_ID))
+            ORDER BY result.ID DESC;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("@RequestId", requestId);
+        command.Parameters.AddWithValue("@LotId", lotId);
+        if ((await command.ExecuteScalarAsync() as string)?.Contains("تعذر") == true)
+            throw new InvalidOperationException("موقف الحجر مغلق لتعذر الفحص.");
     }
 
     private static async Task<string> GenerateImportSampleBarcodeAsync(
@@ -755,8 +838,6 @@ public class ImportRequestDetailsController : Controller
     private async Task<ImportRequestDetailsPageVm> LoadPageAsync(long checkRequestId, long committeeId, byte committeeTypeId)
     {
         var access = await GetCommitteeAccessAsync(checkRequestId, committeeId);
-        if (committeeTypeId == 13 && access.IsAdmin && !access.IsReadOnly)
-            await EnsureSampleBarcodesAsync(committeeId);
 
         var detailsTask = LoadDetailsWithSamplesAsync(checkRequestId, committeeId, committeeTypeId);
 #if false // Replaced by direct SQL loading.
@@ -972,60 +1053,6 @@ public class ImportRequestDetailsController : Controller
         }
     }
 
-    private async Task EnsureSampleBarcodesAsync(long committeeId)
-    {
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        try
-        {
-            var sampleGroups = new List<(long SampleId, long? LotId)>();
-            const string selectSql = """
-                SELECT ID, LotData_ID
-                FROM dbo.Im_CheckRequest_SampleData WITH (UPDLOCK, HOLDLOCK)
-                WHERE Im_RequestCommittee_ID = @CommitteeId
-                  AND User_Deletion_Id IS NULL
-                  AND (NULLIF(LTRIM(RTRIM(Sample_BarCode)), '') IS NULL OR Sample_BarCode LIKE '72%')
-                ORDER BY ID
-                """;
-            await using (var select = new SqlCommand(selectSql, connection, transaction))
-            {
-                select.Parameters.AddWithValue("@CommitteeId", committeeId);
-                await using var reader = await select.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                    sampleGroups.Add((reader.GetInt64(0), reader.IsDBNull(1) ? null : reader.GetInt64(1)));
-            }
-
-            const string updateSql = """
-                UPDATE dbo.Im_CheckRequest_SampleData
-                SET Sample_BarCode = @Barcode, IS_From_Android = 1,
-                    User_Updation_Id = @UserId, User_Updation_Date = GETDATE()
-                WHERE ID = @SampleId AND Im_RequestCommittee_ID = @CommitteeId
-                  AND (NULLIF(LTRIM(RTRIM(Sample_BarCode)), '') IS NULL OR Sample_BarCode LIKE '72%')
-                """;
-            short.TryParse(HttpContext.Session.GetString("UserId"), out short userId);
-            foreach (var group in sampleGroups.GroupBy(x => x.LotId))
-            {
-                string barcode = await GenerateImportSampleBarcodeAsync(connection, transaction);
-                foreach (var sample in group)
-                {
-                    await using var update = new SqlCommand(updateSql, connection, transaction);
-                    update.Parameters.AddWithValue("@Barcode", barcode);
-                    update.Parameters.AddWithValue("@UserId", userId);
-                    update.Parameters.AddWithValue("@SampleId", sample.SampleId);
-                    update.Parameters.AddWithValue("@CommitteeId", committeeId);
-                    await update.ExecuteNonQueryAsync();
-                }
-            }
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
-
     private async Task<List<CommitteeResultTypeOptionVm>> LoadCommitteeResultTypesAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
@@ -1139,6 +1166,7 @@ public class ImportRequestDetailsController : Controller
                    result.Notes, result.IS_Total, confirm.IsAccepted, confirm.Notes AS ConfirmNotes,
                     lotStatus.Name_AR AS QuarantineStatus,
                     CAST(CASE
+                        WHEN type.Name_Ar LIKE N'%تعذر%' THEN 0
                         WHEN ISNULL(result.IS_Total, 0) = 1 THEN
                             CASE WHEN
                                 EXISTS (
@@ -1413,6 +1441,7 @@ public class ImportRequestDetailsController : Controller
 
                 if (lot.QuarantineStatusId > 0)
                 {
+                    await EnsureLotInspectionAvailableAsync(input.CheckRequestId, lot.LotCategoryId, connection, transaction);
                     await using var closeStatuses = new SqlCommand(closeOldStatusesSql, connection, transaction);
                     closeStatuses.Parameters.AddWithValue("@LotId", lot.LotCategoryId);
                     await closeStatuses.ExecuteNonQueryAsync();

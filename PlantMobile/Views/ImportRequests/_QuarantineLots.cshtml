@@ -20,14 +20,19 @@
                     <div class="border rounded-3 p-3 mb-2">
                         <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
                             <strong>اللوط @lot.LotNumber</strong>
-                            @if (lot.ExistingStatusId.HasValue && lot.ExistingStatusContinues == false) { <span class="badge bg-secondary">تم انتهاء الإجراءات على اللوط</span> }
+                            @if (lot.InspectionUnavailable) { <span class="badge bg-secondary">مغلق لتعذر الفحص</span> }
+                            else if (lot.ExistingStatusId.HasValue && lot.ExistingStatusContinues == false) { <span class="badge bg-secondary">تم انتهاء الإجراءات على اللوط</span> }
                             else if (lot.ExistingStatusId.HasValue) { <span class="badge bg-success">تم تسجيل موقف الحجر</span> }
                             else if (!lot.InspectionComplete) { <span class="badge bg-warning text-dark">في انتظار نتيجة الفحص</span> }
                             else if (lot.HasWithdrawal && !lot.WithdrawalComplete) { <span class="badge bg-warning text-dark">في انتظار انتهاء السحب</span> }
                             else if (lot.HasWithdrawal && !lot.LaboratoryResultComplete) { <span class="badge bg-warning text-dark">في انتظار إدخال نتيجة المعمل وإرفاقها</span> }
                             else { <span class="badge bg-success">جاهز لموقف الحجر</span> }
                         </div>
-                        @if (lot.ExistingStatusId.HasValue)
+                        @if (lot.InspectionUnavailable)
+                        {
+                            <div class="alert alert-secondary mb-0">موقف الحجر مغلق لتعذر الفحص.</div>
+                        }
+                        else if (lot.ExistingStatusId.HasValue)
                         {
                             <div class="alert alert-success mb-0">
                                 موقف الحجر: <strong>@lot.ExistingStatusName</strong>

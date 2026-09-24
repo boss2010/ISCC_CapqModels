@@ -52,7 +52,7 @@ public class ImportRequestsController : Controller
         const string lotsSql = """
             SELECT item.ID, COALESCE(plant.Name_Ar, shortName.ShortName_Ar, N'غير محدد'),
                    lot.ID, COALESCE(lot.Lot_Number, CONVERT(nvarchar(30),lot.ID)),
-                   result.CommitteeResultType_ID,
+                   result.ResultName,
                    CAST(CASE WHEN result.ID IS NULL OR result.CommitteeResultType_ID IS NULL THEN 0 ELSE 1 END AS bit),
                    ISNULL(samples.SampleCount,0), ISNULL(samples.IncompleteCount,0),
                    activeStatus.IS_Status, activeStatus.Name_AR, activeStatus.Is_Continue,
@@ -63,8 +63,9 @@ public class ImportRequestsController : Controller
             LEFT JOIN dbo.Item_ShortName shortName ON shortName.ID=item.Item_ShortName_ID
             LEFT JOIN dbo.Item plant ON plant.ID=shortName.Item_ID
             OUTER APPLY (
-                SELECT TOP 1 r.ID,r.CommitteeResultType_ID
+                SELECT TOP 1 r.ID,r.CommitteeResultType_ID, rt.Name_Ar AS ResultName
                 FROM dbo.Im_CommitteeResult r
+                LEFT JOIN dbo.CommitteeResultType rt ON rt.ID=r.CommitteeResultType_ID
                 JOIN dbo.Im_RequestCommittee c ON c.ID=r.Committee_ID AND c.CommitteeType_ID=11 AND c.User_Deletion_Id IS NULL
                 JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID AND e.Employee_Id=@UserId AND e.ISAdmin=1
                   AND e.OperationType=74 AND e.User_Deletion_Id IS NULL
@@ -108,6 +109,7 @@ public class ImportRequestsController : Controller
                 {
                     RequestItemId=reader.GetInt64(0), PlantName=reader.GetString(1), LotId=reader.GetInt64(2), LotNumber=reader.GetString(3),
                     InspectionComplete=reader.GetBoolean(5), HasWithdrawal=reader.GetInt32(6)>0,
+                    InspectionUnavailable=!reader.IsDBNull(4) && reader.GetString(4).Contains("تعذر"),
                     WithdrawalComplete=reader.GetInt32(6)==0 || reader.GetInt32(7)==0,
                     ExistingStatusId=reader.IsDBNull(8)?null:reader.GetInt32(8), ExistingStatusName=reader.IsDBNull(9)?string.Empty:reader.GetString(9),
                     ExistingStatusContinues=reader.IsDBNull(10)?null:reader.GetBoolean(10),
@@ -137,7 +139,18 @@ public class ImportRequestsController : Controller
                 SELECT COUNT(*) FROM dbo.Im_CheckRequest_Items_Lot_Category lot
                 JOIN dbo.Im_CheckRequest_Items item ON item.ID=lot.Im_CheckRequest_Items_ID
                 JOIN dbo.Im_CheckRequset_Shipping_Method shipping ON shipping.ID=item.Im_CheckRequset_Shipping_Method_ID
+                OUTER APPLY (
+                    SELECT TOP 1 rt.Name_Ar AS ResultName
+                    FROM dbo.Im_CommitteeResult r
+                    JOIN dbo.Im_RequestCommittee c ON c.ID=r.Committee_ID
+                    LEFT JOIN dbo.CommitteeResultType rt ON rt.ID=r.CommitteeResultType_ID
+                    WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID=11
+                      AND c.User_Deletion_Id IS NULL AND r.User_Deletion_Id IS NULL
+                      AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=item.ID))
+                    ORDER BY r.ID DESC
+                ) latestInspection
                 WHERE lot.ID=@LotId AND shipping.Im_CheckRequest_ID=@CheckRequestId AND lot.User_Deletion_Id IS NULL
+                  AND ISNULL(latestInspection.ResultName,N'') NOT LIKE N'%تعذر%'
                   AND EXISTS (SELECT 1 FROM dbo.Im_CommitteeResult r JOIN dbo.Im_RequestCommittee c ON c.ID=r.Committee_ID
                               JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID AND e.Employee_Id=@UserId AND e.ISAdmin=1 AND e.User_Deletion_Id IS NULL
                               WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID=11 AND c.User_Deletion_Id IS NULL
@@ -348,7 +361,7 @@ public class ImportRequestsController : Controller
 }
 
 public class RequestQuarantineVm { public long CheckRequestId {get;set;} public string RequestNumber {get;set;}=string.Empty; public List<RequestQuarantineLotVm> Lots {get;set;}=new(); public List<RequestQuarantineStatusVm> Statuses {get;set;}=new(); }
-public class RequestQuarantineLotVm { public long RequestItemId {get;set;} public string PlantName {get;set;}=string.Empty; public long LotId {get;set;} public string LotNumber {get;set;}=string.Empty; public bool InspectionComplete {get;set;} public bool HasWithdrawal {get;set;} public bool WithdrawalComplete {get;set;} public bool LaboratoryResultComplete {get;set;} public int? ExistingStatusId {get;set;} public string ExistingStatusName {get;set;}=string.Empty; public bool? ExistingStatusContinues {get;set;} public bool IsReady=>InspectionComplete&&WithdrawalComplete&&(!HasWithdrawal||LaboratoryResultComplete); }
+public class RequestQuarantineLotVm { public long RequestItemId {get;set;} public string PlantName {get;set;}=string.Empty; public long LotId {get;set;} public string LotNumber {get;set;}=string.Empty; public bool InspectionComplete {get;set;} public bool HasWithdrawal {get;set;} public bool WithdrawalComplete {get;set;} public bool LaboratoryResultComplete {get;set;} public int? ExistingStatusId {get;set;} public string ExistingStatusName {get;set;}=string.Empty; public bool? ExistingStatusContinues {get;set;} public bool InspectionUnavailable {get;set;} public bool IsReady=>!InspectionUnavailable&&InspectionComplete&&WithdrawalComplete&&(!HasWithdrawal||LaboratoryResultComplete); }
 public class RequestQuarantineStatusVm { public int Id {get;set;} public string Name {get;set;}=string.Empty; public bool IsContinue {get;set;} }
 public class RequestQuarantineSaveVm { public long CheckRequestId {get;set;} public List<RequestQuarantineSaveLotVm> Lots {get;set;}=new(); }
 public class RequestQuarantineSaveLotVm { public long LotId {get;set;} public int StatusId {get;set;} public string? Notes {get;set;} }

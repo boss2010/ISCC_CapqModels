@@ -31,8 +31,8 @@ internal static class ImportRequestsSql
 
     private const string RequestCompletion = """
         SELECT lot.CheckRequestId,
-               CAST(MIN(CASE WHEN latestStatus.Is_Continue = 0 THEN 1 ELSE 0 END) AS bit) AS RequestQuarantineComplete,
-               CAST(MAX(CASE WHEN latestStatus.ID IS NULL AND readiness.InspectionComplete = 1 AND pendingSamples.PendingCount = 0 THEN 1 ELSE 0 END) AS bit) AS HasPendingQuarantine
+               CAST(MIN(CASE WHEN latestStatus.Is_Continue = 0 OR readiness.InspectionUnavailable = 1 THEN 1 ELSE 0 END) AS bit) AS RequestQuarantineComplete,
+               CAST(MAX(CASE WHEN latestStatus.ID IS NULL AND readiness.InspectionComplete = 1 AND readiness.InspectionUnavailable = 0 AND pendingSamples.PendingCount = 0 THEN 1 ELSE 0 END) AS bit) AS HasPendingQuarantine
         INTO #RequestCompletion
         FROM #CompletionLots lot
         OUTER APPLY (
@@ -43,8 +43,10 @@ internal static class ImportRequestsSql
             ORDER BY lr.ID DESC
         ) latestStatus
         OUTER APPLY (
-            SELECT TOP (1) CASE WHEN r.CommitteeResultType_ID IS NOT NULL THEN 1 ELSE 0 END AS InspectionComplete
+            SELECT TOP (1) CASE WHEN r.CommitteeResultType_ID IS NOT NULL THEN 1 ELSE 0 END AS InspectionComplete,
+                CASE WHEN type.Name_Ar LIKE N'%تعذر%' THEN 1 ELSE 0 END AS InspectionUnavailable
             FROM dbo.Im_CommitteeResult r JOIN #CompletionCommittees c ON c.ID=r.Committee_ID
+            LEFT JOIN dbo.CommitteeResultType type ON type.ID=r.CommitteeResultType_ID
             WHERE c.ImCheckRequest_ID=lot.CheckRequestId AND c.CommitteeType_ID=11 AND c.User_Deletion_Id IS NULL
               AND r.User_Deletion_Id IS NULL AND (r.LotData_ID=lot.ID OR (r.LotData_ID IS NULL AND r.Im_Request_Item_Id=lot.RequestItemId))
             ORDER BY r.ID DESC

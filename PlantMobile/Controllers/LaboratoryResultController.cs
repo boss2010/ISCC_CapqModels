@@ -7,13 +7,16 @@ public class LaboratoryResultController : Controller
 {
     private const int MaxAttachmentBytes = 10 * 1024 * 1024;
     private readonly string _connectionString;
-    private readonly string _attachmentRoot;
+    private readonly string _attachmentServer;
+    private readonly IConfiguration _configuration;
 
     public LaboratoryResultController(IConfiguration configuration, IWebHostEnvironment environment)
     {
+        _configuration = configuration;
+        _attachmentServer = configuration["Path_NetworkShare"]
+            ?? throw new InvalidOperationException("Path_NetworkShare is not configured.");
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
-        _attachmentRoot = @"\\" + (configuration["Path_NetworkShare"] ?? throw new InvalidOperationException("Path_NetworkShare is not configured.")).Trim('\\', '/');
     }
 
     [HttpGet]
@@ -111,15 +114,12 @@ public class LaboratoryResultController : Controller
         if (input.Attachment == null || input.Attachment.Length == 0) return BadRequest("يجب إرفاق صورة نتيجة المعمل.");
         if (input.Attachment.Length > MaxAttachmentBytes) return BadRequest("حجم المرفق يجب ألا يتجاوز 10 ميجابايت.");
         if (!input.Attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return BadRequest("المسموح هو ملفات الصور فقط.");
-        string extension = input.Attachment.ContentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => ".jpg", "image/png" => ".png", "image/gif" => ".gif",
-            "image/webp" => ".webp", "image/bmp" => ".bmp", _ => ".img"
-        };
-        string storedName = $"{Guid.NewGuid():N}{extension}";
+        string storedName = Path.GetFileName(input.Attachment.FileName);
+        if (string.IsNullOrWhiteSpace(storedName)) return BadRequest("اسم ملف الصورة غير صحيح.");
         var now = DateTime.Now;
         string relativePath = $@"\plant\Import\SampleData\{now.Year}\{now.Month}\{storedName}";
-        string storedPath = _attachmentRoot + relativePath;
+        string storedPath = PlantMobile.Infrastructure.ImportAttachmentFiles.ResolvePath(relativePath, _attachmentServer);
+        bool removeNewFileOnFailure = false;
 
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -145,7 +145,10 @@ public class LaboratoryResultController : Controller
                 if(value==null||value==DBNull.Value) throw new InvalidOperationException("العينة غير موجودة أو غير مسموح بتعديلها.");
                 if(Convert.ToBoolean(value)) throw new InvalidOperationException("تم حفظ نتيجة المعمل من قبل وأصبحت متاحة للعرض فقط.");
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(storedPath)!);
+            PlantMobile.Infrastructure.AttachmentShareConnection.Connect(storedPath, _configuration, reconnectForUpload: true);
+            string directory = Path.GetDirectoryName(storedPath)!;
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+            removeNewFileOnFailure = !System.IO.File.Exists(storedPath);
             await using (var stream = System.IO.File.Create(storedPath))
                 await input.Attachment.CopyToAsync(stream);
             const string saveSql="""
@@ -182,7 +185,7 @@ public class LaboratoryResultController : Controller
         catch(Exception ex)
         {
             await transaction.RollbackAsync();
-            if (System.IO.File.Exists(storedPath)) System.IO.File.Delete(storedPath);
+            if (removeNewFileOnFailure && System.IO.File.Exists(storedPath)) System.IO.File.Delete(storedPath);
             return BadRequest(ex.Message);
         }
     }
