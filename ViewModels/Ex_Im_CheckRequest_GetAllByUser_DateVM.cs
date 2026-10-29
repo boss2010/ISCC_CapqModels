@@ -38,12 +38,7 @@ namespace ViewModels
             public bool HasPendingQuarantine { get; set; }
             public bool WithdrawalComplete { get; set; }
             public bool CanShowLaboratoryResult { get; set; }
-            public string ActionText => IsReadOnly ? "عرض اللجنة" : !IsAdmin ? "إبداء الرأي"
-                : Committee_Type_Id == 11 && InspectionComplete
-                    ? "عرض اللجنة"
-                : Committee_Type_Id == 13 && WithdrawalComplete
-                    ? "عرض اللجنة"
-                : Committee_Type_Id == 13 ? "استكمال السحب" : "بدء / استكمال";
+            public string ActionText => "بدء / استكمال";
             public string CommitteeMembers { get; set; } = string.Empty;
             public bool SampleAttachmentUploaded { get; set; }
             public bool HasPendingSampleFinalResult { get; set; }

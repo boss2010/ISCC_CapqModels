@@ -1,0 +1,71 @@
+@model PlantMobile.Controllers.RequestQuarantineVm
+<form asp-controller="ImportRequests" asp-action="SaveQuarantineLots" method="post" id="requestQuarantineForm">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="CheckRequestId" value="@Model.CheckRequestId" />
+    <div class="alert alert-info">طلب رقم <strong>@Model.RequestNumber</strong> — اختر موقف الحجر لكل لوط جاهز.</div>
+    @if (Model.Lots.Count == 0)
+    {
+        <div class="alert alert-warning">لا توجد نباتات أو لوطات مسجلة على هذا الطلب.</div>
+    }
+    else
+    {
+        int index = 0;
+        @foreach (var plant in Model.Lots.GroupBy(x => new { x.RequestItemId, x.PlantName }))
+        {
+            <section class="border rounded-3 mb-3 overflow-hidden">
+                <h5 class="bg-light border-bottom p-3 mb-0 text-primary">@plant.Key.PlantName</h5>
+                <div class="p-3">
+                @foreach (var lot in plant)
+                {
+                    <div class="border rounded-3 p-3 mb-2">
+                        <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+                            <strong>اللوط @lot.LotNumber</strong>
+                            @if (lot.InspectionUnavailable) { <span class="badge bg-secondary">مغلق لتعذر الفحص</span> }
+                            else if (lot.ExistingStatusId.HasValue && lot.ExistingStatusContinues == false) { <span class="badge bg-secondary">تم انتهاء الإجراءات على اللوط</span> }
+                            else if (lot.ExistingStatusId.HasValue) { <span class="badge bg-success">تم تسجيل موقف الحجر</span> }
+                            else if (!lot.InspectionComplete) { <span class="badge bg-warning text-dark">في انتظار نتيجة الفحص</span> }
+                            else if (lot.HasWithdrawal && !lot.WithdrawalComplete) { <span class="badge bg-warning text-dark">في انتظار انتهاء السحب</span> }
+                            else if (lot.HasWithdrawal && !lot.LaboratoryResultComplete) { <span class="badge bg-warning text-dark">في انتظار إدخال نتيجة المعمل وإرفاقها</span> }
+                            else { <span class="badge bg-success">جاهز لموقف الحجر</span> }
+                        </div>
+                        @if (lot.InspectionUnavailable)
+                        {
+                            <div class="alert alert-secondary mb-0">موقف الحجر مغلق لتعذر الفحص.</div>
+                        }
+                        else if (lot.ExistingStatusId.HasValue)
+                        {
+                            <div class="alert alert-success mb-0">
+                                موقف الحجر: <strong>@lot.ExistingStatusName</strong>
+                                @if (lot.ExistingStatusContinues == false) { <div class="fw-bold mt-2">تم انتهاء الإجراءات على اللوط ولن يتم استكمال أي إجراء آخر عليه.</div> }
+                            </div>
+                        }
+                        else if (lot.IsReady)
+                        {
+                            <input type="hidden" name="Lots[@index].LotId" value="@lot.LotId" />
+                            <div class="row g-2">
+                                <div class="col-md-6"><label class="form-label fw-bold">موقف الحجر</label><select class="form-select quarantine-status" name="Lots[@index].StatusId" required><option value="" selected>— اختر موقف الحجر —</option>@foreach (var status in Model.Statuses) { <option value="@status.Id" data-continue="@status.IsContinue.ToString().ToLowerInvariant()">@status.Name</option> }</select><div class="alert alert-secondary py-2 mt-2 mb-0 terminal-status-message d-none">هذا الموقف ينهي الإجراءات على اللوط ولن يتم استكمال أي إجراء آخر عليه.</div></div>
+                                <div class="col-md-6"><label class="form-label fw-bold">ملاحظات</label><input class="form-control" name="Lots[@index].Notes" /></div>
+                            </div>
+                            index++;
+                        }
+                        else
+                        {
+                            <div class="text-muted">يُفتح الاختيار تلقائيًا بعد اكتمال المرحلة المطلوبة.</div>
+                        }
+                    </div>
+                }
+                </div>
+            </section>
+        }
+        @if (Model.Lots.Any(x => x.IsReady && !x.ExistingStatusId.HasValue))
+        {
+            <div class="text-start"><button type="submit" class="btn btn-success px-5">حفظ موقف الحجر</button></div>
+        }
+    }
+</form>
+<script>
+ document.querySelectorAll('.quarantine-status').forEach(select=>select.addEventListener('change',()=>{
+   const terminal=select.selectedOptions[0]?.dataset.continue==='false';
+   select.parentElement.querySelector('.terminal-status-message')?.classList.toggle('d-none',!terminal);
+ }));
+</script>

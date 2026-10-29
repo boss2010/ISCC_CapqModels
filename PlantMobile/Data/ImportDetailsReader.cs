@@ -1,6 +1,7 @@
-using System.Globalization;
 using EF.Imports;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using ViewModels;
 
 namespace PlantMobile.Data;
@@ -84,9 +85,25 @@ public sealed class ImportDetailsReader(IDbContextFactory<ImportDbContext> facto
         foreach (var row in lots) {
             // Database-first mapping keeps this legacy nvarchar column as text.
             // Parse only at the display boundary, preserving fractional values.
-            row.Lot.Package_Count = string.IsNullOrWhiteSpace(row.PackagesCount) ? 0
-                : decimal.Parse(row.PackagesCount, NumberStyles.Number, CultureInfo.InvariantCulture);
-            ((List<_x0040_temp_table_Lot>)itemMap[row.ItemId].Lot_Data).Add(row.Lot);
+            //row.Lot.Package_Count = string.IsNullOrWhiteSpace(row.PackagesCount) ? 0
+            //    : decimal.Parse(row.PackagesCount, NumberStyles.Number, CultureInfo.InvariantCulture);
+
+            // fi
+			var match = Regex.Match(
+	row.PackagesCount ?? "",
+	@"^\s*\d+(\.\d+)?"
+);
+
+			row.Lot.Package_Count =
+				match.Success &&
+				decimal.TryParse(
+					match.Value,
+					NumberStyles.Number,
+					CultureInfo.InvariantCulture,
+					out var count)
+					? count
+					: 0;
+			((List<_x0040_temp_table_Lot>)itemMap[row.ItemId].Lot_Data).Add(row.Lot);
         }
         var sampleRows = await (from s in db.Im_CheckRequest_SampleData
                                 from link in db.AnalysisLabType.Where(l => l.ID == s.AnalysisLabType_ID).DefaultIfEmpty()
