@@ -25,7 +25,6 @@
                             else if (lot.ExistingStatusId.HasValue) { <span class="badge bg-success">تم تسجيل موقف الحجر</span> }
                             else if (!lot.InspectionComplete) { <span class="badge bg-warning text-dark">في انتظار نتيجة الفحص</span> }
                             else if (lot.HasWithdrawal && !lot.WithdrawalComplete) { <span class="badge bg-warning text-dark">في انتظار انتهاء السحب</span> }
-                            else if (lot.HasWithdrawal && !lot.LaboratoryResultComplete) { <span class="badge bg-warning text-dark">في انتظار إدخال نتيجة المعمل وإرفاقها</span> }
                             else { <span class="badge bg-success">جاهز لموقف الحجر</span> }
                         </div>
                         @if (lot.InspectionUnavailable)

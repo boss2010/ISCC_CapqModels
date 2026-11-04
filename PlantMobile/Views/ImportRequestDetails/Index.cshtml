@@ -73,6 +73,8 @@
     .infection-panel.visible { display:block; }
     .infection-title { color:#13856f; font-size:1.08rem; font-weight:800; margin-bottom:13px; text-align:center; }
     .infection-fields { display:grid; gap:12px; grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .inspection-photo-preview { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+    .inspection-photo-preview img, .saved-inspection-photo { border:1px solid #cfe3e3; border-radius:10px; height:110px; object-fit:cover; width:110px; }
     .inspection-mode { background:#fff; border:1px solid #c9e7e4; border-radius:12px; padding:14px 16px; }
     .inspection-mode-options { display:flex; flex-wrap:wrap; gap:10px; }
     .inspection-mode-option { margin:0; }
@@ -219,7 +221,7 @@
             }
         }
 
-        <form asp-controller="ImportRequestDetails" asp-action="SaveInspection" method="post" id="inspectionSaveForm" style="@(!Model.IsAdmin ? "display:none" : null)">
+        <form asp-controller="ImportRequestDetails" asp-action="SaveInspection" method="post" enctype="multipart/form-data" id="inspectionSaveForm" style="@(!Model.IsAdmin ? "display:none" : null)">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
             <input type="hidden" name="CheckRequestId" value="@Model.CheckRequestId" />
@@ -257,6 +259,10 @@
                             <div><span>نتيجة الفحص</span><strong>@plantSavedResult.ResultName</strong></div>
                             <div><span>موقف الحجر</span><strong>@(plantSavedResult.CanShowQuarantine ? plantSavedResult.QuarantineStatus : "يظهر بعد انتهاء الفحص والسحب")</strong></div>
                             <div style="grid-column:1/-1"><span>الملاحظات</span><strong>@(string.IsNullOrWhiteSpace(plantSavedResult.AdminNotes) ? "لا توجد ملاحظات" : plantSavedResult.AdminNotes)</strong></div>
+                             @if (plantSavedResult.InspectionPhotoIds.Count > 0)
+                             {
+                                 <div style="grid-column:1/-1"><span>صور الفحص</span><div class="inspection-photo-preview">@foreach (var photoId in plantSavedResult.InspectionPhotoIds) { <a asp-action="ViewInspectionPhoto" asp-route-id="@photoId" target="_blank" rel="noopener"><img class="saved-inspection-photo" src="@Url.Action("ViewInspectionPhoto", new { id = photoId })" alt="صورة الفحص" /></a> }</div></div>
+                             }
                         </div>
                     </div>
                 }
@@ -291,6 +297,10 @@
                                             <div><span>موقف الحجر</span><strong class="text-muted">يظهر بعد انتهاء الفحص والسحب</strong></div>
                                         }
                                         <div style="grid-column:1/-1"><span>الملاحظات</span><strong>@(string.IsNullOrWhiteSpace(savedResult.AdminNotes) ? "لا توجد ملاحظات" : savedResult.AdminNotes)</strong></div>
+                                         @if (savedResult.InspectionPhotoIds.Count > 0)
+                                         {
+                                             <div style="grid-column:1/-1"><span>صور الفحص</span><div class="inspection-photo-preview">@foreach (var photoId in savedResult.InspectionPhotoIds) { <a asp-action="ViewInspectionPhoto" asp-route-id="@photoId" target="_blank" rel="noopener"><img class="saved-inspection-photo" src="@Url.Action("ViewInspectionPhoto", new { id = photoId })" alt="صورة الفحص" /></a> }</div></div>
+                                         }
                                     </div>
                                 </div>
                             }
@@ -308,6 +318,12 @@
                                             <label class="form-label fw-bold">الملاحظات</label>
                                             <textarea class="form-control partial-required" name="Lots[@lotIndex].Notes" rows="3" placeholder="اكتب ملاحظات الفحص هنا..." required="@(!isTotalInspection ? "required" : null)"></textarea>
                                         </div>
+                                         <div class="inspection-field inspection-field-notes">
+                                             <label class="form-label fw-bold">صور الفحص</label>
+                                             <input class="form-control inspection-photo-input" type="file" name="Lots[@lotIndex].InspectionPhotos" accept="image/*" capture="environment" multiple />
+                                             <small class="text-muted">يمكن التقاط أو اختيار حتى 5 صور، بحد أقصى 10 ميجابايت للصورة.</small>
+                                             <div class="inspection-photo-preview"></div>
+                                         </div>
                                         <div class="infection-panel" data-infection-panel>
                                             <div class="infection-title">نوع الإصابة</div>
                                             <div class="infection-fields">
@@ -340,6 +356,10 @@
                                         <div><span>نتيجة الفحص</span><strong>@completedResult.ResultName</strong></div>
                                         <div><span>موقف الحجر</span><strong>@(completedResult.CanShowQuarantine ? completedResult.QuarantineStatus : "يظهر بعد انتهاء الفحص والسحب")</strong></div>
                                         <div style="grid-column:1/-1"><span>الملاحظات</span><strong>@(string.IsNullOrWhiteSpace(completedResult.AdminNotes) ? "لا توجد ملاحظات" : completedResult.AdminNotes)</strong></div>
+                                         @if (completedResult.InspectionPhotoIds.Count > 0)
+                                         {
+                                             <div style="grid-column:1/-1"><span>صور الفحص</span><div class="inspection-photo-preview">@foreach (var photoId in completedResult.InspectionPhotoIds) { <a asp-action="ViewInspectionPhoto" asp-route-id="@photoId" target="_blank" rel="noopener"><img class="saved-inspection-photo" src="@Url.Action("ViewInspectionPhoto", new { id = photoId })" alt="صورة الفحص" /></a> }</div></div>
+                                         }
                                     </div>
                                 </div>
                             }
@@ -357,6 +377,7 @@
                         <div class="inspection-fields">
                             <div class="inspection-field"><label class="form-label fw-bold">نتيجة الفحص</label><select class="form-select total-required" name="PlantTotals[@plantIndex].CommitteeResultTypeId" required><option value="">— اختر نتيجة الفحص —</option>@foreach (var resultType in Model.CommitteeResultTypes) { <option value="@resultType.Id">@resultType.Name</option> }</select></div>
                             <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">الملاحظات</label><textarea class="form-control total-required" name="PlantTotals[@plantIndex].Notes" rows="3" required></textarea></div>
+                             <div class="inspection-field inspection-field-notes"><label class="form-label fw-bold">صور الفحص</label><input class="form-control inspection-photo-input" type="file" name="PlantTotals[@plantIndex].InspectionPhotos" accept="image/*" capture="environment" multiple /><small class="text-muted">يمكن التقاط أو اختيار حتى 5 صور، بحد أقصى 10 ميجابايت للصورة.</small><div class="inspection-photo-preview"></div></div>
                             <div class="infection-panel" data-infection-panel>
                                 <div class="infection-title">نوع الإصابة</div>
                                 <div class="infection-fields">
@@ -956,6 +977,22 @@ draftSize.value='';draftSeal.value='';draftNotes.value='';
             };
             form.querySelectorAll('.lot-card > summary').forEach(summary => summary.addEventListener('click', event => {
                 if (currentMode() === 'total' && !event.target.closest('.weight-unit')) event.preventDefault();
+            }));
+            form.querySelectorAll('.inspection-photo-input').forEach(input => input.addEventListener('change', () => {
+                const preview = input.parentElement.querySelector('.inspection-photo-preview');
+                preview.innerHTML = '';
+                if (input.files.length > 5) {
+                    alert('الحد الأقصى هو 5 صور لكل نتيجة فحص.');
+                    input.value = '';
+                    return;
+                }
+                [...input.files].forEach(file => {
+                    const image = document.createElement('img');
+                    image.alt = 'معاينة صورة الفحص';
+                    image.src = URL.createObjectURL(file);
+                    image.addEventListener('load', () => URL.revokeObjectURL(image.src), { once:true });
+                    preview.appendChild(image);
+                });
             }));
             modes.forEach(x => x.addEventListener('change', setInspectionMode));
             form.addEventListener('input', updateProgress);

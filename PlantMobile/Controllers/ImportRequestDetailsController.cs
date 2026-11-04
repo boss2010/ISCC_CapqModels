@@ -9,6 +9,8 @@ namespace PlantMobile.Controllers;
 
 public class ImportRequestDetailsController : Controller
 {
+    private const int MaxInspectionPhotoBytes = 10 * 1024 * 1024;
+    private const int MaxInspectionPhotosPerResult = 5;
     private readonly string _connectionString;
     private readonly string _attachmentServer;
     private readonly IConfiguration _configuration;
@@ -288,6 +290,7 @@ public class ImportRequestDetailsController : Controller
                     if (!totalsByItem.TryGetValue(lot.RequestItemId, out var plant)) continue;
                     lot.CommitteeResultTypeId = plant.CommitteeResultTypeId;
                     lot.Notes = plant.Notes;
+                    lot.InspectionPhotos = plant.InspectionPhotos;
                     lot.InfectionItemId = plant.InfectionItemId;
                 }
             }
@@ -307,6 +310,29 @@ public class ImportRequestDetailsController : Controller
         {
             TempData["SaveError"] = "يجب استكمال نتيجة الفحص والملاحظات.";
             return RedirectToAction(nameof(Index), RouteValues(input));
+        }
+
+        foreach (var lot in input.Lots)
+        {
+            if (lot.InspectionPhotos.Count > MaxInspectionPhotosPerResult)
+            {
+                TempData["SaveError"] = $"الحد الأقصى لصور الفحص هو {MaxInspectionPhotosPerResult} صور لكل نتيجة.";
+                return RedirectToAction(nameof(Index), RouteValues(input));
+            }
+            foreach (var photo in lot.InspectionPhotos)
+            {
+                if (photo.Length <= 0 || photo.Length > MaxInspectionPhotoBytes)
+                {
+                    TempData["SaveError"] = "حجم كل صورة فحص يجب ألا يتجاوز 10 ميجابايت.";
+                    return RedirectToAction(nameof(Index), RouteValues(input));
+                }
+                if (string.IsNullOrWhiteSpace(photo.ContentType)
+                    || !photo.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["SaveError"] = "المسموح في صور الفحص هو ملفات الصور فقط.";
+                    return RedirectToAction(nameof(Index), RouteValues(input));
+                }
+            }
         }
 
         if (!short.TryParse(HttpContext.Session.GetString("UserId"), out short userId))
@@ -349,6 +375,36 @@ public class ImportRequestDetailsController : Controller
         }
 
         return RedirectToAction(nameof(Index), RouteValues(input));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ViewInspectionPhoto(long id)
+    {
+        if (HttpContext.Session.GetString("UserSession") != "Authenticated"
+            || !short.TryParse(HttpContext.Session.GetString("UserId"), out short userId))
+            return Unauthorized();
+
+        const string sql = """
+            SELECT photo.AttachmentPath_Binary, photo.Infection_Comment
+            FROM dbo.A_AttachmentData_Im_CommitteeResult_Infection photo
+            INNER JOIN dbo.Im_CommitteeResult result ON result.ID = photo.Im_CommitteeResult_id
+            INNER JOIN dbo.CommitteeEmployee employee ON employee.Committee_ID = result.Committee_ID
+              AND employee.Employee_Id = @UserId AND employee.OperationType = 74
+              AND employee.User_Deletion_Id IS NULL
+            WHERE photo.Id = @Id AND photo.AttachmentPath_Binary IS NOT NULL
+              AND result.User_Deletion_Id IS NULL
+            """;
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@Id", id);
+        command.Parameters.AddWithValue("@UserId", userId);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return NotFound();
+        var bytes = (byte[])reader.GetValue(0);
+        string contentType = reader.IsDBNull(1) ? "image/jpeg" : reader.GetString(1);
+        if (!contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) contentType = "image/jpeg";
+        return File(bytes, contentType);
     }
 
     [HttpPost]
@@ -1220,18 +1276,40 @@ public class ImportRequestDetailsController : Controller
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@CommitteeId", committeeId);
         command.Parameters.AddWithValue("@UserId", userId);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            results.Add(new AssistantResultVm
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                results.Add(new AssistantResultVm
+                {
+                    ResultId = reader.GetInt64(0), LotId = reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
+                    LotNumber = reader.IsDBNull(2) ? "—" : reader.GetString(2), ResultName = reader.IsDBNull(3) ? "—" : reader.GetString(3),
+                    AdminNotes = reader.IsDBNull(4) ? string.Empty : reader.GetString(4), IsTotal = !reader.IsDBNull(5) && reader.GetBoolean(5),
+                    ExistingAccepted = reader.IsDBNull(6) ? null : reader.GetBoolean(6), ExistingNotes = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    QuarantineStatus = reader.IsDBNull(8) ? "—" : reader.GetString(8),
+                    CanShowQuarantine = reader.GetBoolean(9),
+                    RequestItemId = reader.IsDBNull(10) ? 0 : reader.GetInt64(10)
+                });
+        }
+
+        if (results.Count > 0)
+        {
+            const string photosSql = """
+                SELECT photo.Id, photo.Im_CommitteeResult_id
+                FROM dbo.A_AttachmentData_Im_CommitteeResult_Infection photo
+                INNER JOIN dbo.Im_CommitteeResult result ON result.ID = photo.Im_CommitteeResult_id
+                WHERE result.Committee_ID = @CommitteeId AND photo.AttachmentPath_Binary IS NOT NULL
+                ORDER BY photo.Id
+                """;
+            await using var photosCommand = new SqlCommand(photosSql, connection);
+            photosCommand.Parameters.AddWithValue("@CommitteeId", committeeId);
+            var resultsById = results.ToDictionary(x => x.ResultId);
+            await using var photosReader = await photosCommand.ExecuteReaderAsync();
+            while (await photosReader.ReadAsync())
             {
-                ResultId = reader.GetInt64(0), LotId = reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
-                LotNumber = reader.IsDBNull(2) ? "—" : reader.GetString(2), ResultName = reader.IsDBNull(3) ? "—" : reader.GetString(3),
-                AdminNotes = reader.IsDBNull(4) ? string.Empty : reader.GetString(4), IsTotal = !reader.IsDBNull(5) && reader.GetBoolean(5),
-                ExistingAccepted = reader.IsDBNull(6) ? null : reader.GetBoolean(6), ExistingNotes = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
-                QuarantineStatus = reader.IsDBNull(8) ? "—" : reader.GetString(8),
-                CanShowQuarantine = reader.GetBoolean(9),
-                RequestItemId = reader.IsDBNull(10) ? 0 : reader.GetInt64(10)
-            });
+                if (resultsById.TryGetValue(photosReader.GetInt64(1), out var result))
+                    result.InspectionPhotoIds.Add(photosReader.GetInt64(0));
+            }
+        }
         return results;
     }
 
@@ -1348,6 +1426,7 @@ public class ImportRequestDetailsController : Controller
                     IS_Total_Android = @IsTotal,
                     User_Updation_Id = @UserId,
                     User_Updation_Date = GETDATE()
+                OUTPUT INSERTED.ID
                 WHERE Committee_ID = @CommitteeId
                   AND (
                       LotData_ID = @LotId
@@ -1366,6 +1445,15 @@ public class ImportRequestDetailsController : Controller
                       )
                   )
                   AND User_Deletion_Id IS NULL
+                """;
+
+            const string insertInspectionPhotoSql = """
+                INSERT INTO dbo.A_AttachmentData_Im_CommitteeResult_Infection
+                    (Id, Im_CommitteeResult_id, Infection_Comment, AttachmentPath_Binary,
+                     User_Creation_Id, User_Creation_Date)
+                VALUES
+                    (NEXT VALUE FOR dbo.A_AttachmentData_Im_CommitteeResult_Infection_SEQ,
+                     @ResultId, @ContentType, @Photo, @UserId, GETDATE())
                 """;
 
             const string closeOldStatusesSql = """
@@ -1424,6 +1512,7 @@ public class ImportRequestDetailsController : Controller
                   AND result.User_Deletion_Id IS NULL
                 """;
 
+            var resultsWithSavedPhotos = new HashSet<long>();
             foreach (var lot in input.Lots)
             {
                 await using var updateResult = new SqlCommand(updateResultSql, connection, transaction);
@@ -1435,9 +1524,26 @@ public class ImportRequestDetailsController : Controller
                 updateResult.Parameters.AddWithValue("@IsTotal", lot.IsTotal);
                 updateResult.Parameters.AddWithValue("@CommitteeId", input.CommitteeId);
                 updateResult.Parameters.AddWithValue("@LotId", lot.LotCategoryId);
-                int updatedResults = await updateResult.ExecuteNonQueryAsync();
-                if (updatedResults != 1)
+                object? updatedResult = await updateResult.ExecuteScalarAsync();
+                if (updatedResult == null || updatedResult == DBNull.Value)
                     throw new InvalidOperationException($"لم يتم العثور على سجل نتيجة الفحص للوط {lot.LotCategoryId} داخل اللجنة {input.CommitteeId}.");
+                long resultId = Convert.ToInt64(updatedResult);
+
+                if (lot.InspectionPhotos.Count > 0 && resultsWithSavedPhotos.Add(resultId))
+                {
+                    foreach (var photo in lot.InspectionPhotos)
+                    {
+                        await using var photoStream = new MemoryStream();
+                        await photo.CopyToAsync(photoStream);
+                        await using var insertPhoto = new SqlCommand(insertInspectionPhotoSql, connection, transaction);
+                        insertPhoto.Parameters.AddWithValue("@ResultId", resultId);
+                        insertPhoto.Parameters.AddWithValue("@ContentType", photo.ContentType);
+                        insertPhoto.Parameters.Add("@Photo", System.Data.SqlDbType.VarBinary, -1).Value = photoStream.ToArray();
+                        insertPhoto.Parameters.AddWithValue("@UserId", userId);
+                        if (await insertPhoto.ExecuteNonQueryAsync() != 1)
+                            throw new InvalidOperationException($"تعذر حفظ صورة الفحص للوط {lot.LotCategoryId}.");
+                    }
+                }
 
                 if (lot.QuarantineStatusId > 0)
                 {
@@ -1577,6 +1683,7 @@ public class AssistantResultVm
     public bool IsTotal { get; set; }
     public bool? ExistingAccepted { get; set; }
     public string ExistingNotes { get; set; } = string.Empty;
+    public List<long> InspectionPhotoIds { get; set; } = new();
 }
 
 public class AssistantOpinionSaveVm
@@ -1634,6 +1741,7 @@ public class ImportInspectionPlantVm
     public byte CommitteeResultTypeId { get; set; }
     public string Notes { get; set; } = string.Empty;
     public long InfectionItemId { get; set; }
+    public List<IFormFile> InspectionPhotos { get; set; } = new();
 }
 
 public class ImportInspectionLotVm
@@ -1647,6 +1755,7 @@ public class ImportInspectionLotVm
     public int QuarantineStatusId { get; set; }
     public string Notes { get; set; } = string.Empty;
     public long InfectionItemId { get; set; }
+    public List<IFormFile> InspectionPhotos { get; set; } = new();
 }
 
 public class ImportQuarantineSaveVm

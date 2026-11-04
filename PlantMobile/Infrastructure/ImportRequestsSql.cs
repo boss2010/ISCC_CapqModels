@@ -56,8 +56,7 @@ internal static class ImportRequestsSql
             FROM dbo.Im_CheckRequest_SampleData s JOIN #CompletionCommittees c ON c.ID=s.Im_RequestCommittee_ID
             WHERE c.ImCheckRequest_ID=lot.CheckRequestId AND c.CommitteeType_ID IN (11,13) AND c.User_Deletion_Id IS NULL
               AND s.User_Deletion_Id IS NULL AND (s.LotData_ID=lot.ID OR (s.LotData_ID IS NULL AND s.Im_Request_Item_Id=lot.RequestItemId))
-              AND (ISNULL(s.SampleSize,0)<=0 OR ISNULL(c.IsFinishedAll,0)=0 OR s.IsAccepted IS NULL
-                   OR NOT EXISTS (SELECT 1 FROM dbo.A_AttachmentData a WHERE a.RowId=s.ID AND a.A_AttachmentTableNameId=12 AND a.User_Deletion_Id IS NULL))
+              AND (ISNULL(s.SampleSize,0)<=0 OR ISNULL(c.IsFinishedAll,0)=0)
         ) pendingSamples
         WHERE (latestStatus.ID IS NOT NULL OR EXISTS (
               SELECT 1 FROM dbo.Im_CommitteeResult inspection

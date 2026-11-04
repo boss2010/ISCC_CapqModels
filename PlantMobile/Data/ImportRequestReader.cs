@@ -117,7 +117,7 @@ public sealed class ImportRequestReader(IDbContextFactory<ImportDbContext> facto
                     continue;
                 complete &= lot.Status?.Continues == false;
                 bool pendingWithdrawal = withdrawal.Any(s => (s.LotData_ID == lot.ID || (s.LotData_ID == null && s.Im_Request_Item_Id == lot.ItemId))
-                    && (s.SampleSize.GetValueOrDefault() <= 0 || committees[s.Im_RequestCommittee_ID].IsFinishedAll != true || s.IsAccepted == null || !s.HasAttachment));
+                    && (s.SampleSize.GetValueOrDefault() <= 0 || committees[s.Im_RequestCommittee_ID].IsFinishedAll != true));
                 pendingQuarantine |= lot.Status == null && inspection?.CommitteeResultType_ID != null && !pendingWithdrawal;
             }
             completion[id] = (any && complete, pendingQuarantine);

@@ -159,11 +159,7 @@ public class ImportRequestsController : Controller
                   AND NOT EXISTS (SELECT 1 FROM dbo.Im_CheckRequest_SampleData s JOIN dbo.Im_RequestCommittee c ON c.ID=s.Im_RequestCommittee_ID
                                   WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID IN (11,13) AND c.User_Deletion_Id IS NULL
                                     AND s.LotData_ID=lot.ID AND s.User_Deletion_Id IS NULL
-                                    AND (s.SampleSize IS NULL OR s.SampleSize<=0 OR ISNULL(c.IsFinishedAll,0)=0
-                                      OR s.IsAccepted IS NULL OR NOT EXISTS
-                                        (SELECT 1 FROM dbo.A_AttachmentData attachment
-                                         WHERE attachment.RowId=s.ID AND attachment.A_AttachmentTableNameId=12
-                                           AND attachment.User_Deletion_Id IS NULL)))
+                                    AND (s.SampleSize IS NULL OR s.SampleSize<=0 OR ISNULL(c.IsFinishedAll,0)=0))
                 """;
             const string saveSql="""
                 UPDATE dbo.Im_CheckRequest_Items_Lot_Result SET IS_Status_Committee=0 WHERE Im_CheckRequest_Items_Lot_Category_ID=@LotId;
@@ -361,7 +357,7 @@ public class ImportRequestsController : Controller
 }
 
 public class RequestQuarantineVm { public long CheckRequestId {get;set;} public string RequestNumber {get;set;}=string.Empty; public List<RequestQuarantineLotVm> Lots {get;set;}=new(); public List<RequestQuarantineStatusVm> Statuses {get;set;}=new(); }
-public class RequestQuarantineLotVm { public long RequestItemId {get;set;} public string PlantName {get;set;}=string.Empty; public long LotId {get;set;} public string LotNumber {get;set;}=string.Empty; public bool InspectionComplete {get;set;} public bool HasWithdrawal {get;set;} public bool WithdrawalComplete {get;set;} public bool LaboratoryResultComplete {get;set;} public int? ExistingStatusId {get;set;} public string ExistingStatusName {get;set;}=string.Empty; public bool? ExistingStatusContinues {get;set;} public bool InspectionUnavailable {get;set;} public bool IsReady=>!InspectionUnavailable&&InspectionComplete&&WithdrawalComplete&&(!HasWithdrawal||LaboratoryResultComplete); }
+public class RequestQuarantineLotVm { public long RequestItemId {get;set;} public string PlantName {get;set;}=string.Empty; public long LotId {get;set;} public string LotNumber {get;set;}=string.Empty; public bool InspectionComplete {get;set;} public bool HasWithdrawal {get;set;} public bool WithdrawalComplete {get;set;} public bool LaboratoryResultComplete {get;set;} public int? ExistingStatusId {get;set;} public string ExistingStatusName {get;set;}=string.Empty; public bool? ExistingStatusContinues {get;set;} public bool InspectionUnavailable {get;set;} public bool IsReady=>!InspectionUnavailable&&InspectionComplete&&WithdrawalComplete; }
 public class RequestQuarantineStatusVm { public int Id {get;set;} public string Name {get;set;}=string.Empty; public bool IsContinue {get;set;} }
 public class RequestQuarantineSaveVm { public long CheckRequestId {get;set;} public List<RequestQuarantineSaveLotVm> Lots {get;set;}=new(); }
 public class RequestQuarantineSaveLotVm { public long LotId {get;set;} public int StatusId {get;set;} public string? Notes {get;set;} }
