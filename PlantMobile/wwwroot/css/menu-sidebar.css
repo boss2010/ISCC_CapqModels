@@ -1,0 +1,273 @@
+/* ---------------------------------------------------------------------------
+   Navigation menu — visual port of the legacy DrawMenu sidebar.
+   Every rule is scoped under #pq-menu (or the .pq-* shell) so it cannot leak
+   into the Bootstrap 4 pages.
+   --------------------------------------------------------------------------- */
+
+/* ---------- shell ---------- */
+.pq-shell {
+    display: flex;
+    direction: rtl; /* the page is rtl, so the first flex item (the sidebar) sits on the right */
+    align-items: stretch;
+}
+
+.pq-sidebar {
+    flex: 0 0 215px;
+    width: 215px;
+    background: #58595b;
+}
+
+.pq-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.pq-menu-toggle {
+    display: none;
+}
+
+.pq-backdrop {
+    display: none;
+}
+
+/* ---------- sidebar ---------- */
+#pq-menu {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    direction: rtl;
+    text-align: right;
+    background: #58595b;
+    color: #fff;
+    font-family: "Cairo-Regular", Tahoma, Arial, sans-serif;
+}
+
+#pq-menu * ,
+#pq-menu *::before,
+#pq-menu *::after {
+    box-sizing: border-box;
+}
+
+#pq-menu .pq-menu-brand {
+    text-align: center;
+    padding: 10px 0 8px;
+}
+
+#pq-menu .pq-menu-brand img {
+    max-width: 80px;
+    height: auto;
+}
+
+#pq-menu .pq-menu-empty {
+    margin: 0;
+    padding: 15px 10px;
+    font-size: 13px;
+    color: #f3f3f3;
+}
+
+/* ---------- level 1: groups ---------- */
+#pq-menu .mainNav {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    background: #728359;
+    position: relative;
+    top: -3px;
+}
+
+#pq-menu .mainNav > li {
+    border-top: 1px solid #f9dbc8;
+    position: relative;
+}
+
+#pq-menu .mainNav > li:last-child {
+    border-bottom: 1px solid #96d2af;
+}
+
+#pq-menu .mainNav a {
+    display: block;
+    position: relative;
+    padding: 10px 4px 10px 2px;
+    line-height: 13px;
+    font-size: 16px;
+    color: #fff;
+    text-decoration: none;
+    outline: 0;
+    transition: all .3s ease-in-out;
+}
+
+#pq-menu .mainNav a i {
+    margin-left: 5px;
+    width: 15px;
+    font-size: 20px;
+    color: #fffbe9;
+}
+
+#pq-menu .mainNav a span {
+    line-height: 13px;
+    font-size: 15px;
+}
+
+#pq-menu .mainNav a b {
+    float: left;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+#pq-menu .mainNav a b .fas {
+    font-size: 12px;
+    opacity: .85;
+}
+
+#pq-menu .mainNav a:hover {
+    background-color: #94a978;
+    font-weight: bold;
+    transition: all .3s ease-in-out;
+}
+
+#pq-menu .mainNav > li > a {
+    padding-right: 10px;
+}
+
+/* ---------- level 2: modules ---------- */
+#pq-menu .mainNav ul {
+    margin: 0;
+    padding: 0;
+    display: none;
+    list-style: none;
+    background: #4b788f;
+}
+
+#pq-menu .mainNav li.active > ul {
+    display: block;
+}
+
+#pq-menu .mainNav ul li {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    clear: both;
+}
+
+#pq-menu .mainNav ul > li > a {
+    padding-right: 20px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+#pq-menu .mainNav ul > li > a::after {
+    content: "\f192";
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 11px;
+    color: #fafbd3;
+    float: right;
+    margin-left: 5px;
+}
+
+#pq-menu .mainNav ul > li > a:hover {
+    background-color: #efb984;
+    color: #515e3b;
+    font-weight: bold;
+}
+
+#pq-menu .mainNav ul > li.active > a {
+    color: #fff;
+    background-color: #7a8b83;
+}
+
+#pq-menu .mainNav ul > li.active > a::after {
+    color: #fff;
+}
+
+/* ---------- level 3: screens ---------- */
+#pq-menu .mainNav ul ul {
+    background: #1b6669;
+}
+
+#pq-menu .mainNav ul ul > li > a {
+    padding-right: 30px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #161e04;
+    background-color: #6ac991;
+}
+
+#pq-menu .mainNav ul ul > li > a::after {
+    content: "\f111";
+    color: #161e04;
+}
+
+#pq-menu .mainNav ul ul > li > a:hover {
+    background: #feffdff2;
+    color: #161e04;
+}
+
+#pq-menu .mainNav ul ul > li > a:hover::after {
+    color: #39627f;
+}
+
+#pq-menu .mainNav ul ul > li.active > a {
+    background-color: #e16500;
+    color: #fafbd3;
+}
+
+#pq-menu .mainNav ul ul > li.active > a::after {
+    color: #fafbd3;
+}
+
+/* ---------- small screens: slide-in sidebar ---------- */
+@media (max-width: 991.98px) {
+    .pq-shell {
+        display: block;
+    }
+
+    .pq-menu-toggle {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .pq-sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1055;
+        width: 260px;
+        flex: none;
+        transform: translateX(100%);
+        transition: transform .25s ease-in-out;
+        overflow-y: auto;
+        box-shadow: -4px 0 18px rgba(0, 0, 0, .35);
+    }
+
+    .pq-sidebar.open {
+        transform: translateX(0);
+    }
+
+    #pq-menu {
+        position: static;
+        max-height: none;
+    }
+
+    .pq-backdrop {
+        display: block;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1050;
+        background: rgba(0, 0, 0, .45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease-in-out;
+    }
+
+    .pq-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}

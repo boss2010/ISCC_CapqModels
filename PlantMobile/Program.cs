@@ -9,6 +9,9 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddPooledDbContextFactory<EF.Imports.ImportDbContext>(options =>
     PlantMobile.Data.ImportDatabase.Configure(options, builder.Configuration));
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
+builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Logging.AddProvider(new DailyFileLoggerProvider(
     Path.Combine(builder.Environment.ContentRootPath, "Logs")));
 /////////////////rrr8-5-2025/////////////////////////
