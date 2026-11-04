@@ -1,0 +1,36 @@
+@{
+    ViewData["Title"] = "هذه الشاشة غير متاحة";
+    var code = (string?)ViewBag.Code ?? "404";
+}
+<div class="row justify-content-center">
+    <div class="col-xl-7 col-lg-8 col-md-10">
+        <div class="text-center py-5 my-4">
+            <div class="mb-4">
+                <span class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                      style="width:110px;height:110px;background:#faf3de;border:1px solid #ecd9a8;">
+                    <i class="fas fa-user-shield" style="font-size:52px;color:#DFB163;"></i>
+                </span>
+            </div>
+            <h1 class="mb-2" style="font-family:'Cairo',sans-serif;font-size:1.9rem;color:#252531;font-weight:700;">
+                هذه الشاشة غير متاحة دلوقتي
+            </h1>
+            <p class="mb-1" style="font-size:1.05rem;color:#55535f;">
+                الصفحة اللي طلبتها مش متوفرة أو لسه متفعّلتش، ولا تقدر توصلها بنفسك.
+            </p>
+            <p class="mb-4" style="font-size:1rem;color:#55535f;">
+                لو محتاج الشاشة دي <strong>اسأل الأدمن / مسئول النظام</strong> عشان يفعّلها أو يضيف صلاحيتك عليها.
+            </p>
+            <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+                <a href="/" class="btn btn-primary btn-lg" style="background:#DFB163;border-color:#DFB163;color:#181818;min-width:180px;">
+                    <i class="fas fa-home mr-2"></i> الرجوع للرئيسية
+                </a>
+                <button type="button" class="btn btn-outline-dark btn-lg" onclick="history.back()" style="min-width:160px;">
+                    <i class="fas fa-arrow-right mr-2"></i> رجوع
+                </button>
+            </div>
+            <div class="mt-4" style="font-size:.8rem;color:#9b9ba6;direction:ltr;">
+                Error @code
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,61 @@
+@model PlantMobile.Models.Menu.MenuViewModel
+
+<div id="pq-menu" class="pq-menu">
+    <div class="pq-menu-brand">
+        <img src="~/img/logo-capq2.png" alt="الحجر الزراعي" />
+    </div>
+    <div class="pq-menu-caption">القائمة الرئيسية</div>
+
+    @if (Model.IsEmpty)
+    {
+        <p class="pq-menu-empty">لا توجد صلاحيات معروضة لهذا المستخدم.</p>
+    }
+    else
+    {
+        <ul class="mainNav">
+            @foreach (var group in Model.Groups)
+            {
+                <li class="pq-group@(group.IsActive ? " active" : "")">
+                    <a href="#" class="pq-group-link">
+                        <i class="fas fa-leaf pq-leaf"></i>
+                        <span>@group.Group.Title</span>
+                        <i class="fas fa-chevron-down pq-sign"></i>
+                    </a>
+                    <ul>
+                        @foreach (var module in group.Modules)
+                        {
+                            var singleDirect = module.Items.Count == 1 && module.Items[0].Href != "#"
+                                ? module.Items[0]
+                                : null;
+                            <li class="pq-module@(module.IsActive ? " active" : "")">
+                                @if (singleDirect is not null)
+                                {
+                                    // a module with exactly one screen: one tap goes straight to it
+                                    <a href="@singleDirect.Href" class="pq-module-link pq-direct" data-menu-id="@singleDirect.Item.Id">
+                                        <span>@module.Module.Title</span>
+                                        <i class="fas fa-arrow-left pq-sign"></i>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="#" class="pq-module-link">
+                                        <span>@module.Module.Title</span>
+                                        <i class="fas fa-chevron-down pq-sign"></i>
+                                    </a>
+                                    <ul>
+                                        @foreach (var item in module.Items)
+                                        {
+                                            <li class="pq-item@(item.IsActive ? " active" : "")">
+                                                <a href="@item.Href" data-menu-id="@item.Item.Id">@item.Item.Title</a>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </li>
+            }
+        </ul>
+    }
+</div>

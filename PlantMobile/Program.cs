@@ -9,6 +9,9 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddPooledDbContextFactory<EF.Imports.ImportDbContext>(options =>
     PlantMobile.Data.ImportDatabase.Configure(options, builder.Configuration));
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
+builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Logging.AddProvider(new DailyFileLoggerProvider(
     Path.Combine(builder.Environment.ContentRootPath, "Logs")));
 /////////////////rrr8-5-2025/////////////////////////
@@ -48,7 +51,32 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
-// Enable CORS
+
+// Replace raw 404 responses for page requests with a friendly "ask the admin" page.
+// Static assets (paths with a file extension) and pages that already produced a
+// response keep the real 404. Registered first so it observes the final status.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    var response = context.Response;
+    if (response.StatusCode != StatusCodes.Status404NotFound || response.HasStarted)
+    {
+        return;
+    }
+
+    var path = context.Request.Path.Value ?? string.Empty;
+
+    if (Path.HasExtension(path) ||
+        path.StartsWith("/Unavailable", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/Home/Error", StringComparison.OrdinalIgnoreCase) ||
+        response.ContentLength is > 0)
+    {
+        return;
+    }
+
+    response.Redirect("/Unavailable?code=404");
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
