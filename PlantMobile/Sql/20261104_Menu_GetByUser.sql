@@ -10,6 +10,8 @@
     * @ApplicationCategoryId = 1 is the legacy web application (PR_Application.PR_ApplicationCategoryId).
     * Menu/module Active flags are ignored by default, exactly like the legacy screens.
       Add the two lines marked STRICT to reproduce Menu:RespectActiveFlags = true.
+    * Only rows flagged isEnableAndroid = 1 appear by default (Menu:OnlyEnabledForAndroid = true).
+      Flip @OnlyAndroidEnabled to 0 to see every permitted screen again.
     * The legacy screen also hides Im_CheckRequests/Im_Fumigation/ReleaseSupervisorTasks
       unconditionally (DrawMenuController). The application removes it in
       MenuService (Menu:ExcludedUrls), so the raw counts below can differ by one row
@@ -19,6 +21,7 @@
 DECLARE @UserId smallint = 1;
 DECLARE @IsArabic bit = 1;
 DECLARE @ApplicationCategoryId int = 1;
+DECLARE @OnlyAndroidEnabled bit = 1; -- 1 = only isEnableAndroid rows (matches Menu:OnlyEnabledForAndroid)
 
 /* ------------------------- New single query ------------------------- */
 CREATE TABLE #NewMenu
@@ -67,6 +70,7 @@ JOIN (
  AND mo.PR_MenuId = um.PR_MenuId
 WHERE g.Active = 1
   AND app.PR_ApplicationCategoryId = @ApplicationCategoryId
+  AND (@OnlyAndroidEnabled = 0 OR mn.isEnableAndroid = 1)
 -- STRICT (uncomment to match Menu:RespectActiveFlags = true)
 --AND ISNULL(mod.Active, 1) = 1
 --AND ISNULL(mn.Active, 1) = 1

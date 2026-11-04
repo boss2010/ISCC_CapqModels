@@ -24,19 +24,33 @@
                     <ul>
                         @foreach (var module in group.Modules)
                         {
+                            var singleDirect = module.Items.Count == 1 && module.Items[0].Href != "#"
+                                ? module.Items[0]
+                                : null;
                             <li class="pq-module@(module.IsActive ? " active" : "")">
-                                <a href="#" class="pq-module-link">
-                                    <span>@module.Module.Title</span>
-                                    <i class="fas fa-chevron-down pq-sign"></i>
-                                </a>
-                                <ul>
-                                    @foreach (var item in module.Items)
-                                    {
-                                        <li class="pq-item@(item.IsActive ? " active" : "")">
-                                            <a href="@item.Href" data-menu-id="@item.Item.Id">@item.Item.Title</a>
-                                        </li>
-                                    }
-                                </ul>
+                                @if (singleDirect is not null)
+                                {
+                                    // a module with exactly one screen: one tap goes straight to it
+                                    <a href="@singleDirect.Href" class="pq-module-link pq-direct" data-menu-id="@singleDirect.Item.Id">
+                                        <span>@module.Module.Title</span>
+                                        <i class="fas fa-arrow-left pq-sign"></i>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="#" class="pq-module-link">
+                                        <span>@module.Module.Title</span>
+                                        <i class="fas fa-chevron-down pq-sign"></i>
+                                    </a>
+                                    <ul>
+                                        @foreach (var item in module.Items)
+                                        {
+                                            <li class="pq-item@(item.IsActive ? " active" : "")">
+                                                <a href="@item.Href" data-menu-id="@item.Item.Id">@item.Item.Title</a>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
                             </li>
                         }
                     </ul>

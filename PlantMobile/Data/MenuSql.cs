@@ -9,15 +9,20 @@ internal static class MenuSql
     /// <summary>
     /// Builds the menu query. When <paramref name="respectActiveFlags"/> is false the query keeps
     /// the legacy behaviour (menu and module Active flags are ignored), so the result is identical
-    /// to the old screens.
+    /// to the old screens. When <paramref name="onlyEnabledForAndroid"/> is true only menu rows
+    /// flagged <c>isEnableAndroid = 1</c> are returned (false hides nothing).
     /// </summary>
-    public static string Build(bool respectActiveFlags) =>
-        Template.Replace("{{ACTIVE_FILTER}}", respectActiveFlags ? StrictActiveFilter : string.Empty);
+    public static string Build(bool respectActiveFlags, bool onlyEnabledForAndroid) =>
+        Template
+            .Replace("{{ACTIVE_FILTER}}", respectActiveFlags ? StrictActiveFilter : string.Empty)
+            .Replace("{{ANDROID_FILTER}}", onlyEnabledForAndroid ? OnlyAndroidFilter : string.Empty);
 
     private const string StrictActiveFilter = """
           AND ISNULL(mod.Active, 1) = 1
           AND ISNULL(mn.Active, 1) = 1
         """;
+
+    private const string OnlyAndroidFilter = "  AND mn.isEnableAndroid = 1";
 
     private const string Template = """
         WITH UserMenus AS (
@@ -60,6 +65,7 @@ internal static class MenuSql
         WHERE g.Active = 1
           AND app.PR_ApplicationCategoryId = @ApplicationCategoryId
         {{ACTIVE_FILTER}}
+        {{ANDROID_FILTER}}
         ORDER BY g.Id, mod.Id, ISNULL(mo.Order_BY, 2147483647), mn.Id;
         """;
 }

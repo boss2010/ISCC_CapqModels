@@ -9,6 +9,7 @@ public sealed class MenuReader
     private readonly string _connectionString;
     private readonly int _applicationCategoryId;
     private readonly bool _respectActiveFlags;
+    private readonly bool _onlyEnabledForAndroid;
 
     public MenuReader(IConfiguration configuration)
     {
@@ -16,6 +17,7 @@ public sealed class MenuReader
             ?? throw new InvalidOperationException("PrivilegeDBConnection is not configured.");
         _applicationCategoryId = configuration.GetValue("Menu:ApplicationCategoryId", 1);
         _respectActiveFlags = configuration.GetValue("Menu:RespectActiveFlags", false);
+        _onlyEnabledForAndroid = configuration.GetValue("Menu:OnlyEnabledForAndroid", true);
     }
 
     public async Task<IReadOnlyList<MenuRow>> ReadAsync(int userId, bool isArabic, CancellationToken cancellationToken = default)
@@ -23,7 +25,7 @@ public sealed class MenuReader
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        await using var command = new SqlCommand(MenuSql.Build(_respectActiveFlags), connection)
+        await using var command = new SqlCommand(MenuSql.Build(_respectActiveFlags, _onlyEnabledForAndroid), connection)
         {
             CommandTimeout = 30
         };

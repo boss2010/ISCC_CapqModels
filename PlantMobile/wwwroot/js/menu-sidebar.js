@@ -30,6 +30,11 @@
 
         $menu.on('click', 'a', function (e) {
             var $link = $(this);
+
+            if ($link.hasClass('pq-direct')) {
+                return; // one-screen module: a normal link, navigate directly
+            }
+
             var $sub = $link.next('ul');
 
             if (!$sub.length) {
