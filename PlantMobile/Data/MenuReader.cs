@@ -25,7 +25,12 @@ public sealed class MenuReader
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        await using var command = new SqlCommand(MenuSql.Build(_respectActiveFlags, _onlyEnabledForAndroid), connection)
+        var supportsAndroidMenuFlag = !_onlyEnabledForAndroid ||
+            await HasAndroidMenuFlagAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        await using var command = new SqlCommand(
+            MenuSql.Build(_respectActiveFlags, _onlyEnabledForAndroid && supportsAndroidMenuFlag),
+            connection)
         {
             CommandTimeout = 30
         };
@@ -52,6 +57,17 @@ public sealed class MenuReader
         }
 
         return rows;
+    }
+
+    private static async Task<bool> HasAndroidMenuFlagAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            "SELECT CASE WHEN COL_LENGTH('dbo.PR_Menu', 'isEnableAndroid') IS NULL THEN 0 ELSE 1 END;",
+            connection);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt32(result) == 1;
     }
 
     private static bool ReadFlag(SqlDataReader reader, int ordinal) =>

@@ -86,7 +86,10 @@ internal static class ImportRequestsSql
             INNER JOIN dbo.CommitteeType type ON type.ID = committee.CommitteeType_ID
             LEFT JOIN dbo.Im_OpertaionType operation ON operation.ID = request.Im_OperationType
             WHERE request.IsActive = 1
-              AND committee.IsApproved = 1
+              -- Treatment committees are assigned before IsApproved is populated in
+              -- the current workflow. Keep approval mandatory for inspection and
+              -- withdrawal, but do not hide an assigned treatment committee.
+              AND (committee.IsApproved = 1 OR committee.CommitteeType_ID = 14)
               AND committee.User_Deletion_Id IS NULL
               AND committee.CommitteeType_ID IN (11, 13, 14)
               AND NOT (committee.CommitteeType_ID = 13

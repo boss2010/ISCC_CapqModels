@@ -1,109 +1,110 @@
 @model ViewModels.ListImPermissionFilterVm
 @{
-    ViewData["Title"] = "أذون الاستيراد";
+    ViewData["Title"] = "قائمة أذونات الاستيراد";
+    int firstResult = Model.TotalCount == 0 ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
+    int lastResult = Math.Min(Model.Page * Model.PageSize, Model.TotalCount);
 }
+<link rel="stylesheet" href="~/css/bootstrap-select.css" />
 
-<div class="container-fluid py-4" dir="rtl">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h2 class="text-primary mb-1">أذون الاستيراد</h2>
-            <div class="text-muted">يتم عرض آخر 7 أيام تلقائيًا، ويمكن تعديل فترة البحث.</div>
-        </div>
+<style>
+    .permission-page{direction:rtl;max-width:1500px;margin:0 auto;padding:28px 18px;color:#25343b}
+    .page-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+    .page-heading h2{color:#246b70;margin:0;font-weight:800}.page-heading p{margin:5px 0 0;color:#71838b}
+    .permission-stats{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:16px;margin-bottom:20px}
+    .permission-stat{position:relative;overflow:hidden;min-height:112px;border:0;border-radius:16px;padding:20px 22px;color:#fff!important;text-align:right;box-shadow:0 8px 22px rgba(28,52,65,.13);transition:.2s;text-decoration:none!important}
+    .permission-stat:after{content:"";position:absolute;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.1);left:-22px;bottom:-35px}
+    .permission-stat:hover,.permission-stat.active{transform:translateY(-3px);box-shadow:inset 0 0 0 3px rgba(255,255,255,.82),0 12px 28px rgba(28,52,65,.22)}
+    .permission-stat strong{display:block;font-size:34px;line-height:1;margin-bottom:12px}.permission-stat span{font-size:15px;font-weight:700}
+    .stat-all{background:linear-gradient(135deg,#246b83,#2f94a8)}.stat-pending{background:linear-gradient(135deg,#c27b13,#edae35)}
+    .stat-approved{background:linear-gradient(135deg,#247449,#3eaa70)}.stat-rejected{background:linear-gradient(135deg,#a43b45,#d85a64)}.stat-unpaid{background:linear-gradient(135deg,#7551a5,#9b72cf)}
+    .filter-form{background:#fff;border:1px solid #e5ecef;border-radius:16px;padding:0 22px 22px;box-shadow:0 6px 22px rgba(28,52,65,.07);margin-bottom:20px}
+    .filter-title{margin:0 -22px 20px;padding:16px 22px;border-bottom:1px solid #e8eef1;font-size:18px;font-weight:700;color:#246b70;display:flex;justify-content:space-between;align-items:center}
+    .filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.filter-form label{display:block;margin-bottom:7px;color:#40545d;font-weight:700}
+    .filter-form .form-control{height:42px;border:1px solid #d8e2e6;border-radius:8px;box-shadow:none}.filter-form .form-control:focus{border-color:#2b9295;box-shadow:0 0 0 3px rgba(43,146,149,.12)}
+    .filter-form .bootstrap-select{width:100%!important}.filter-form .bootstrap-select>.dropdown-toggle{height:42px;border:1px solid #d8e2e6;background:#fff;color:#40545d;border-radius:8px}.filter-form .bootstrap-select .dropdown-menu{right:0;left:auto;text-align:right}.filter-form .bs-searchbox input{height:38px!important;direction:rtl}
+    .filter-actions{display:flex;justify-content:center;gap:8px;padding-top:18px}.filter-actions .btn{min-width:110px;border-radius:8px;padding:9px 20px}
+    .permission-table-card{background:#fff;border:1px solid #e5ecef;border-radius:16px;box-shadow:0 6px 22px rgba(28,52,65,.07);overflow:hidden}
+    .table-card-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e8eef1}.table-card-head h3{margin:0;font-size:18px}.results-summary{color:#667982;font-weight:700;background:#f0f7f7;padding:7px 12px;border-radius:20px}
+    .permission-table{margin:0}.permission-table thead{background:#287f82;color:#fff}.permission-table thead th{padding:13px 9px;border:0;white-space:nowrap;text-align:center}
+    .permission-table tbody td{padding:12px 9px;border:0;border-bottom:1px solid #edf1f3;vertical-align:middle;text-align:center;font-size:14px}.permission-table tbody tr:nth-child(even) td{background:#f8fafb}.permission-table tbody tr:hover td{background:#eef8f8}
+    .action-link{display:inline-block;color:#21777a;background:#e8f5f5;border-radius:7px;padding:6px 12px;font-weight:700;text-decoration:none}.action-link:hover{background:#21777a;color:#fff}
+    .state-badge{display:inline-block;border-radius:20px;padding:6px 11px;font-size:12px;font-weight:700;white-space:nowrap}.state-success{color:#177245;background:#e5f6ed}.state-warning{color:#94600b;background:#fff3d8}.state-danger{color:#a4323c;background:#fde9eb}.state-muted{color:#586b74;background:#edf1f3}
+    .permission-pagination{padding:18px;display:flex;justify-content:center}.permission-pagination .pagination{margin:0;flex-wrap:wrap}.permission-pagination .page-link{color:#21777a}.permission-pagination .active .page-link{background:#287f82;border-color:#287f82;color:#fff}
+    @@media(max-width:900px){.permission-stats{grid-template-columns:repeat(2,1fr)}.filter-grid{grid-template-columns:repeat(2,1fr)}}
+    @@media(max-width:520px){.permission-page{padding:16px 10px}.page-heading{align-items:flex-start;flex-direction:column}.page-heading .btn{width:100%}.permission-stats,.filter-grid{grid-template-columns:1fr}.permission-stat{min-height:92px}.table-card-head{align-items:flex-start;flex-direction:column;gap:10px}.filter-actions{flex-direction:column}.filter-actions .btn{width:100%}}
+</style>
+
+<div class="permission-page">
+    <div class="page-heading">
+        <div><h2>قائمة أذونات الاستيراد</h2><p>البحث والمتابعة بنفس بيانات شاشة النظام الأصلية</p></div>
         <a asp-controller="ImportRequests" asp-action="Index" class="btn btn-outline-secondary">العودة للطلبات</a>
     </div>
 
-    @if (ViewBag.PageError is string pageError)
-    {
-        <div class="alert alert-danger">@pageError</div>
-    }
+    @if (ViewBag.PageError is string pageError) { <div class="alert alert-danger">@pageError</div> }
+    <div asp-validation-summary="All" class="alert alert-warning"></div>
 
-    <form method="get" asp-controller="ListIm_Permission" asp-action="Index" class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">فلاتر البحث</div>
-        <div class="card-body">
-            <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
-            <div class="row g-3">
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="fromDate">من تاريخ</label>
-                    <input class="form-control" id="fromDate" name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" />
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="toDate">إلى تاريخ</label>
-                    <input class="form-control" id="toDate" name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" />
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="permissionNumber">رقم الإذن أو جزء منه</label>
-                    <input class="form-control" id="permissionNumber" name="permissionNumber" value="@Model.PermissionNumber" placeholder="مثال: 123" />
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="country">الدولة</label>
-                    <input class="form-control" id="country" name="country" value="@Model.Country" placeholder="اسم الدولة أو جزء منه" />
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="company">الشركة</label>
-                    <input class="form-control" id="company" name="company" value="@Model.Company" placeholder="اسم الشركة أو جزء منه" />
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <label class="form-label fw-bold" for="shortName">الاسم المختصر</label>
-                    <input class="form-control" id="shortName" name="shortName" value="@Model.ShortName" placeholder="الاسم أو جزء منه" />
-                </div>
+    <div class="permission-stats">
+        <button type="button" data-status="5" class="permission-stat stat-all @(Model.Status==5?"active":"")"><strong>@Model.AllCount</strong><span>إجمالي الطلبات</span></button>
+        <button type="button" data-status="3" class="permission-stat stat-pending @(Model.Status==3?"active":"")"><strong>@Model.PendingCount</strong><span>لم يُتخذ إجراء</span></button>
+        <button type="button" data-status="2" class="permission-stat stat-approved @(Model.Status==2?"active":"")"><strong>@Model.ApprovedCount</strong><span>تمت الموافقة والطباعة</span></button>
+        <button type="button" data-status="4" class="permission-stat stat-rejected @(Model.Status==4?"active":"")"><strong>@Model.RejectedCount</strong><span>مرفوضة</span></button>
+        <button type="button" data-status="6" class="permission-stat stat-unpaid @(Model.Status==6?"active":"")"><strong>@Model.UnpaidCount</strong><span>لم يتم الدفع</span></button>
+    </div>
+
+    <form method="get" asp-action="Index" class="filter-form" id="permissionFilterForm">
+        <input type="hidden" name="status" value="@Model.Status"/><input type="hidden" name="page" value="1"/>
+        <div class="filter-title"><span><i class="fas fa-search"></i> البحث والتصفية</span><button type="button" class="btn btn-sm btn-link" id="toggleFilters">إخفاء</button></div>
+        <div id="filterFields">
+            <div class="filter-grid">
+                <div><label for="permissionNumber">البحث برقم الإذن</label><input class="form-control" id="permissionNumber" name="permissionNumber" value="@Model.PermissionNumber" placeholder="اكتب رقم الإذن أو جزءًا منه"/></div>
+                <div><label for="countryId">الدولة</label><select class="selectpicker" data-live-search="true" data-live-search-placeholder="ابحث داخل الدول..." data-none-selected-text="الكل" id="countryId" name="countryId"><option value="">الكل</option></select></div>
+                <div><label for="companyId">اسم الشركة</label><select class="selectpicker remote-select" data-source="companies" data-live-search="true" data-live-search-placeholder="ابحث داخل الشركات..." data-none-selected-text="الكل" id="companyId" name="companyId"><option value="">الكل</option></select></div>
+                <div><label for="shortNameId">الصنف</label><select class="selectpicker remote-select" data-source="items" data-live-search="true" data-live-search-placeholder="ابحث داخل الأصناف..." data-none-selected-text="الكل" id="shortNameId" name="shortNameId"><option value="">الكل</option></select></div>
+                <div><label for="fromDate">التاريخ من</label><input class="form-control" type="date" id="fromDate" name="fromDate" value="@Model.FromDate.ToString("yyyy-MM-dd")"/></div>
+                <div><label for="toDate">التاريخ إلى</label><input class="form-control" type="date" id="toDate" name="toDate" value="@Model.ToDate.ToString("yyyy-MM-dd")"/></div>
             </div>
-            <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-primary px-4"><i class="fas fa-search"></i> بحث</button>
-                <a asp-controller="ListIm_Permission" asp-action="Index" class="btn btn-outline-secondary">آخر 7 أيام</a>
-            </div>
+            <div class="filter-actions"><button type="submit" class="btn btn-primary">بحث</button><a asp-action="Index" class="btn btn-outline-secondary">حذف</a></div>
         </div>
     </form>
 
-    <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <strong>نتائج البحث</strong>
-            <span class="badge bg-info text-dark">@Model.Results.Count نتيجة</span>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>رقم الإذن</th>
-                        <th>تاريخ الوصول</th>
-                        <th>بداية الإذن</th>
-                        <th>نهاية الإذن</th>
-                        <th>الدولة</th>
-                        <th>الشركة</th>
-                        <th>الاسم المختصر</th>
-                        <th>نوع العملية</th>
-                        <th>الحالة</th>
-                        <th>الدفع</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Model.Results.Count == 0)
-                    {
-                        <tr><td colspan="10" class="text-center text-muted py-4">لا توجد نتائج مطابقة للفلاتر المختارة.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var item in Model.Results)
-                        {
-                            <tr>
-                                <td class="fw-bold"><a href="@Url.Content($"~/Im_Permissions/Im_permissionDetail/Index?ImPermission_Number={Uri.EscapeDataString(item.PermissionNumber)}")" class="text-primary">@(string.IsNullOrWhiteSpace(item.PermissionNumber) ? "—" : item.PermissionNumber)</a></td>
-                                <td>@item.ArrivalDate.ToString("yyyy/MM/dd")</td>
-                                <td>@(item.StartDate?.ToString("yyyy/MM/dd") ?? "—")</td>
-                                <td>@(item.EndDate?.ToString("yyyy/MM/dd") ?? "—")</td>
-                                <td>@(string.IsNullOrWhiteSpace(item.Country) ? "—" : item.Country)</td>
-                                <td><div>@(string.IsNullOrWhiteSpace(item.Company) ? "—" : item.Company)</div><small class="text-muted">@item.ImporterType</small></td>
-                                <td>@(string.IsNullOrWhiteSpace(item.ShortName) ? "—" : item.ShortName)</td>
-                                <td>@(string.IsNullOrWhiteSpace(item.OperationType) ? "—" : item.OperationType)</td>
-                                <td>
-                                    @if (item.IsAccepted == true) { <span class="badge bg-success">مقبول</span> }
-                                    else if (item.IsAccepted == false) { <span class="badge bg-danger">مرفوض</span> }
-                                    else { <span class="badge bg-secondary">تحت الإجراء</span> }
-                                </td>
-                                <td>@if (item.IsPaid == true) { <span class="badge bg-success">تم الدفع</span> } else { <span class="badge bg-warning text-dark">غير مدفوع</span> }</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
+    <div class="permission-table-card">
+        <div class="table-card-head"><h3>قائمة أذونات الاستيراد</h3><div class="results-summary">عرض @firstResult–@lastResult من @Model.TotalCount</div></div>
+        <div class="table-responsive"><table class="table permission-table"><thead><tr><th>م</th><th>رقم إذن الاستيراد</th><th>الصنف</th><th>نوع المستورد</th><th>اسم المستورد</th><th>دولة التصدير</th><th>تاريخ الطلب</th><th>التفاصيل</th><th>الحالة والطباعة</th></tr></thead><tbody>
+        @if (Model.Results.Count == 0) { <tr><td colspan="9" class="py-4 text-muted">لا توجد نتائج مطابقة للبحث</td></tr> }
+        @foreach (var item in Model.Results)
+        {
+            <tr><td>@item.RowNumber</td><td>@item.PermissionNumber</td><td>@(string.IsNullOrWhiteSpace(item.ShortName)?"—":item.ShortName)</td><td>@item.ImporterType</td><td>@item.Company</td><td>@item.Country</td><td>@item.ArrivalDate.ToString("dd/MM/yyyy")</td>
+            <td><a class="action-link" href="@Url.Content($"~/Im_Permissions/Im_permissionDetail/Index?ImPermission_Number={Uri.EscapeDataString(item.PermissionNumber)}")">التفاصيل</a></td><td>
+            @if(item.IsAccepted==true && item.IsPaid==true && item.IsPrintArabic==true && item.IsPrintEnglish==true){<span class="state-badge state-success">تمت الموافقة والدفع والطباعة</span>}
+            else if(item.IsAccepted==true && item.IsPaid==true){<span class="state-badge state-success">تمت الموافقة والدفع</span>}
+            else if(item.IsAccepted==true){<span class="state-badge state-warning">تمت الموافقة ولم يتم الدفع</span>}
+            else if(item.IsAccepted==false){<span class="state-badge state-danger">تم رفض الطلب</span>}
+            else{<span class="state-badge state-muted">لم يُتخذ إجراء</span>}
+            </td></tr>
+        }
+        </tbody></table></div>
+        @if(Model.TotalPages>1){int start=Math.Max(1,Model.Page-2);int end=Math.Min(Model.TotalPages,Model.Page+2);<nav class="permission-pagination"><ul class="pagination"><li class="page-item @(Model.Page==1?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page-1)">السابق</a></li>@for(int p=start;p<=end;p++){<li class="page-item @(p==Model.Page?"active":"")"><a class="page-link" href="@PageUrl(p)">@p</a></li>}<li class="page-item @(Model.Page>=Model.TotalPages?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page+1)">التالي</a></li></ul></nav>}
     </div>
 </div>
+
+@functions{
+    string PageUrl(int pageNumber) => Url.Action("Index",new{page=pageNumber,fromDate=Model.FromDate.ToString("yyyy-MM-dd"),toDate=Model.ToDate.ToString("yyyy-MM-dd"),permissionNumber=Model.PermissionNumber,countryId=Model.CountryId,companyId=Model.CompanyId,shortNameId=Model.ShortNameId,status=Model.Status}) ?? "#";
+}
+@section Scripts{
+<script src="~/js/bootstrap-select.js"></script>
+<script>
+$(function(){
+    var selectedCountry='@(Model.CountryId?.ToString() ?? "")',selectedCompany='@(Model.CompanyId?.ToString() ?? "")',selectedItem='@(Model.ShortNameId?.ToString() ?? "")';
+    function fillSelect(selector,items,selected){var select=$(selector).empty().append($('<option>').val('').text('الكل'));$.each(items||[],function(_,item){select.append($('<option>').val(item.id).text(item.text));});if(selected)select.val(selected);select.selectpicker('refresh');}
+    function load(url,selector,query,selected){$.getJSON(url,{q:query||'',selectedId:selected||null},function(items){fillSelect(selector,items,selected);});}
+    $('.selectpicker').selectpicker({liveSearch:true,width:'100%',noneSelectedText:'الكل'});
+    load('@Url.Action("Countries")','#countryId','',selectedCountry);
+    load('@Url.Action("Companies")','#companyId','',selectedCompany);
+    load('@Url.Action("Items")','#shortNameId','',selectedItem);
+    function bindRemoteSelect(selector,url){var timer;$(selector).on('shown.bs.select',function(){var select=$(this),search=select.parent().find('.bs-searchbox input');search.attr('placeholder',select.data('source')==='companies'?'ابحث داخل الشركات...':'ابحث داخل الأصناف...');search.off('input.remote').on('input.remote',function(){clearTimeout(timer);var q=this.value;timer=setTimeout(function(){load(url,selector,q,'');},250);});});}
+    bindRemoteSelect('#companyId','@Url.Action("Companies")');bindRemoteSelect('#shortNameId','@Url.Action("Items")');
+    $('.permission-stat').on('click',function(){$('#permissionFilterForm input[name="status"]').val($(this).data('status'));$('#permissionFilterForm').trigger('submit');});
+    var hidden=false;$('#toggleFilters').on('click',function(){hidden=!hidden;$('#filterFields').slideToggle(160);$(this).text(hidden?'إظهار':'إخفاء');});
+    $('#permissionFilterForm').on('submit',function(e){if($('#fromDate').val()>$('#toDate').val()){e.preventDefault();alert('تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية');}});
+});
+</script>}

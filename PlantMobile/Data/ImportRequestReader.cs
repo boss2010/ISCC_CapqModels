@@ -20,7 +20,9 @@ public sealed class ImportRequestReader(IDbContextFactory<ImportDbContext> facto
                     join o in db.Im_OpertaionType on r.Im_OperationType equals o.ID into operations
                     from o in operations.DefaultIfEmpty()
                     where e.Employee_Id == userId && e.OperationType == 74 && e.User_Deletion_Id == null
-                        && r.IsActive == true && c.IsApproved == true && c.User_Deletion_Id == null
+                        && r.IsActive == true
+                        && (c.IsApproved == true || c.CommitteeType_ID == 14)
+                        && c.User_Deletion_Id == null
                         && (c.CommitteeType_ID == 11 || c.CommitteeType_ID == 13 || c.CommitteeType_ID == 14)
                         && !(c.CommitteeType_ID == 13
                             && samples.Any(s => s.Im_RequestCommittee_ID == c.ID && s.Sample_BarCode != null)
