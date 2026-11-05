@@ -20,6 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="Select.HtmlToPdf">
+      <HintPath>$(NuGetPackageRoot)Select.HtmlToPdf\20.2.0\lib\net40\Select.HtmlToPdf.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EF\EF.csproj" />
     <ProjectReference Include="..\ViewModels\ViewModels.csproj" />
   </ItemGroup>

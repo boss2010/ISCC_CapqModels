@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using ViewModels;
+using PlantMobile.Data;
 
 namespace PlantMobile.Controllers;
 
@@ -10,11 +11,16 @@ public class ListIm_PermissionController : Controller
 {
     private readonly string _connectionString;
     private readonly ILogger<ListIm_PermissionController> _logger;
+    private readonly PermissionMenuAccessReader _accessReader;
 
-    public ListIm_PermissionController(IConfiguration configuration, ILogger<ListIm_PermissionController> logger)
+    public ListIm_PermissionController(
+        IConfiguration configuration,
+        PermissionMenuAccessReader accessReader,
+        ILogger<ListIm_PermissionController> logger)
     {
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
+        _accessReader = accessReader;
         _logger = logger;
     }
 
@@ -24,6 +30,12 @@ public class ListIm_PermissionController : Controller
         long? countryId, long? companyId, long? shortNameId, int status = 5, int page = 1)
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated") return RedirectToAction("Index", "Login");
+        if (short.TryParse(HttpContext.Session.GetString("UserId"), out var userId))
+        {
+            var access = await _accessReader.ReadListPermissionsAsync(userId, HttpContext.RequestAborted).ConfigureAwait(false);
+            ViewBag.CanView = access.CanView;
+            ViewBag.CanPrint = access.CanPrint;
+        }
         DateTime today = DateTime.Today;
         var model = new ListImPermissionFilterVm
         {

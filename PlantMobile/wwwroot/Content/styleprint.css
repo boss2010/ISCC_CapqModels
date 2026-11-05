@@ -1,0 +1,27 @@
+﻿@media screen {
+    p.bodyText {
+        font-family: verdana, arial, sans-serif;
+    }
+}
+
+@media print {
+    #left-navigation {
+        display: none;
+    }
+    row .navbarr {
+        display: none;
+    }
+    .navbar-nav {
+        display: none;
+    }
+    .demo-blockquote
+    {
+        width:100%;
+    }
+}
+
+@media screen, print {
+    p.bodyText {
+        font-size: 10pt
+    }
+}

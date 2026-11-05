@@ -1,0 +1,951 @@
+
+@model PlantMobile.Models.ImPermissionPrintDetailsVm
+@using System.Globalization;
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var strtDate = DateTime.Now.ToString().Split(' ')[0];
+    if (Model.Start_Date != null)
+    {
+        strtDate = Model.Start_Date.ToString().Split(' ')[0];
+    }
+    var endDate = DateTime.Now.AddMonths(3).ToString().Split(' ')[0];
+    if (Model.End_Date != null)
+    {
+        endDate = Model.End_Date.ToString().Split(' ')[0];
+    }
+}
+@*<link href="~/assets/css/print.min.css" rel="stylesheet" />
+    <script src="~/assets/js/print.min.js"></script>*@
+@*<script src="~/assets/bootstrap-table-master/dist/extensions/print/bootstrap-table-print.min.js"></script>*@
+
+<link href="~/Content/styleprint.css" rel="stylesheet" type="text/css" media="print" />
+@*<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>*@
+
+<script src="~/scripts/jquery.qrcode.js"></script>
+<script src="~/scripts/qrcode.js"></script>
+@*<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/ui/1.12.0-beta.1/jquery-ui.min.js"></script>*@
+
+@*<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.1.135/jspdf.min.js"></script>
+    <script type="text/javascript" src="http://cdn.uriit.ru/jsPDF/libs/adler32cs.js/adler32cs.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js
+    "></script>*@
+@*<script type="text/javascript" src="libs/Blob.js/BlobBuilder.js"></script>*@
+@*<script type="text/javascript" src="http://cdn.immex1.com/js/jspdf/plugins/jspdf.plugin.addimage.js"></script>
+    <script type="text/javascript" src="http://cdn.immex1.com/js/jspdf/plugins/jspdf.plugin.standard_fonts_metrics.js"></script>
+    <script type="text/javascript" src="http://cdn.immex1.com/js/jspdf/plugins/jspdf.plugin.split_text_to_size.js"></script>
+    <script type="text/javascript" src="http://cdn.immex1.com/js/jspdf/plugins/jspdf.plugin.from_html.js"></script>*@
+@*<script type="text/javascript" src="js/basic.js"></script>*@
+<style>
+    #PrintResultButton, #PrintResultButton2 {
+        background-color: #1e7c80 !important;
+        border: 2px solid #1e8084 !important;
+        box-shadow: 0 4px #1d9fa5 !important;
+        outline: none;
+        color: white;
+        margin-bottom: 10px;
+        width: 50%;
+    }
+
+    .lab-1 {
+        margin-top: 30px;
+        margin-right: 8px;
+        text-align: center;
+        font-size: 16px;
+    }
+
+    .lab-2 {
+        margin-top: 45px;
+        margin-right: 8px;
+        text-align: center;
+        font-size: 16px;
+    }
+
+    img.img1 {
+        margin-top: 19px;
+    }
+
+    .demo-blockquote {
+        margin-bottom: 70px !important;
+    }
+</style>
+<form id="antiforgeryPrintForm" method="post">@Html.AntiForgeryToken()</form>
+@if (Model.Items != null)
+{
+    foreach (var itm in Model.Items)
+    {
+        if (Model.IS_Print_Ar != true || Model.CanPrint == null)
+        {
+            <div id="tableArabic" style="width:21cm;height:29.7cm;background:gray;margin:auto;padding-top:.6cm">
+                <div id="border" style="width:20cm;background:white;margin:auto;border:1px solid #000;font-family: 'Arial regular'!important;font-size:10pt;">
+                    <div id="header" style="height:4.5cm;">
+                        <div class="" style="margin:auto;height:inherit;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <div class="col-md-4 col-sm-4" style="display:inline-block;float:right;padding: 3px;height: inherit;">
+                                    <img class="img1" style="" src="~/assets/images/capq/logo-capq-114.png" />
+                                </div>
+                                <div class="col-md-8 col-sm-8" style="display:inline-block;height: inherit;">
+                                    <p class="lab-2" style="font-weight:bold">
+                                        جمهورية مصر العربية<br />
+                                        وزارة الزراعة واستصلاح الأراضي<br />
+                                        الإدارة المركزية للحجر الزراعي
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <div class="col-md-6 col-sm-6" style="display:inline-block;float:right;height: inherit;text-align: left;">
+                                    <label style="margin-top: 10px;font-size: 20px;">إذن استيراد</label>
+                                    <label style="margin-top: 50px; font-size: 16px; ">@Model.ImPermission_Number</label>
+                                </div>
+                                <div class="col-md-6 col-sm-6" style="display:inline-block;height:inherit;padding: 35px 10px;">
+                                <label style="width: 100px; height: 100px; margin-bottom: 0px; float: left; " class="qrcodeimport"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="content" style="height:20cm;">
+                        <div class="" style="margin:auto;height:1.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 100%; height: inherit; padding:0px 3px">
+                                <span> يسمح الاستيراد للشحنة طبقًا لجميع القواعد التي أقرها القرار الوزاري رقم 562 لسنة 2019 ومعايير الصحة النباتية وبالاشتراطات التالية لصالح شركة:</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:2.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>اسم المستورد: </label> <span>@Model.ImporterName</span><br />
+                                <label>عنوان المستورد:</label> <span style="text-align:right;">@Model.ImporterAddress</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                @if (Model.ImportersCompanies.Count > 0)
+                                {
+                                    <label>اسم المورد:</label><span>@Model.ImportersCompanies[0].ImporterCompany</span><br />
+                                    <label>عنوان المورد: </label><span> @Model.ImportersCompanies[0].ImporterCompanyAddress</span>
+
+                                }
+                                else
+                                {
+                                    <label>اسم المورد:</label><span>----</span><br />
+                                    <label>عنوان المورد: </label><span> -----</span>
+                                }
+
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>اسم المنتج:</label>
+                                <span>@itm.ItemShortNameAr @itm.qualitiveGroupName</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>الاسم العلمي:</label>
+                                <span style="font-style:italic;">@itm.ScientificNameAr</span>
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%;height: inherit;padding: 3px">
+                                <label>الجزء النباتي:</label>
+                                <span>@itm.subPartName</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>الغرض من الاستيراد: </label>
+                                <span>@itm.Purpose</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>بلد المنشأ: </label>
+                                <span>@itm.InitiatorCountry</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>بلد التصدير أو إعادة التصدير:</label>
+                                <span>@Model.ExportCountryName</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>الكمية (الوزن): </label>
+                                @{ 
+                                    double _GrossWeight = Math.Round(Convert.ToDouble(itm.GrossWeight), 2);
+                                }
+                               
+                                <span>@_GrossWeight كيلوجرام</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>عدد الأجزاء: </label>
+                                @if (String.IsNullOrEmpty(itm.subPartName))
+                                {
+                                    <span>@itm.Units_Number / #######</span>
+                                }
+                                else
+                                {
+                                    <span>@itm.Units_Number / @itm.subPartName</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>وحده التعبئة:</label>
+                                <span> @itm.packageType</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>طريقة أو مادة التعبئة:</label>
+                                <span>@itm.packageMaterial</span>
+
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%;height: inherit;padding: 3px">
+                                <label>حجم الرسالة:</label>
+                                <span> @itm.Size متر مكعب</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>الدرجة:</label>
+                                <span>@itm.Order_Text</span>
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>ميناء الدخول:</label>
+                                <span>@Model.ArrivePortName</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+
+                                <label>ميناء الشحن:</label>
+                                @if (String.IsNullOrEmpty(Model.TransportPortName))
+                                {
+                                    <span>اي ميناء في @Model.ExportCountryName</span>
+                                }
+                                else
+                                {
+                                    <span>@Model.TransportPortName</span>
+                                }
+
+
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>وسيلة الشحن:</label>
+                                <span>@Model.Ship_Name / @Model.Shipment_MeanName </span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style="text-align: center; width: 100%; height: inherit; padding: 3px">
+                                <label>قائمة الأصناف</label>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;display:flex;">
+                            <div class="" style="width: 100%; height: inherit; padding: 3px">
+                                <div style="width: 40%;display:inline-block;">
+                                    <label style=" ">اسم الصنف</label>
+                                    <br />
+                                    @foreach (var cat in itm.ItemCategories)
+                                    {
+                                        <label style=" ">@cat.categoryName</label>
+                                        <br />
+                                    }
+                                </div>
+                                <div style="width: 30%;display:inline-block;">
+
+                                    <label style=" "> الوزن الإجمالي</label>
+                                    <br />
+                                    @foreach (var cat in itm.ItemCategories)
+                                    {
+                                        <label style=" ">@cat.GrossWeight</label>
+                                        <br />
+                                    }
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="" style="margin:auto;height:2.3cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 100%; height: inherit;padding: 3px">
+                                <div class="" style="padding:0px">
+                                    <div style="width: 40%;display:inline-block;"></div>
+                                    <div style="width: 30%;display:inline-block;"></div>
+
+                                </div>
+
+                                @*<span>
+
+                                        @foreach (var cat in itm.ItemCategories)
+                                        {
+
+                                            <span>@cat.categoryName </span>
+
+                                        }
+                                        @if (itm.ItemCategories.Count <= 0)
+                                        {
+                                            <span>###### </span>
+                                        }
+                                    </span>*@
+
+                            </div>
+
+                        </div>
+                        <div class="" style="margin:auto;height:6.2cm;border-bottom:1px solid #000;display:flex;line-height: 1.3!important;font-size: 13px!important;">
+                            <div class="" style=" width: 100%; height: inherit;padding: 3px">
+                                <label>
+                                    شروط الإستيراد:
+                                </label>
+                                <span>
+                                    @if (itm.Itemconstrains != null)
+                                    {
+                                        if (itm.Itemconstrains.texts_Ar != null)
+                                        {
+                                            var f = 0;
+                                            foreach (var loc in itm.Itemconstrains.texts_Ar)
+                                            {
+                                                f = f + 1;
+                                                <span style="padding:5px;word-break: normal;text-align: right;">
+
+                                                    <span class="parplant"><span style="font-weight:bold">@f-</span> @loc</span>
+                                                </span>
+                                            }
+                                        }
+                                    }
+                                </span>
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:1.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style="text-align: center; width: 100%; height: inherit; padding:0px 3px">
+
+                                @*<span style="display:block"> تم إصدار هذا الإذن في  @DateTime.Now.ToString("yyyy/MM/dd", new CultureInfo("ar-AE")).Split(' ')[0] وتسري صالحية هذا الإذن حتى @DateTime.Now.AddMonths(3).ToString("yyyy/MM/dd").Split(' ')[0]  </span>*@
+
+                                <span style="display:block"> تم إصدار هذا الإذن في  @strtDate  وتسري صالحية هذا الإذن حتى @endDate </span>
+
+                                <span>
+                                    يعد هذا الإذن بمثابة إقرار على صاحب الشأن بالالتزام بالقواعد المنظمة للحجر الزراعي والالتزام بعرض الرسالة على سلطات الحجر الزراعي فور وصولها
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="footer3" style="height:3cm;">
+                        <div class="" style="margin:auto;height:inherit;display:flex;">
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">مكان الإصدار: @Model.outletName</label>
+                                <span></span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">اسم المسئول المفوض:</label>
+                                <span>@Model.UserName</span>
+                                <br />
+                                <label style="  ">التوقيع:</label>
+                                <span>..............................</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">تاريخ الإصدار:</label>
+                                <span>(@DateTime.Now.ToString("yyyy/MM/dd").Split(' ')[0])</span>
+                                <div class="circle" style=" margin: 9px 3px; width: 85px; height:85px; background-color: white; border: 1px solid black; border-radius: 50%; float: left;">
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="text-width" style="font-family: 'Arial regular' !important; font-size: 10pt; width: 20cm; background-color: white; margin: auto; height: 1cm; display: flex; text-align: center">
+                    <div class="" style=" width: 100%; height: inherit; padding: 3px">
+                        <span>
+                            لا تتحمل الإدارة المركزية للحجر الزراعي أو أي من موظفيها أو ممثليها أي مسئولية مالية قد تنجم عن هذه الشهادة
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+            <br />
+            <br />
+            <div class="row">
+                <div class="col-md-4">
+                </div>
+                <div class="col-md-4 text-align-center">
+                    <button id="PrintResultButton" class="btn btnar" value='Print' onclick='printar("tableArabic")'> اطبع </button>
+                </div>
+            </div>
+        }
+        <br />
+        <br />
+        if (Model.IS_Print_EN != true || Model.CanPrint == null)
+        {
+            <div id="tableEnglish" style="width:21cm;height:29.7cm;background:gray;margin:auto;padding-top:.6cm">
+                <div id="border" style="direction: ltr; text-align: left; font-size: 12px; width: 20cm; background: white; margin: auto; border: 1px solid #000; font-family: 'times-new-roman'!important;font-size:10pt">
+                    <div id="header" style="height:4.5cm;">
+                        <div class="" style="margin:auto;height:inherit;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <div class="col-md-4 col-sm-4" style="display:inline-block;float:left;padding: 3px;height: inherit;">
+                                    <img class="img1" style="" src="~/assets/images/capq/logo-capq-114.png" />
+                                </div>
+                                <div class="col-md-8 col-sm-8" style="display:inline-block;height: inherit;">
+                                    <p class="lab-1" style="font-weight:bold">
+                                        Arab Republic of Egypt<br />
+                                        Ministry of Agriculture and <br />
+                                        Land Reclamation <br />
+                                        Central Administration <br />
+                                        of Plant Quarantine <br />
+
+                                    </p>
+
+                                </div>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <div class="col-md-6  col-sm-6" style="display:inline-block;float:left;height: inherit;text-align: right;"><label style="margin-top: 10px;font-size: 20px;">Import Permit</label>
+                                            <label style=" margin-top: 50px; font-size: 16px;">@Model.ImPermission_Number</label>
+                                </div>
+                                <div class="col-md-6  col-sm-6" style="display:inline-block;height:inherit;padding: 35px 10px;">
+                                    <label style="width: 100px; height: 100px; margin-bottom: 0px; float: right; " class="qrcodeimport"></label>
+
+                                    
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                    <div id="content" style="height:20cm;">
+                        <div class="" style="margin:auto;height:1.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 100%; height: inherit; padding:0px 3px">
+                                <span>
+                                    This consignment is allowed to be imported according to all the values assigned Ministerial decree No. 562 of 2019 and the
+                                    phytosanitary Measurements and The requirement specified in this Import Permit for the
+                                    mentioned company.
+                                </span>
+                            </div>
+
+                        </div>
+                        <div class="" style="margin:auto;height:2.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+
+                                <label>Name of  Importer: </label>
+                                <span style="font-size:14px;">@Model.ImporterNameEn</span><br />
+                                <label>Address of Importer: </label>
+                                <span>@Model.ImporterAddressEn</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                @if (Model.ImportersCompanies.Count > 0)
+                                {
+                                    <label>Name of exporter: </label><span>@Model.ImportersCompanies[0].ImporterCompanyEn</span>
+
+                                    <br />
+                                    <label>Address of exporter:</label>
+                                    <span>@Model.ImportersCompanies[0].ImporterCompanyAddressEn</span>
+
+
+                                }
+                                else
+                                {
+                                    <label>Name of Importer:</label><span>-----</span>
+
+                                    <br />
+                                    <label>Address of Importer:</label>
+                                    <span>----</span>
+                                }
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Name of Produce:</label>
+                                <span>@itm.ItemShortNameEn @itm.qualitiveGroupNameEn</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Scientific name:</label>
+                                <span style="font-style:italic;">@itm.ScientificNameAr</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%;height: inherit;padding: 3px">
+                                <label>Plant Part: </label>
+                                <span>@itm.subPartNameEn</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+
+                                <label>Purpose of import:</label>
+                                <span>@itm.PurposeEn</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Country of export / re-export:</label>
+                                <span>@Model.ExportCountryNameEn</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Place of origin:</label>
+                                <span>@itm.InitiatorCountryEn</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Quantity (Wt.):</label>
+                                <span>@String.Format("{0:n}", itm.GrossWeight) Kilo Gram</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+
+                                <label>No. of unit: </label>
+                                @if (String.IsNullOrEmpty(itm.subPartNameEn))
+                                {
+                                    <span>@itm.Units_Number / ######</span>
+                                }
+                                else
+                                {
+                                    <span>@itm.Units_Number / @itm.subPartNameEn</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Packaging unit: </label>
+                                <span>@itm.packageTypeEn</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Packaging material:</label>
+                                <span> @itm.packageMaterialEn</span>
+
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%;height: inherit;padding: 3px">
+                                <label>Point of entry: </label>
+                                <span>@Model.ArrivePortNameEn</span>
+
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Grade:</label>
+                                <span>@itm.Order_Text</span>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Volume of consignment:</label>
+                                <span>@itm.Size Cubic Meters</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+
+                                <label>Loading port:</label>
+                                @if (String.IsNullOrEmpty(Model.TransportPortNameEn))
+                                {
+                                    <span>Any port in @Model.ExportCountryNameEn</span>
+                                }
+                                else
+                                {
+                                    <span>@Model.TransportPortNameEn</span>
+                                }
+
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 50%; height: inherit;padding: 3px">
+                                <label>Means of conveyance:</label>
+                                <span>@Model.Ship_Name / @Model.Shipment_MeanNameEn</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class=" " style=" width: 50%; height: inherit;padding: 3px">
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style="text-align: center; width: 100%; height: inherit; padding: 3px">
+                                <label>List of Varieties</label>
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:.6cm;display:flex;">
+                            <div class="" style="width: 100%; height: inherit; padding: 3px">
+                                <div style="width: 40%;display:inline-block;">
+                                    <label style=" ">Variety Name</label>
+                                    <br />
+                                    @foreach (var cat in itm.ItemCategories)
+                                    {
+                                        <label style=" ">@cat.categoryNameEn</label>
+                                        <br />
+                                    }
+                                </div>
+                                <div style="width: 30%;display:inline-block;">
+
+                                    <label style=" "> Gross Weight</label>
+                                    <br />
+                                    @foreach (var cat in itm.ItemCategories)
+                                    {
+                                        <label style=" ">@cat.GrossWeight</label>
+                                        <br />
+                                    }
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="" style="margin:auto;height:2.3cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style=" width: 100%; height: inherit;padding: 3px">
+
+                                <div class="" style="padding:0px">
+                                    <div style="width: 40%;display:inline-block;"></div>
+                                    <div style="width: 30%;display:inline-block;"></div>
+
+                                </div>
+                                @*<span>
+
+                                        @foreach (var cat in itm.ItemCategories)
+                                        {
+
+                                            <span>@cat.categoryNameEn </span>
+
+                                        }
+                                        @if (itm.ItemCategories.Count <= 0)
+                                        {
+                                            <span>###### </span>
+                                        }
+                                    </span>*@
+
+                            </div>
+
+                        </div>
+                        <div class="" style="margin:auto;height:6.2cm;border-bottom:1px solid #000;display:flex;line-height: 1.3!important;font-size: 13px!important;">
+                            <div class="" style=" width: 100%; height: inherit;padding: 3px">
+                                <label>Import Requirements:</label>
+                                <span>
+                                    @if (itm.Itemconstrains != null)
+                                    {
+                                        if (itm.Itemconstrains.texts_Ar != null)
+
+
+                                        {
+
+                                            var f = 0;
+                                            foreach (var loc in itm.Itemconstrains.text_En)
+                                            {
+                                                f = f + 1;
+
+                                                <span class="parplant"><span style="font-weight:bold">@f-</span> @loc</span>
+
+                                            }
+
+                                        }
+                                    }
+                                </span>
+
+                            </div>
+                        </div>
+                        <div class="" style="margin:auto;height:1.5cm;border-bottom:1px solid #000;display:flex;">
+                            <div class="" style="text-align: center; width: 100%; height: inherit; padding:0px 3px">
+
+                                <span style="display:block;"> permit issued on @strtDate  and it is valid until @endDate </span>
+
+
+
+                                <span>
+                                    This permit is considered as an acknowledge from the concerned person that the consignment shall be subjected
+                                    to the plant quarantine regulations and for inspection by the plant quarantine authorities as soon as its arrival.
+                                </span>
+
+                            </div>
+                        </div>
+                    </div>
+                    <div id="footer3" style="height:3cm;">
+                        <div class="" style="margin:auto;height:inherit;display:flex;">
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">place of issue: @Model.outletName_En</label>
+                                <span></span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">Name of authorized official: </label>
+                                <span>@Model.UserNameEn</span>
+                                <br />
+                                <label style="  ">signature:</label>
+                                <span>..............................</span>
+                            </div>
+                            <div class="verticalLine" style="margin:0;border-right: 1px solid black;"></div>
+                            <div class="" style="width: 33.33333333%; height: inherit;padding: 3px">
+                                <label style="  ">Date of issue:</label>
+                                <span>(@DateTime.Now.ToString().Split(' ')[0])</span>
+                                <div class="circle" style=" margin: 9px 3px; width: 85px; height:85px; background-color: white; border: 1px solid black; border-radius: 50%; float: right;">
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="text-width" style="font-family: 'times-new-roman' !important; font-size: 9pt; width: 20cm; background-color: white; margin: auto; height: 1cm; display: flex; text-align: center">
+                    <div class="" style=" width: 100%; height: inherit; padding:3px">
+                        <span>
+                            .No finanical liability with respect to this certificate shall attach to the Central Administration of Quarantine or to any of its officers or representatives
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <br />
+            <br />
+            <div class="row">
+                <div class="col-md-4">
+                </div>
+                <div class="col-md-4 text-align-center">
+                    <button id="PrintResultButton2" class="btn btnen" value='Print' onclick='al("tableEnglish")'>Print </button>
+                    @*<button id="cmd" onclick="ExportToPdfEn()">generate PDF</button>*@
+                </div>
+            </div>
+        }
+    }
+}
+
+
+<script>
+    var verificationToken = $('input[name="__RequestVerificationToken"]').val();
+
+    function ExportToPdfEn() {
+
+        $('.preloader:eq(0)').fadeIn(0);
+        $('.preloading-icon:eq(0)').fadeIn(0);
+
+        //var nicInstance = nicEditors.findEditor('minutesEditor');
+        //var editedMom = nicInstance.getContent();
+        var editedMom = $("#tableEnglish").html();
+        var x = 2;
+        //var DomainPath =window.location.host;
+        $.ajax({
+            url: '@Url.Action("ExportToPDF", "Im_PermissionRequestPrint")',
+            type:'post',
+            async: false,
+            data: {
+                richTxt: editedMom,
+                permissionNumber: '@Model.ImPermission_Number',
+              lang:x,
+              __RequestVerificationToken: verificationToken
+            },
+            success: function (Data) {
+                //window.location = '/Meeting/DownloadPdf?file=' + Data.filename;
+            },
+            error: function (e) {
+
+            },
+        });
+
+        $('.preloader:eq(0)').fadeOut();
+        $('.preloading-icon:eq(0)').fadeOut(0);
+
+    }
+     function ExportToPdf() {
+
+        $('.preloader:eq(0)').fadeIn(0);
+        $('.preloading-icon:eq(0)').fadeIn(0);
+
+        //var nicInstance = nicEditors.findEditor('minutesEditor');
+        //var editedMom = nicInstance.getContent();
+        var editedMom = $("#tableArabic").html();
+        var x = 1;
+        //var DomainPath =window.location.host;
+        $.ajax({
+            url: '@Url.Action("ExportToPDF", "Im_PermissionRequestPrint")',
+            type:'post',
+            async: false,
+            data: {
+                richTxt: editedMom,
+                permissionNumber: '@Model.ImPermission_Number',
+              lang:x,
+              __RequestVerificationToken: verificationToken
+            },
+            success: function (Data) {
+
+                //window.location = '/Meeting/DownloadPdf?file=' + Data.filename;
+            },
+            error: function (e) {
+
+            },
+        });
+
+        $('.preloader:eq(0)').fadeOut();
+        $('.preloading-icon:eq(0)').fadeOut(0);
+
+    }
+    $(function () {
+
+    var specialElementHandlers = {
+        '#editor': function (element,renderer) {
+            return true;
+        }
+    };
+ //$('#cmd').click(function () {
+ //       var doc = new jsPDF();
+ //       doc.fromHTML(
+ //           $('#tableEnglish').html(), 15, 15,
+ //           { 'width': 170, 'elementHandlers': specialElementHandlers },
+ //           function(){ doc.save('sample-file.pdf'); }
+ //       );
+
+ //   });
+
+});
+     @*$("PrintResultButton").click(function () {
+                var id = '@Model.Im_PermissionRequest_ID';
+                $.post('/Im_Permissions/Im_PermissionRequestPrint/PrintArabic', { Im_PermissionRequest_ID:id, __RequestVerificationToken: verificationToken }, function (data, succ) {
+
+                    $("#tableArabic").hide();
+                    $(".btnar").hide();
+                    //Window.location = '/Im_Permissions/ListIm_Permission/Index';
+                });
+
+            });*@
+            @*$("#PrintResultButton2").click(function () {
+                 var id = '@Model.Im_PermissionRequest_ID';
+                $.post('/Im_Permissions/Im_PermissionRequestPrint/PrintEnglish', { Im_PermissionRequest_ID:id, __RequestVerificationToken: verificationToken }, function (data, succ) {
+
+                    $("#tableEnglish").hide();
+                    $(".btnen").hide();
+                });
+
+            });*@
+
+
+    jQuery('.qrcodeimport').qrcode("@Model.ImPermission_Number");
+
+    function printar(k) {
+
+       // var obj=sendObject();
+         // var obj = {}
+        //obj.Print_Count = '@Model.Print_Count';
+
+      //  var mydate = new Date();
+       // obj.Start_Date = '@Model.Start_Date';
+
+        //var mydate1 = new Date( );
+        //obj.End_Date = '@Model.End_Date';
+       // obj.Im_PermissionRequest_ID = '@Model.Im_PermissionRequest_ID';
+      //  console.log();
+     //   console.log('@Model.Start_Date');
+     //   console.log( obj)
+
+        var id = '@Model.Im_PermissionRequest_ID';
+          if ('@Model.CanPrint' =='True'||'@Model.CanPrint' =='False') {
+              $.post('/Im_Permissions/Im_PermissionRequestPrint/PrintArabic',
+                  { Im_PermissionRequest_ID:id, __RequestVerificationToken: verificationToken }, function (data, succ) {
+                      ExportToPdf();
+                    $("#tableArabic").hide();
+                    $(".btnar").hide();
+
+                    //Window.location = '/Im_Permissions/ListIm_Permission/Index';
+              });
+          }
+                var restorepage2 = document.body.innerHTML;
+                var printcontent2 = $('#' + k).html();
+        document.body.innerHTML = printcontent2;
+         jQuery('.qrcodeimport').qrcode("@Model.ImPermission_Number");
+        var css = `@@page{margin: .6cm .5cm .5cm .5cm!important;}.verticalLine{width:1px !important;margin: 0!important;background: #000!important;}.lab-2 {margin-top: 45px;margin-right: 8px;text-align: center;font-size: 16px}img.img1 {margin-top: 19px !important;vertical-align: middle !important;}.col-md-4 {width: 33.33333333%;}.col-md-8 {width: 66.66666667%;}.col-md-6 {width: 50%;}.col-md-7 {width: 58.33333333%;}.col-md-5 {width: 41.66666667%;} canvas{display: inline-block !important;vertical-align: baseline!important;top: 10px;position: absolute;} `,
+
+                    //var css = `.display-none {visibility: hidden!important;} .footer {position:fixed!important;}@@page{margin:10px 15px 10px 15px!important;}td{padding: 5px!important;} #tableArabic{height: 1120px !important;}`,
+                    head = document.head || document.getElementsByTagName('head')[0],
+                    style = document.createElement('style');
+                style.type = 'text/css';
+                style.media = 'print';
+
+                if (style.styleSheet) {
+                    style.styleSheet.cssText = css;
+                }
+                else {
+                    style.appendChild(document.createTextNode(css));
+                }
+                head.appendChild(style);
+                window.print();
+                //history.go(0);
+           window.location.reload();
+        document.body.innerHTML = restorepage2;
+
+         if ('@Model.IS_Print_EN' =='True') {
+             window.location = '/Im_Permissions/ListIm_Permission/Index';
+        }
+
+            }
+    function al(m) {
+        var id = '@Model.Im_PermissionRequest_ID';
+
+
+
+        if ('@Model.CanPrint' == 'True' || '@Model.CanPrint' == 'False') {
+
+            $.post('/Im_Permissions/Im_PermissionRequestPrint/PrintEnglish', { Im_PermissionRequest_ID:id, __RequestVerificationToken: verificationToken }, function (data, succ) {
+                ExportToPdfEn();
+                $("#tableEnglish").hide();
+                $(".btnen").hide();
+
+            });
+
+        }
+              var restorepage2 = document.body.innerHTML;
+                var printcontent2 = $('#' + m).html();
+        document.body.innerHTML = printcontent2;
+         jQuery('.qrcodeimport').qrcode("@Model.ImPermission_Number");
+        var css = `@@page{margin: .6cm .5cm .5cm .5cm!important;}.verticalLine{width:1px !important;margin: 0!important;background: #000!important;}.lab-1 {margin-top: 30px;margin-left: 8px;text-align: center;font-size: 16px}img.img1 {margin-top: 19px !important;vertical-align: middle !important;}.col-md-4 {width: 33.33333333%;}.col-md-8 {width: 66.66666667%;}.col-md-6 {width: 50%;}.col-md-7 {width: 58.33333333%;}.col-md-5 {width: 41.66666667%;}canvas{display: inline-block !important;vertical-align: baseline!important;top: 10px;position: absolute;}`,
+                    head = document.head || document.getElementsByTagName('head')[0],
+                    style = document.createElement('style');
+
+
+                style.type = 'text/css';
+                style.media = 'print';
+
+                if (style.styleSheet) {
+                    style.styleSheet.cssText = css;
+                }
+                else {
+                    style.appendChild(document.createTextNode(css));
+                }
+                head.appendChild(style);
+                window.print();
+                //history.go(0);
+           window.location.reload();
+        document.body.innerHTML = restorepage2;
+        console.log('@Model.IS_Print_Ar')
+  if ('@Model.IS_Print_Ar' =='True') {
+      window.location = '/Im_Permissions/ListIm_Permission/Index';
+        }
+    }
+    @*function sendObject() {
+        debugger
+        var obj = {}
+        obj.Print_Count ='@Model.Print_Count';
+        obj.Start_Date ='@Model.Start_Date';
+        obj.End_Date ='@Model.End_Date';
+        obj.Im_PermissionRequest_ID = '@Model.Im_PermissionRequest_ID';
+        console.log(obj.Start_Date);
+        console.log('@Model.Start_Date');
+        debugger
+        return obj;
+    }*@
+</script>
+
+

@@ -11,6 +11,8 @@ builder.Services.AddPooledDbContextFactory<EF.Imports.ImportDbContext>(options =
 builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
+builder.Services.AddSingleton<PlantMobile.Data.PermissionPrintReader>();
+builder.Services.AddSingleton<PlantMobile.Data.PermissionMenuAccessReader>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Logging.AddProvider(new DailyFileLoggerProvider(
     Path.Combine(builder.Environment.ContentRootPath, "Logs")));

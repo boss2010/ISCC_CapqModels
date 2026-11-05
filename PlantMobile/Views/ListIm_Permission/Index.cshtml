@@ -75,8 +75,17 @@
         {
             <tr><td>@item.RowNumber</td><td>@item.PermissionNumber</td><td>@(string.IsNullOrWhiteSpace(item.ShortName)?"—":item.ShortName)</td><td>@item.ImporterType</td><td>@item.Company</td><td>@item.Country</td><td>@item.ArrivalDate.ToString("dd/MM/yyyy")</td>
             <td><a class="action-link" href="@Url.Content($"~/Im_Permissions/Im_permissionDetail/Index?ImPermission_Number={Uri.EscapeDataString(item.PermissionNumber)}")">التفاصيل</a></td><td>
-            @if(item.IsAccepted==true && item.IsPaid==true && item.IsPrintArabic==true && item.IsPrintEnglish==true){<span class="state-badge state-success">تمت الموافقة والدفع والطباعة</span>}
-            else if(item.IsAccepted==true && item.IsPaid==true){<span class="state-badge state-success">تمت الموافقة والدفع</span>}
+            @{
+                var printUrl = $"/Im_Permissions/Im_PermissionRequestPrint/Index?ImPermission_Number={Uri.EscapeDataString(item.PermissionNumber)}";
+                var canPrint = ViewBag.CanPrint is bool printFlag ? printFlag : true; // null keeps the legacy behaviour (print link shown)
+            }
+            @if(item.IsAccepted==true && item.IsPaid==true){
+                if(canPrint){
+                    if(item.IsPrintArabic==true && item.IsPrintEnglish==true){<span class="state-badge state-success">تمت الموافقة والدفع والطباعة</span>}
+                    else{<span class="state-badge state-success">تمت الموافقة والدفع</span> <a class="action-link" href="@printUrl">طباعة</a>}
+                }
+                else{<span class="state-badge state-warning">تم الدفع - لا توجد صلاحية للطباعة</span>}
+            }
             else if(item.IsAccepted==true){<span class="state-badge state-warning">تمت الموافقة ولم يتم الدفع</span>}
             else if(item.IsAccepted==false){<span class="state-badge state-danger">تم رفض الطلب</span>}
             else{<span class="state-badge state-muted">لم يُتخذ إجراء</span>}
