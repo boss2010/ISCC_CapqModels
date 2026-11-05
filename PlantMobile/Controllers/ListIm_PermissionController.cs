@@ -81,7 +81,7 @@ public class ListIm_PermissionController : Controller
                cc.Start_Date,cc.End_Date,cc.IsAcceppted,cc.IsPaid,cc.IS_Print_Ar,cc.IS_Print_EN,
                cc.Renewal_Status,rr.Im_OperationType,rr.ExportCountry_Id,rr.Importer_ID,rr.ImporterType_Id
         INTO #Base
-        FROM dbo.Im_PermissionRequest cc WITH (INDEX(IX_Im_PermissionRequest_ArrivalDate_List))
+        FROM dbo.Im_PermissionRequest cc
         INNER JOIN dbo.Im_RequestData rr ON rr.Im_PermissionRequest_ID=cc.ID
         WHERE cc.User_Deletion_Id IS NULL AND cc.Arrival_Date>=@FromDate AND cc.Arrival_Date<DATEADD(day,1,@ToDate)
           AND (@CountryId IS NULL OR rr.ExportCountry_Id=@CountryId)
