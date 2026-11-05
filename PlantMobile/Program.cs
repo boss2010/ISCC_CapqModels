@@ -13,6 +13,9 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionPrintReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionMenuAccessReader>();
+builder.Services.AddSingleton<PlantMobile.Data.CheckRequestPortReader>();
+builder.Services.AddSingleton<PlantMobile.Data.CheckRequestOutletReader>();
+builder.Services.AddSingleton<PlantMobile.Data.ImCheckRequestDisplayReader>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Logging.AddProvider(new DailyFileLoggerProvider(
     Path.Combine(builder.Environment.ContentRootPath, "Logs")));

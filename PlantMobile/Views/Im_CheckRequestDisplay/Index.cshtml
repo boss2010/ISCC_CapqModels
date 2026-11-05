@@ -1,0 +1,1061 @@
+@model PlantMobile.Models.ImCheckRequestDisplayVm
+
+@{
+    ViewBag.Title = "Index";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .request-action-status {
+        display: inline-block;
+        padding: 9px 18px;
+        margin: 10px 0;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .request-action-completion {
+        color: #3730a3;
+        background: #e0e7ff;
+    }
+
+    .request-action-approved {
+        color: #166534;
+        background: #dcfce7;
+    }
+
+    .request-action-rejected {
+        color: #991b1b;
+        background: #fee2e2;
+    }
+
+    .hs-code-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+        .hs-code-actions .form-control {
+            min-width: 0;
+        }
+
+    .short-name-add-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .lots-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .lots-table {
+        min-width: 1450px;
+    }
+
+        .lots-table .lot-weight-cell {
+            min-width: 210px;
+        }
+
+        .lots-table .lot-weight-input {
+            min-width: 120px;
+        }
+
+    .permission-table {
+        border-collapse: collapse;
+        table-layout: auto;
+        width: auto;
+        direction: rtl;
+    }
+
+        .permission-table td {
+            padding: 0 25px 8px 0;
+            white-space: nowrap;
+            vertical-align: middle;
+            font-weight: 600;
+        }
+
+        .permission-table .permission-number {
+            text-align: right;
+        }
+
+        .permission-table .permission-item-name {
+            text-align: right;
+        }
+
+        .permission-table .permission-weight {
+            text-align: right;
+        }
+
+        .permission-table a {
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+    .permission-link {
+        font-weight: bold;
+        font-size: 18px;
+        color: lightseagreen;
+        text-decoration: none;
+    }
+
+        .permission-link:hover {
+            color: #D2691E;
+            text-decoration: underline;
+        }
+</style>
+
+<form id="submform" method="post" action='@Url.Action("acceptRequest", "Im_CheckRequestDisplay")' enctype="multipart/form-data">
+    @Html.AntiForgeryToken()
+
+<div class="perm-box"> 
+    <div class="perm-num-display"> 
+        <div class="perm-label" style="font-size: 18px; font-weight: bold; color: #6B4F3A;"> 
+                رقم الطلب : <span style="color: #8B4513; font-size: 19px; font-weight: bold;"> @Model.CheckRequest_Number </span> 
+            </div> 
+        </div> 
+</div>
+
+    <div class="perm-box">
+        <div class="perm-num-display">
+
+            <div class="perm-label" style="font-size: 18px; font-weight: bold;">
+                أرقام اذون الإستيراد
+            </div><br />
+            <input type="hidden" name="ID" id="ID" value="@Model.ID" />
+            <input type="hidden" id="Outlet_ID" name="Outlet_ID" value="@Model.Outlet_ID" />
+            @if (Model.List_Permission != null &&
+                Model.List_Permission.Any())
+            {
+                <table class="permission-table">
+                    <tbody>
+                        @foreach (var permission in Model.List_Permission)
+                        {
+                            <tr>
+                                <td class="permission-number">
+                                    <a href="/Im_Permissions/Im_permissionDetail/Index?ImPermission_Number=@permission.ImPermission_Number"
+                                       target="_blank"
+                                       class="permission-link">
+                                        @*style="font-weight:bold; color:skyblue; font-size:17px; ">*@
+                                        @permission.ImPermission_Number
+                                    </a>
+                                </td>
+
+                                <td class="permission-item-name">
+                                    @permission.Item_Name
+                                </td>
+
+                                <td class="permission-weight">
+                                    الوزن القائم:
+                                    @(permission.GrossWeight?.ToString("#,##0.##") ?? "0")
+                                    كجم
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+        </div>
+    </div>
+
+    <div class="section-title">
+        بيانات الشهادة الجمركية
+    </div>
+
+    <div class="form-row">
+
+        <div class="col-md-4">
+
+            <label>رقم الشهادة</label>
+
+            <input class="form-control" readonly value="@Model.Customs_Certificate_Number" />
+
+        </div>
+
+        <div class="col-md-4">
+
+            <label>تاريخ الشهادة</label>
+
+            <input type="date" class="form-control" readonly value='@(Model.Certificate_Date?.ToString("yyyy-MM-dd"))' />
+
+        </div>
+
+        <div class="col-md-4">
+
+            <label>رقم المنافيست</label>
+
+            <input class="form-control" readonly value="@Model.Manifest_Number" />
+
+        </div>
+
+    </div>
+
+    <div class="form-row">
+
+        <div class="col-md-4">
+
+            <label>تاريخ الشحن</label>
+
+            <input type="date" class="form-control" readonly value='@(Model.Shipping_Date?.ToString("yyyy-MM-dd"))' />
+
+        </div>
+
+        <div class="col-md-4">
+
+            <label>تاريخ الوصول</label>
+
+            <input type="date" class="form-control" readonly value='@(Model.Arrival_Date?.ToString("yyyy-MM-dd"))' />
+
+        </div>
+
+        <div class="col-md-4">
+
+            <label>نوع العملية</label>
+
+            <input class="form-control" readonly value="@Model.Operation_Type_Name" />
+
+        </div>
+
+    </div>
+
+
+
+    <div class="section-title">
+        معلومات إضافية
+    </div>
+
+    <div class="form-row">
+
+
+
+        <input type="hidden" name="CheckRequest_Number" value="@Model.CheckRequest_Number" />
+
+
+    </div>
+
+    <div class="form-row">
+
+
+        <div class="col-md-3">
+
+            <label>اسم المورد</label>
+
+            <input class="form-control" readonly value="@Model.Importer_Name" />
+
+        </div>
+
+        <div class="col-md-3">
+
+            @*<label>بلد المنشأ</label>
+
+                @Html.TextBoxFor(m => m.List_Items.FirstOrDefault().Im_InitiatorCounteryName,
+                    new { @class = "form-control", @readonly = "readonly" })*@
+
+        </div>
+        @* <div class="col-md-3"><label>اسم الباخرة</label><input class="form-control" readonly value="@Model.List_Items.FirstOrDefault().List_Lots.FirstOrDefault().ShipName"></div>*@
+        @* <div class="col-md-3"><label>رقم البوليصة</label><input class="form-control" readonly value="@Model.List_Items.FirstOrDefault().List_Lots.FirstOrDefault().Waybill"></div>*@
+
+
+
+    </div>
+    <div class="form-row">
+        <div class="col-md-4">
+            <label>الدولة المصدرة</label>
+            <input id="s1_importer" class="form-control" readonly value="@Model.ExportCountryName">
+        </div>
+        <div class="col-md-4">
+            <label>نوع الميناء <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="originWrap">
+                <input id="s1_origin_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('origin')" onfocus="openDrop('origin')" onblur="closeDrop('origin',300)" readonly value="@Model.ExportPortType">
+                <input type="hidden" id="s1_origin" value="">
+                <div class="sel-dropdown" id="origin_drop"></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label>ميناء الشحن <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="exportWrap">
+                <input id="s1_export_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('export')" onfocus="openDrop('export')" onblur="closeDrop('export',300)" readonly value="@Model.ExportPortName">
+                <input type="hidden" id="s1_exportCountry" value="">
+                <div class="sel-dropdown" id="export_drop"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="form-row">
+        <div class="col-md-4"><label>دولة المرور</label><input id="s1_importer" class="form-control" readonly value="@Model.TransitCountryName"></div>
+        <div class="col-md-4">
+            <label>نوع الميناء <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="originWrap">
+                <input id="s1_origin_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('origin')" onfocus="openDrop('origin')" onblur="closeDrop('origin',300)" readonly value="@Model.TransitPortType">
+                <input type="hidden" id="s1_origin" value="">
+                <div class="sel-dropdown" id="origin_drop"></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label>ميناء العبور <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="exportWrap">
+                <input id="s1_export_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('export')" onfocus="openDrop('export')" onblur="closeDrop('export',300)" readonly value="@Model.TransitPortName">
+                <input type="hidden" id="s1_exportCountry" value="">
+                <div class="sel-dropdown" id="export_drop"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="form-row">
+        <div class="col-md-4"><label>الدولة المستوردة</label><input id="s1_importer" class="form-control" placeholder="مصر" readonly></div>
+        <div class="col-md-4">
+            <label>نوع الميناء <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="originWrap">
+                <input id="s1_origin_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('origin')" onfocus="openDrop('origin')" onblur="closeDrop('origin',300)" readonly value="@Model.ArrivalPortType">
+                <input type="hidden" id="s1_origin" value="">
+                <div class="sel-dropdown" id="origin_drop"></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label>ميناء الوصول <span style="color:#e53e3e">*</span></label>
+            <div class="sel-wrap" id="exportWrap">
+                <input id="s1_export_search" class="sel-search form-control" placeholder="اكتب للبحث..." autocomplete="off"
+                       oninput="filterCountry('export')" onfocus="openDrop('export')" onblur="closeDrop('export',300)" readonly value="@Model.ArrivalPortName">
+                <input type="hidden" id="s1_exportCountry" value="">
+                <div class="sel-dropdown" id="export_drop"></div>
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="section-title">
+        الأصناف
+    </div>
+
+    @if (Model.List_Items != null)
+    {
+        @foreach (var item in Model.List_Items)
+        {
+            long totalPackages = 0;
+
+            @if (item.List_Lots != null)
+            {
+                @foreach (var lot in item.List_Lots)
+                {
+                    @if (!string.IsNullOrWhiteSpace(lot.PackagesCount))
+                    {
+                        long packagesCount;
+
+                        @if (long.TryParse(lot.PackagesCount, out packagesCount))
+                        {
+                            totalPackages += packagesCount;
+                        }
+                    }
+                }
+            }
+            <div class="item-card-header">
+
+                <span class="item-card-title">
+                    صنف رقم @item.ID
+                </span>
+
+            </div>
+
+            <div class="form-row">
+
+                <div class="col-md-3">
+
+                    <label>HS Code</label>
+
+                    <div class="hs-code-actions">
+                        <input class="form-control"
+                               id="HSCode_@item.ID"
+                               value="@item.HSCode"
+                               readonly />
+                        <button type="button"
+                                class="btn btn-primary short-name-add-btn"
+                                title="تعديل HS Code"
+                                onclick="openHSCodeModal(@item.ID, '@System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(item.HSCode ?? string.Empty)')">
+                            <i class="fa fa-plus"></i>
+                            تعديل
+                        </button>
+                    </div>
+
+                </div>
+                <div class="col-md-3">
+
+                    <label>اسم النبات</label>
+
+                    <input class="form-control"
+                           value="@item.Item_Name"
+                           readonly />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label>الاسم العلمي</label>
+
+                    <input class="form-control"
+                           value="@item.Scientific_Name"
+                           readonly />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label>مختصر</label>
+
+                    <input class="form-control"
+                           id="ShortName_@item.ID"
+                           value="@item.Short_Name"
+                           readonly />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label>الحالة</label>
+
+                    <input class="form-control"
+                           value="@item.Item_Status"
+                           readonly />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label>الغرض</label>
+
+                    <input class="form-control"
+                           value="@item.Purpose"
+                           readonly />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label>الجزء النباتي</label>
+
+                    <input class="form-control"
+                           value="@item.Plant_Part"
+                           readonly />
+
+                </div>
+                <div class="col-md-3">
+
+                    <label>بلد المنشأ</label>
+
+                    <input class="form-control"
+                           value="@item.Im_InitiatorCounteryName"
+                           readonly />
+
+                </div>
+
+            </div>
+
+
+            <br />
+
+            <!-- CLASSIFICATIONS -->
+            <div class="row">
+                <div class="col-md-6">
+                    <label>التصنيف العلمي</label>
+
+                    <div class="form-row">
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 1" readonly value="@item.KingdomName" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 2" readonly value="@item.PhylumSubphylumName" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 3" readonly value="@item.OrderName" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label>التصنيف الزراعي</label>
+
+                    <div class="form-row">
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 1" readonly value="@item.ItemTypeName" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 2" readonly value="@item.MainClassificationName" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" placeholder="مستوى 3" readonly value="@item.SecondaryClassificationName" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <br />
+
+            <!-- DECLARED WEIGHTS -->
+            <div class="row">
+
+                <div class="col-md-6">
+                    <label>إجمالي الوزن القائم المُصرَّح به</label>
+
+                    <div class="form-row">
+                        @*<div class="col-md-6">
+                                <input class="form-control" readonly value="@item.GrossWeight" />
+                            </div>
+                            <div class="col-md-6">
+                                <input class="form-control" readonly value="كجم" />
+                            </div>*@
+                        <div class="col-md-6">
+
+                            <input type="text"
+                                   id="GrossWeight_@item.ID"
+                                   class="form-control"
+                                   value='@(item.GrossWeight?.ToString("#,##0.##"))'
+                                   data-original="@item.GrossWeight"
+                                   readonly />
+
+                        </div>
+
+                        <div class="col-md-6">
+
+                            <select class="form-control"
+                                    onchange="convertWeight(this,@item.ID,'GrossWeight')">
+
+                                <option value="kg">كجم</option>
+                                <option value="g">جرام</option>
+                                <option value="ton">طن</option>
+
+                            </select>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label>إجمالي الوزن الصافي المُصرَّح به</label>
+
+                    <div class="form-row">
+                        @*<div class="col-md-6">
+                                <input class="form-control" readonly value="@item.Net_Weight" />
+                            </div>
+                            <div class="col-md-6">
+                                <input class="form-control" readonly value="كجم" />
+                            </div>*@
+                        <div class="col-md-6">
+
+                            <input type="text"
+                                   id="NetWeight_@item.ID"
+                                   class="form-control"
+                                   value='@(item.Net_Weight?.ToString("#,##0.##"))'
+                                   data-original="@item.Net_Weight"
+                                   readonly />
+
+                        </div>
+
+                        <div class="col-md-6">
+
+                            <select class="form-control"
+                                    onchange="convertWeight(this,@item.ID,'NetWeight')">
+
+                                <option value="kg">كجم</option>
+                                <option value="g">جرام</option>
+                                <option value="ton">طن</option>
+
+                            </select>
+
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <label>عدد الطرود الإجمالى</label>
+
+                    <div class="form-row">
+
+                        <div class="col-md-6">
+
+                            <input type="text" class="form-control" readonly value="@totalPackages" />
+
+                        </div>
+
+
+                    </div>
+                </div>
+            </div>
+            <br />
+            <br />
+
+            <div>
+                <input class="form-control" readonly placeholder="أدخل الأوزان الإجمالية المُصرَّح بها" />
+            </div>
+
+            <br />
+            <br />
+
+            <!-- LOTS -->
+            <div class="section-title">اللوطات</div>
+            @if (item.List_Lots != null)
+            {
+                @foreach (var itemLot in item.List_Lots)
+                {
+                    <div class="lots-table-wrapper" style="padding: 10px; background-color: whitesmoke">
+
+                        <table class="table table-bordered lots-table">
+                            <thead>
+                                <tr>
+                                    <th>رقم اللوط</th>
+                                    <th>المسمى المختصر</th>
+                                    <th>وزن قائم</th>
+                                    <th>وزن صافي</th>
+                                    <th>علامة مميزة</th>
+                                    <th>صب / عبوات</th>
+                                    <th>عدد الطرود</th>
+                                    <th>نوع العبوة</th>
+                                    <th>مادة العبوة</th>
+                                    <th>اسم وسيلة الشحن</th>
+                                    <th>تاريخ الرحلة</th>
+                                    <th>رقم البوليصة</th>
+
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                <tr>
+                                    <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.Lot_Number" /></td>
+                                    <td><input class="form-control" readonly style="text-align:center;" value="@item.Short_Name" data-short-name-for="@item.ID" title="@item.Short_Name" /></td>
+                                    <td class="lot-weight-cell">
+                                        <div class="d-flex gap-1">
+                                            <input id="LotGrossWeight_@itemLot.ID"
+                                                   data-original="@itemLot.GrossWeight"
+                                                   readonly
+                                                   title='@(itemLot.GrossWeight?.ToString("#,##0.##"))'
+                                                   class="form-control lot-weight-input"
+                                                   style="text-align:center;"
+                                                   value='@(itemLot.GrossWeight?.ToString("#,##0.##"))' />
+
+                                            <select class="form-control"
+                                                    style="width:90px"
+                                                    onchange="convertWeight(this,@itemLot.ID,'LotGrossWeight')">
+                                                <option value="kg">كجم</option>
+                                                <option value="ton">طن</option>
+                                                <option value="g">جرام</option>
+                                            </select>
+
+                                        </div>
+                                    </td>
+                                    <td class="lot-weight-cell">
+                                        <div class="d-flex gap-1">
+                                            @*<input class="form-control" readonly style="width: auto; text-align: center; " value='@(itemLot.Net_Weight?.ToString("#,##0.##"))' />
+                                                <input class="form-control" readonly style="width: 55px; text-align: center; " value="كجم" />*@
+
+                                            <div class="d-flex gap-1">
+                                                <input type="text"
+                                                       id="NetWeight_@itemLot.ID"
+                                                       class="form-control lot-weight-input"
+                                                       style=" text-align: center;"
+                                                       value='@(itemLot.Net_Weight?.ToString("#,##0.##"))'
+                                                       title='@(itemLot.Net_Weight?.ToString("#,##0.##"))'
+                                                       data-original="@itemLot.Net_Weight"
+                                                       readonly />
+
+                                                <select class="form-control"
+                                                        style="width:90px"
+                                                        onchange="convertWeight(this,@itemLot.ID,'NetWeight')">
+                                                    <option value="kg">كجم</option>
+                                                    <option value="g">جرام</option>
+                                                    <option value="ton">طن</option>
+                                                </select>
+                                            </div>
+
+                                        </div>
+                                    </td>
+
+                                    <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.DistinctiveMark" /></td>
+
+                                    @if (@itemLot.containers_type_ID == 108)
+                                    {
+                                        <td><input class="form-control" readonly style="text-align:center;" value="صب" /></td>
+                                        <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.PackagesCount" /></td>
+                                        <td><input class="form-control" readonly style="text-align:center;" value="" /></td>
+                                        <td><input class="form-control" readonly style="width: auto; text-align: center; " value="" /></td>
+                                    } else {                                        <td><input class="form-control" readonly style="text-align:center;" value="عبوات" /></td>
+                                        <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.PackagesCount" /></td>
+                                        <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.packageType" /></td>
+                                        <td><input class="form-control" readonly style="width: auto; text-align: center; " value="@itemLot.packageMaterialName" /></td>
+                                    }
+
+
+                                    <td><input class="form-control" readonly style=" text-align: center; " value="@itemLot.ShipName" /></td>
+                                    <td><input class="form-control" readonly style="width: 100px; text-align: center; " value='@(itemLot.TripDate?.ToString("dd/MM/yyyy"))' /></td>
+                                    <td><input class="form-control" readonly style="text-align:center;" value="@itemLot.Waybill" /></td>
+
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            <br />
+            <br />
+
+            <!-- المرفقات -->
+
+
+
+            <br />
+            <br />
+
+        }
+        <!-- المرفقات على مستوى الطلب -->
+        <div class="section-title">المرفقات</div>
+
+        @if (Model.List_Attachments != null && Model.List_Attachments.Any())
+        {
+            @foreach (var itemAttachment in Model.List_Attachments)
+            {
+                <div style="padding:10px; background-color:whitesmoke; margin-bottom:10px;">
+
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>اسم المرفق</th>
+                                <th>ملف</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <input class="form-control"
+                                           readonly
+                                           value="@itemAttachment.Attachment_Number" />
+                                </td>
+
+                                <td>
+                                    <center>
+                                        <input type="button"
+                                               value="عرض المرفق"
+                                               class="form-control"
+                                               onclick="btndownload_click(this)"
+                                               data-assigned-id="@itemAttachment.AttachmentPath"
+                                               style="width:auto; color:#fff;" />
+                                    </center>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+            }
+        } else {            <div class="alert alert-info">
+                لا توجد مرفقات لهذا الطلب.
+            </div>
+        }
+
+        <!-- ملاحظات -->
+        <div class="section-title">ملاحظات</div>
+
+        @if (Model.IsAccepted != null || Model.Completion_Status == 1)
+        {
+            <textarea class="form-control" rows="4" id="Completion_Notes" name="Completion_Notes" readonly>@Model.Completion_Notes</textarea>
+        } else {            <textarea class="form-control" rows="4" id="Completion_Notes" name="Completion_Notes">@Model.Completion_Notes</textarea>
+        }
+        <br />
+        <br />
+    }
+    @if (Model.IsAccepted == null &&
+        (string.IsNullOrWhiteSpace(Model.Completion_Notes) || Model.Completion_Status == 2))
+    {
+        <input type="hidden" id="txtIsAccepted" name="IsAccepted" value="" />
+        <div class="form-row">
+            <div class="col-md-3"></div>
+
+            <div class="col-md-2">
+                @{
+
+                    //  var Disabled = Model.IsPaid == false ? "disabled" : "";
+
+                    var Disabled = Model.IsAccepted == true ? "disabled" : "";
+
+                    Disabled = Model.IsAccepted == true ? "disabled" : Disabled;
+
+                    Disabled = ViewBag.Hide_Button == 1 ? "disabled" : Disabled;
+                    var t = "";
+                    var t1 = "";
+
+                    var txt = Model.IsAccepted == true ? t1 : t;
+                    var temp = "";
+
+
+                    txt = Model.IsPaid == false ? temp : txt;
+
+
+                    <input type="submit"
+                           id="btnSave"
+                           value="قبول"
+                           @*value="@txt"*@
+                           @Disabled
+                           class="btn ls-light-green-btn btn-round"
+                           style="width: 100%; background: #2c5282; font-weight: bold; " />
+                    @*<input type="submit" id="btnSave" name="" value="@txt"
+                        @Disabled
+                        class="btn ls-light-green-btn btn-round" style="width:90%;" />*@
+                }
+
+            </div>
+
+
+
+            <div class="col-md-2">
+                @*eman*@
+                <input type="button"
+                       id="btnReject"
+                       @Disabled
+                       value="رفض"
+                       @*value="@PlantQuar.WEB.Language.Resource_data1.requestrejected"*@
+                       class="btn ls-light-green-btn btn-round"
+                       style="width: 100%; background-color: #e5322d !important; border: 2px solid #e5322d !important; box-shadow: 0 4px #e5322d !important; color:#fff !important;" />
+
+                @*<input type="button" id="btnReject" name="" value="@PlantQuar.WEB.Language.Resource_data1.requestrejected"
+                    @Disabled
+                    class="btn ls-light-green-btn btn-round" data-toggle="modal" data-target="#Modal-refuse"
+                    style="width:90%;" />*@
+            </div>
+
+            <div class="col-md-2">
+                @if (Model.Completion_Status == 2)
+                {
+                    <input type="button"
+                           id="btnContinue"
+                           value="طلب استكمال مرة أخرى"
+                           class="btn ls-light-green-btn btn-round"
+                           style="width:100%; background:#4f46e5 !important; color:#fff !important;" />
+                } else {                    <input type="button"
+                           id="btnContinue"
+                           value="استكمال والتنفيذ"
+                           class="btn ls-light-green-btn btn-round"
+                           style="width:100%;" />
+                }
+            </div>
+            @*<div class="col-md-3">
+
+                    <a id="print" class="btn ls-light-green-btn btn-round" href="/ExportRequest/ExRequest_Details/Index2?requestId=@Model.CheckRequest_Id">print</a>
+                </div>*@
+
+            <div class="col-md-3"></div>
+        </div>
+
+        <!-- Modal -->
+    } else {        @if (Model.Completion_Status == 2 && Model.IsAccepted == null)
+        {
+            <span class="request-action-status request-action-approved">تم الاستكمال بواسطة العميل</span>
+        } else if (!string.IsNullOrWhiteSpace(Model.Completion_Notes) && Model.IsAccepted == null) {            <span class="request-action-status request-action-completion">استكمال</span>
+        } else if (Model.IsAccepted == true) {            <span class="request-action-status request-action-approved">تم قبول الطلب</span>
+        } else if (Model.IsAccepted == false) {            <span class="request-action-status request-action-rejected">تم رفض الطلب</span>
+        }
+    }
+</form>
+<div class="modal fade" id="hsCodeModal" tabindex="-1" role="dialog" aria-labelledby="hsCodeModalTitle">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="إغلاق"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="hsCodeModalTitle">تعديل HS Code</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="hsCodeRequestItemId" />
+                <div class="form-group">
+                    <label for="currentHSCode">HS Code الحالي</label>
+                    <input type="text" id="currentHSCode" class="form-control" readonly />
+                </div>
+                <div class="form-group">
+                    <label for="hsCodeAddition">القيمة الجديدة</label>
+                    <input type="text" id="hsCodeAddition" class="form-control" maxlength="200" autocomplete="off" />
+                    <span id="hsCodeValidation" class="text-danger" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">إلغاء</button>
+                <button type="button" id="saveHSCodeAddition" class="btn btn-primary">حفظ التعديل</button>
+            </div>
+        </div>
+    </div>
+</div>
+@if (TempData["Message"] != null)
+{
+    <script>
+        alert(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Message"])));
+    </script>
+}
+
+
+<script>
+
+    function openHSCodeModal(requestItemId, currentHSCode) {
+        $("#hsCodeRequestItemId").val(requestItemId);
+        $("#currentHSCode").val(currentHSCode || "");
+        $("#hsCodeAddition").val("");
+        $("#hsCodeValidation").hide().text("");
+        $("#hsCodeModal").modal("show");
+        setTimeout(function () { $("#hsCodeAddition").focus(); }, 250);
+    }
+
+    $(document).on("click", "#saveHSCodeAddition", function () {
+        var addition = $.trim($("#hsCodeAddition").val());
+        var requestItemId = $("#hsCodeRequestItemId").val();
+        var validation = $("#hsCodeValidation");
+        var saveButton = $(this);
+
+        if (!addition) {
+            validation.text("يرجى كتابة القيمة الجديدة").show();
+            return;
+        }
+
+        validation.hide().text("");
+        saveButton.prop("disabled", true);
+
+        $.ajax({
+            url: '@Url.Action("AppendHSCode", "Im_CheckRequestDisplay")',
+            type: "POST",
+            data: {
+                __RequestVerificationToken: $('#submform input[name="__RequestVerificationToken"]').val(),
+                requestItemId: requestItemId,
+                addition: addition
+            }
+        }).done(function (response) {
+            if (!response || !response.success) {
+                validation.text(response && response.message ? response.message : "تعذر حفظ الإضافة").show();
+                return;
+            }
+
+            $("#HSCode_" + requestItemId).val(response.hsCode);
+            $("#hsCodeModal").modal("hide");
+            alert(response.message);
+        }).fail(function () {
+            validation.text("حدث خطأ أثناء حفظ الإضافة").show();
+        }).always(function () {
+            saveButton.prop("disabled", false);
+        });
+    });
+
+    $(document).on("keypress", "#hsCodeAddition", function (e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $("#saveHSCodeAddition").click();
+        }
+    });
+
+    function btndownload_click(elem) {
+
+        var path = elem.getAttribute("data-assigned-id");
+
+        if (!path) {
+
+            alert("لا يوجد ملف");
+
+            return;
+        }
+
+        window.open(
+            '/Imges/Downlood_Imge/Get_Downlood_Imge?path1='
+            + encodeURIComponent(path),
+            '_blank',
+            'noopener'
+        );
+    }
+    function convertWeight(elem, id, type) {
+        var unit = elem.value;
+
+        var input =
+            document.getElementById(type + "_" + id);
+
+        var originalValue =
+            parseFloat(input.getAttribute("data-original"));
+
+        var result = originalValue;
+
+        if (unit === "kg") {
+            result = originalValue;
+        }
+
+        else if (unit === "g") {
+            result = originalValue * 1000;
+        }
+
+        else if (unit === "ton") {
+            result = originalValue / 1000;
+        }
+
+        input.value = result.toFixed(2);
+    }
+    $(document).on("click", "#btnContinue", function (e) {
+
+        e.preventDefault();
+
+        if (!validateCompletionNotes()) {
+            return;
+        }
+
+
+        $("#submform")
+            .attr("action", '@Url.Action("ContinueRequest", "Im_CheckRequestDisplay")')
+            .submit();
+
+    });
+    // الموافقة والرفض
+    $("#btnSave").click(function () {
+        $("#txtIsAccepted").val("true");
+    });
+
+    $("#btnReject").click(function () {
+        if (!validateCompletionNotes()) {
+            return;
+        }
+
+        $("#txtIsAccepted").val("false");
+
+        // لو عايز تبعت الفورم مباشرة
+        $("#submform").submit();
+    });
+
+    $.ajax({
+        url: '/Im_CheckRequestDisplay/acceptRequest',
+        type: 'POST',
+        data: model,
+        success: function (response) {
+
+            if (response.success) {
+
+                alert(response.message);
+
+                window.location.href =
+                    '/Im_CheckRequests/Im_CheckRequestDisplay/Index?ImCheckRequest_Number='
+                    + requestNumber;
+            }
+            else {
+                alert(response.message);
+            }
+        }
+    });
+    function validateCompletionNotes() {
+        var $notes = $("#Completion_Notes");
+
+        if (!$.trim($notes.val())) {
+            alert("من فضلك أدخل ملاحظاتك أولاً.");
+            $notes.focus();
+            return false;
+        }
+
+        return true;
+    }
+</script>

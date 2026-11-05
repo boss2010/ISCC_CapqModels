@@ -1,0 +1,263 @@
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "تعديل الميناء المسجلة لطلب";
+}
+
+<style>
+    .port-page { direction: rtl; max-width: 1500px; margin: 0 auto; padding: 28px 18px; color: #25343b; }
+    .port-page h2 { color: #246b70; margin: 0 0 18px; font-weight: 800; }
+    .lbl { border: none; box-shadow: 0 5px #beb3a0; background: #5c0000 !important; font-weight: 600; color: #fafbd3 !important; border-radius: 16px 55px; padding: 10px 15px; display: inline-block; }
+    .color-white { color: #fff !important; background: #246b70 !important; border: 0; border-radius: 8px; padding: 9px 18px; font-weight: 700; }
+    .port-table-card { background:#fff; border:1px solid #e5ecef; border-radius:16px; box-shadow:0 6px 22px rgba(28,52,65,.07); overflow:hidden; }
+    .port-table { margin: 0; }
+    .port-table thead { background: #287f82; color: #fff; }
+    .port-table thead th { padding: 13px 9px; border: 0; text-align: center; white-space: nowrap; }
+    .port-table tbody td { padding: 12px 9px; border: 0; border-bottom: 1px solid #edf1f3; vertical-align: middle; text-align: center; }
+    .port-table tbody tr:nth-child(even) td { background: #f8fafb; }
+    .form-control { height: 42px; border: 1px solid #d8e2e6; border-radius: 8px; box-shadow: none; }
+</style>
+
+<div class="port-page">
+    <h2>تعديل الميناء المسجلة لطلب</h2>
+
+    <form id="antiforgeryPortForm" method="post">@Html.AntiForgeryToken()</form>
+
+    <div class="row mar-bottom-15">
+        <div class="col-md-6 flex-align">
+            <label class="col-md-4" style="margin-top:10px" for="CheckNumber">رقم الطلب</label>
+            <div class="col-md-8">
+                <input type="text" class="form-control" id="CheckNumber" autocomplete="off" />
+            </div>
+        </div>
+        <div class="col-md-2">
+            <input type="button" value="عرض" class="form-control color-white" id="show_data" />
+        </div>
+    </div>
+
+    <br />
+    <div class="row"><div class="col-md-12"><label class="lbl">بيانات الميناء</label></div></div>
+    <br />
+
+    <div id="divcheck" class="port-table-card">
+        <div class="table-responsive">
+            <table id="table_List_Im_Check" class="table port-table">
+                <thead>
+                    <tr class="label-primary">
+                        <th class="font-weight-bold">نوع العملية</th>
+                        <th>الميناء المسجلة</th>
+                        <th>الدولة</th>
+                        <th>الميناء الجديدة</th>
+                        <th>الدولة / المحافظة</th>
+                        <th>الميناء الجديدة</th>
+                    </tr>
+                </thead>
+                <tbody id="portsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <br />
+    <div class="row">
+        <div class="col-md-10"></div>
+        <div class="col-md-2">
+            <input type="button" value="حفظ" class="form-control color-white" id="saveChanges" />
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var currentRows = [];
+    var verificationToken = $('input[name="__RequestVerificationToken"]').val();
+
+    function optionItems(items) {
+        return (items || []).map(function (item) {
+            return { value: item.value ?? item.Value, text: item.displayText ?? item.DisplayText };
+        });
+    }
+
+    function fillSelect(select, items) {
+        var placeholder = items.length && items[0].value === null ? items.shift() : null;
+        var html = placeholder ? '<option value="">' + placeholder.text + '</option>' : '<option value="">----------</option>';
+        $.each(items, function (_, item) {
+            html += '<option value="' + item.value + '">' + escapeHtml(item.text) + '</option>';
+        });
+        select.html(html);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderRows(records) {
+        currentRows = records || [];
+        var body = $('#portsBody').empty();
+        if (!currentRows.length) {
+            body.append('<tr><td colspan="6" class="text-muted py-4">لا توجد نتائج مطابقة</td></tr>');
+            return;
+        }
+
+        $.each(currentRows, function (_, item) {
+            var typeId = item.reqPortTypeId;
+            var id = item.checkRequestPortId;
+            var portCell = '';
+            var countryCell = '';
+            var portSelect = '';
+            var current = (item.portNameAr || '') + ' / ' + (item.countryArName || item.governName || '');
+            if (typeId === 11 || typeId === 9) {
+                var label = typeId === 11 ? 'عبور' : 'شحن';
+                countryCell = '<td>' + escapeHtml(item.countryArName || '—') + ' → ' + escapeHtml(item.portNameAr || '—') + '</td>';
+                var countrySelect = typeId === 11
+                    ? '<select class="form-control passage-country" data-port="' + id + '"></select>'
+                    : '<select class="form-control shipping-country" data-port="' + id + '"></select>';
+                var internationalSelect = typeId === 11
+                    ? '<select class="form-control passage-port" data-port="' + id + '"></select>'
+                    : '<select class="form-control shipping-port" data-port="' + id + '"></select>';
+                body.append('<tr data-port="' + id + '" data-type="' + typeId + '"><td hidden>' + typeId + '</td><td>' + label + '</td><td>' + escapeHtml(current) + '</td>' + countryCell + '<td>' + countrySelect + '</td><td>' + internationalSelect + '</td></tr>');
+            } else if (typeId === 10) {
+                body.append('<tr data-port="' + id + '" data-type="' + typeId + '"><td hidden>' + typeId + '</td><td>وصول</td><td>' + escapeHtml(item.governName || '—') + ' → ' + escapeHtml(item.portNameAr || '—') + '</td><td>مصر → ' + escapeHtml(item.governName || '—') + ' → ' + escapeHtml(item.portNameAr || '—') + '</td><td><select class="form-control arrival-government" data-port="' + id + '"></select></td><td><select class="form-control arrival-port" data-port="' + id + '"></select></td></tr>');
+            }
+        });
+
+        loadReferenceOptions();
+    }
+
+    function loadReferenceOptions() {
+        var rows = $('#portsBody tr[data-port]');
+        if (!rows.length) return;
+
+        $.post('@Url.Action("country_ID", "Im_checkRequest_Update_Port")', { __RequestVerificationToken: verificationToken }, function (response) {
+            var options = optionItems(response.options ?? response.Options);
+            $('.passage-country, .shipping-country').each(function () { fillSelect($(this), options.slice()); });
+            $('.shipping-country').trigger('change');
+            $('.passage-country').trigger('change');
+        }).fail(function () {
+            $('.passage-country, .shipping-country').html('<option value="">تعذر التحميل</option>');
+        });
+
+        $.post('@Url.Action("Government_ID", "Im_checkRequest_Update_Port")', { __RequestVerificationToken: verificationToken }, function (response) {
+            var options = optionItems(response.options ?? response.Options);
+            $('.arrival-government').each(function () { fillSelect($(this), options.slice()); });
+            $('.arrival-government').trigger('change');
+        }).fail(function () {
+            $('.arrival-government').html('<option value="">تعذر التحميل</option>');
+        });
+    }
+
+    function loadPortsFor(select, url, value, parameterName) {
+        $(select).empty().append('<option value="">جار التحميل...</option>');
+        $.ajax({
+            url: url,
+            type: 'POST',
+            headers: { RequestVerificationToken: verificationToken },
+            data: (function () { var payload = {}; payload[parameterName || 'country_ID'] = value; payload.__RequestVerificationToken = verificationToken; return payload; })(),
+            success: function (response) {
+                var options = optionItems(response.options ?? response.Options);
+                fillSelect($(select), options);
+            },
+            error: function () {
+                $(select).html('<option value="">تعذر التحميل</option>');
+            }
+        });
+    }
+
+    function showData() {
+        var checkNumber = $('#CheckNumber').val().trim();
+        if (!checkNumber) {
+            alert('يجب ادخال رقم الطلب أولا');
+            return;
+        }
+
+        $.ajax({
+            url: '@Url.Action("Port_List", "Im_checkRequest_Update_Port")',
+            type: 'POST',
+            headers: { RequestVerificationToken: verificationToken },
+            data: { CheckNumber: checkNumber, __RequestVerificationToken: verificationToken },
+            success: function (data) {
+                var records = data.Records || data.records || [];
+                var result = data.Result ?? data.result;
+                if (result === 2) {
+                    currentRows = [];
+                    $('#portsBody').empty().append('<tr><td colspan="6" class="text-muted py-4">لا يوجد طلب بهذا الرقم</td></tr>');
+                    return;
+                }
+                if (result === 1) {
+                    alert('تم تشكيل لجنة ولا يمكن تعديل الميناء');
+                }
+                renderRows(records);
+            },
+            error: function () {
+                alert('تعذر تحميل بيانات الميناء');
+            }
+        });
+    }
+
+    function saveChanges() {
+        var checkNumber = $('#CheckNumber').val().trim();
+        if (!checkNumber) {
+            alert('يجب ادخال رقم الطلب أولا');
+            return;
+        }
+
+        var values = [];
+        currentRows.forEach(function (item) {
+            var id = item.checkRequestPortId;
+            var typeId = item.reqPortTypeId;
+            var original = item.portId ? String(item.portId) : '';
+            var selected = '';
+            if (typeId === 10) selected = $('#portsBody tr[data-port="' + id + '"] .arrival-port').val();
+            else if (typeId === 9) selected = $('#portsBody tr[data-port="' + id + '"] .shipping-port').val();
+            else if (typeId === 11) selected = $('#portsBody tr[data-port="' + id + '"] .passage-port').val();
+
+            if (!selected || selected === '0' || selected === original) return;
+            values.push({ Im_CheckRequest_Port_ID: id, Port_ID: Number(selected), status: 1 });
+        });
+
+        if (!values.length) {
+            alert('لا توجد تغييرات لحفظها');
+            return;
+        }
+
+        if (!confirm('تأكيد حفظ تعديلات المواني؟')) return;
+
+        $.ajax({
+            url: '@Url.Action("update_port", "Im_checkRequest_Update_Port")',
+            type: 'POST',
+            contentType: 'application/json; charset=utf-8',
+            headers: { RequestVerificationToken: verificationToken },
+            data: JSON.stringify({ list_of_values: values, CheckNumber: checkNumber }),
+            success: function () {
+                alert('تم حفظ التعديلات بنجاح');
+                showData();
+            },
+            error: function (xhr) {
+                var response = xhr.responseJSON;
+                alert((response && (response.Message || response.message)) || 'تعذر حفظ التعديلات');
+            }
+        });
+    }
+
+    $('#show_data').on('click', showData);
+    $('#saveChanges').on('click', saveChanges);
+    $('#CheckNumber').on('keypress', function (e) { if (e.key === 'Enter') showData(); });
+
+    $('#portsBody').on('change', '.passage-country, .shipping-country', function () {
+        var id = $(this).data('port');
+        var typeId = $(this).closest('tr').data('type');
+        var countryId = $(this).val();
+        var target = typeId == 11 ? '.passage-port' : '.shipping-port';
+        loadPortsFor('#portsBody tr[data-port="' + id + '"] ' + target, '@Url.Action("InternationalPort_ID", "Im_checkRequest_Update_Port")', countryId, 'country_ID');
+    });
+
+    $('#portsBody').on('change', '.arrival-government', function () {
+        var id = $(this).data('port');
+        var governmentId = $(this).val();
+        loadPortsFor('#portsBody tr[data-port="' + id + '"] .arrival-port', '@Url.Action("Port_ID", "Im_checkRequest_Update_Port")', governmentId, 'government_ID');
+    });
+</script>
+}
