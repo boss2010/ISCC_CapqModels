@@ -12,6 +12,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionPrintReader>();
+builder.Services.AddSingleton<PlantMobile.Data.PermissionScreenReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionMenuAccessReader>();
 builder.Services.AddSingleton<PlantMobile.Data.CheckRequestPortReader>();
 builder.Services.AddSingleton<PlantMobile.Data.CheckRequestOutletReader>();

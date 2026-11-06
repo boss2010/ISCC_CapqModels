@@ -1,0 +1,152 @@
+@{
+    ViewData["Title"] = "إعادة طباعة الإذن";
+}
+<style>
+    .permission-screen{direction:rtl;max-width:1100px;margin:0 auto;padding:28px 18px;color:#25343b}
+    .permission-screen .page-heading{margin-bottom:18px}
+    .permission-screen .page-heading h2{color:#246b70;margin:0;font-weight:800}
+    .permission-screen .page-heading p{margin:5px 0 0;color:#71838b}
+    .permission-card{background:#fff;border:1px solid #e5ecef;border-radius:16px;padding:22px;box-shadow:0 6px 22px rgba(28,52,65,.07);margin-bottom:20px}
+    .permission-card label{display:block;margin-bottom:7px;color:#40545d;font-weight:700}
+    .permission-card .form-control{height:42px;border:1px solid #d8e2e6;border-radius:8px;box-shadow:none}
+    .permission-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+    .permission-actions .btn{min-width:140px;border-radius:8px;padding:9px 20px}
+    .print-table thead{background:#287f82;color:#fff}
+    .print-table thead th{padding:13px 9px;border:0;text-align:center;white-space:nowrap}
+    .print-table tbody td{padding:12px 9px;border:0;border-bottom:1px solid #edf1f3;text-align:center;vertical-align:middle}
+    .print-table tbody tr:nth-child(even) td{background:#f8fafb}
+    .state-badge{display:inline-block;border-radius:20px;padding:6px 11px;font-size:12px;font-weight:700;white-space:nowrap}
+    .state-success{color:#177245;background:#e5f6ed}
+    .state-warning{color:#94600b;background:#fff3d8}
+    .state-muted{color:#586b74;background:#edf1f3}
+</style>
+
+<div class="permission-screen">
+    <div class="page-heading">
+        <h2>إعادة طباعة الإذن</h2>
+        <p>البحث برقم الإذن لعرض حالة الطباعة العربية والإنجليزية ثم السماح بإعادة الطباعة</p>
+    </div>
+
+    <div class="permission-card">
+        <label for="permisionnumber">رقم الإذن</label>
+        <input type="text" id="permisionnumber" class="form-control" placeholder="بحث برقم الإذن" autocomplete="off" />
+        <div class="permission-actions">
+            <button type="button" class="btn btn-primary" onclick="results()">بحث</button>
+        </div>
+    </div>
+
+    <div id="screenMessage" class="alert" style="display:none"></div>
+
+    <div class="permission-card" id="PrintStatusID" style="display:none">
+        <input type="hidden" id="ImPermission_Number_ID" value="" />
+        <table class="table print-table" role="grid" style="margin:0">
+            <thead>
+                <tr>
+                    <th>الطباعة</th>
+                    <th>الحالة السابقة</th>
+                    <th>الحالة الجديدة</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-weight:700">طباعة نسخة عربي</td>
+                    <td id="PreArabic"></td>
+                    <td>
+                        <input type="checkbox" id="cbid1" onclick="updateLable()" />
+                        <span id="labelPrintAr" style="margin-right:8px"></span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight:700">طباعة نسخة إنجليزي</td>
+                    <td id="PreEnglish"></td>
+                    <td>
+                        <input type="checkbox" id="cbid2" onclick="updateLable()" />
+                        <span id="labelPrintEn" style="margin-right:8px"></span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="permission-actions">
+            <button type="button" id="ActivatePrint" class="btn btn-success" onclick="update()">تعديل</button>
+        </div>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+<script>
+    var permissionScreenToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+    function showMessage(text, isError) {
+        var box = document.getElementById('screenMessage');
+        box.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+        box.textContent = text;
+        box.style.display = 'block';
+    }
+
+    function labelForPrint(isPrinted) {
+        return isPrinted ? 'لن يتم إعادة الطباعة مرة أخرى' : 'سيتم إعادة الطباعة مرة أخرى';
+    }
+
+    function results() {
+        var permisionnumber = document.getElementById('permisionnumber').value.trim();
+        if (permisionnumber === '') {
+            showMessage('أدخل رقم الإذن أولاً.', true);
+            return;
+        }
+
+        $.post('/Im_Permissions/IM_Permission_Active_Print/GetPermissionsList', {
+            ImPermission_Number: permisionnumber,
+            __RequestVerificationToken: permissionScreenToken
+        }).done(function (data) {
+            if (!data || data.Result === 'ERROR') {
+                document.getElementById('PrintStatusID').style.display = 'none';
+                showMessage((data && data.Message) || 'لا يوجد إذن بهذا الرقم', true);
+                return;
+            }
+
+            var item = data[0];
+            document.getElementById('screenMessage').style.display = 'none';
+            document.getElementById('PrintStatusID').style.display = 'block';
+            document.getElementById('ImPermission_Number_ID').value = item.Im_PermissionRequest_ID;
+            document.getElementById('PreArabic').textContent = item.IS_Print_Ar ? 'تمت الطباعة' : 'لم تتم الطباعة';
+            document.getElementById('PreEnglish').textContent = item.IS_Print_EN ? 'تمت الطباعة' : 'لم تتم الطباعة';
+            document.getElementById('cbid1').checked = !!item.IS_Print_Ar;
+            document.getElementById('cbid2').checked = !!item.IS_Print_EN;
+            updateLable();
+        }).fail(function () {
+            showMessage('تعذر تحميل بيانات الإذن.', true);
+        });
+    }
+
+    function updateLable() {
+        document.getElementById('labelPrintAr').textContent = labelForPrint(document.getElementById('cbid1').checked);
+        document.getElementById('labelPrintEn').textContent = labelForPrint(document.getElementById('cbid2').checked);
+    }
+
+    function update() {
+        var permissionId = document.getElementById('ImPermission_Number_ID').value;
+        if (!permissionId) {
+            showMessage('ابحث عن الإذن أولاً.', true);
+            return;
+        }
+
+        $.post('/Im_Permissions/IM_Permission_Active_Print/UpdateUserDatal', {
+            ImPermission_Number_ID: permissionId,
+            IS_Print_Ar: document.getElementById('cbid1').checked,
+            IS_Print_EN: document.getElementById('cbid2').checked,
+            NOTS_AR: document.getElementById('labelPrintAr').textContent,
+            NOTS_EN: document.getElementById('labelPrintEn').textContent,
+            __RequestVerificationToken: permissionScreenToken
+        }).done(function (data) {
+            if (data && data.Result === 'OK') {
+                showMessage('تم حفظ التعديل بنجاح.', false);
+                results();
+            } else {
+                showMessage((data && data.Message) || 'تعذر حفظ التعديل.', true);
+            }
+        }).fail(function () {
+            showMessage('تعذر حفظ التعديل.', true);
+        });
+    }
+</script>

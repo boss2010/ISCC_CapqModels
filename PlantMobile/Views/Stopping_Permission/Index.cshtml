@@ -1,0 +1,160 @@
+@{
+    ViewData["Title"] = "إيقاف الإذن";
+}
+<style>
+    .permission-screen{direction:rtl;max-width:1200px;margin:0 auto;padding:28px 18px;color:#25343b}
+    .permission-screen .page-heading{margin-bottom:18px}
+    .permission-screen .page-heading h2{color:#246b70;margin:0;font-weight:800}
+    .permission-screen .page-heading p{margin:5px 0 0;color:#71838b}
+    .permission-card{background:#fff;border:1px solid #e5ecef;border-radius:16px;padding:22px;box-shadow:0 6px 22px rgba(28,52,65,.07);margin-bottom:20px}
+    .permission-card label{display:block;margin-bottom:7px;color:#40545d;font-weight:700}
+    .permission-card .form-control{height:42px;border:1px solid #d8e2e6;border-radius:8px;box-shadow:none}
+    .permission-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+    .permission-actions .btn{min-width:140px;border-radius:8px;padding:9px 20px}
+    .stop-table{overflow-x:auto}
+    .stop-table table{min-width:900px;margin:0}
+    .stop-table thead{background:#287f82;color:#fff}
+    .stop-table thead th{padding:13px 9px;border:0;text-align:center;white-space:nowrap}
+    .stop-table tbody td{padding:12px 9px;border:0;border-bottom:1px solid #edf1f3;text-align:center;vertical-align:middle}
+    .stop-table tbody tr:nth-child(even) td{background:#f8fafb}
+    .action-link{display:inline-block;color:#21777a;background:#e8f5f5;border-radius:7px;padding:6px 12px;font-weight:700;text-decoration:none}
+    .action-link:hover{background:#21777a;color:#fff}
+</style>
+
+<div class="permission-screen">
+    <div class="page-heading">
+        <h2>إيقاف الإذن</h2>
+        <p>البحث برقم الإذن لعرض حالته وإيقافه (لا يمكن الإيقاف إذا كان الإذن مرتبطًا بطلب وارد)</p>
+    </div>
+
+    <div class="permission-card">
+        <label for="permisionnumber">رقم الإذن</label>
+        <input type="text" id="permisionnumber" class="form-control" placeholder="بحث برقم الإذن" autocomplete="off" />
+        <div class="permission-actions">
+            <button type="button" class="btn btn-primary" onclick="results()">بحث</button>
+        </div>
+    </div>
+
+    <div id="screenMessage" class="alert" style="display:none"></div>
+
+    <div class="permission-card" id="StoppingCard" style="display:none">
+        <div class="stop-table">
+            <table class="table" role="grid">
+                <thead>
+                    <tr>
+                        <th>رقم الإذن</th>
+                        <th>الصنف</th>
+                        <th>نوع المستورد</th>
+                        <th>اسم المستورد</th>
+                        <th>دولة التصدير</th>
+                        <th>تاريخ الوصول</th>
+                        <th>التفاصيل</th>
+                        <th>حالة الطلب</th>
+                    </tr>
+                </thead>
+                <tbody id="tblCheckLst"></tbody>
+            </table>
+        </div>
+        <div class="permission-actions">
+            <button type="button" id="ActivatePrint" class="btn btn-danger" onclick="update()" style="display:none">إيقاف الإذن</button>
+        </div>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+<script>
+    var stoppingToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+    function showMessage(text, isError) {
+        var box = document.getElementById('screenMessage');
+        box.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+        box.textContent = text;
+        box.style.display = 'block';
+    }
+
+    function statusText(item) {
+        if (item.IsAcceppted === true) {
+            if (item.IsPaid === true) {
+                return (item.IS_Print_Ar === true && item.IS_Print_EN === true)
+                    ? 'تمت الموافقة وتم الدفع وتمت الطباعة'
+                    : 'تمت الموافقة وتم الدفع ولم تتم الطباعة';
+            }
+            if (item.IsPaid === null) {
+                return 'تمت الموافقة ولم يتم الدفع';
+            }
+            return 'تمت الموافقة';
+        }
+        if (item.IsAcceppted === false) {
+            return 'تم رفض الطلب';
+        }
+        return 'لم يتخذ إجراء على الإذن';
+    }
+
+    function results() {
+        var permisionnumber = document.getElementById('permisionnumber').value.trim();
+        if (permisionnumber === '') {
+            showMessage('أدخل رقم الإذن أولاً.', true);
+            return;
+        }
+
+        $.post('/Im_Permissions/Stopping_Permission/GetPermissionsList', {
+            ImPermission_Number: permisionnumber,
+            __RequestVerificationToken: stoppingToken
+        }).done(function (data) {
+            if (!data || data.Result === 'ERROR') {
+                document.getElementById('StoppingCard').style.display = 'none';
+                showMessage((data && data.Message) || 'لا يوجد إذن بهذا الرقم', true);
+                return;
+            }
+
+            var item = data[0];
+            document.getElementById('screenMessage').style.display = 'none';
+            document.getElementById('StoppingCard').style.display = 'block';
+
+            var detailsUrl = '/Im_Permissions/Im_permissionDetail/Index?ImPermission_Number=' + encodeURIComponent(item.ImPermission_Number);
+            var row = '<tr>'
+                + '<td>' + item.ImPermission_Number + '</td>'
+                + '<td>' + (item.ShortName || '') + '</td>'
+                + '<td>' + (item.ImporterTypeName || '') + '</td>'
+                + '<td>' + (item.ImporterName || '') + '</td>'
+                + '<td>' + (item.ExportCountryName || '') + '</td>'
+                + '<td>' + (item.Arrival_Date || '') + '</td>'
+                + '<td><a class="action-link" href="' + detailsUrl + '">التفاصيل</a></td>'
+                + '<td>' + statusText(item) + '</td>'
+                + '</tr>';
+            document.getElementById('tblCheckLst').innerHTML = row;
+
+            if (item.Im_CheckRequest_ID === null || item.Im_CheckRequest_ID === undefined) {
+                document.getElementById('ActivatePrint').style.display = 'inline-block';
+            } else {
+                document.getElementById('ActivatePrint').style.display = 'none';
+                showMessage('لا يمكنك إيقاف هذا الإذن لأنه مرتبط بطلب وارد.', true);
+            }
+        }).fail(function () {
+            showMessage('تعذر تحميل بيانات الإذن.', true);
+        });
+    }
+
+    function update() {
+        var permisionnumber = document.getElementById('permisionnumber').value.trim();
+        if (permisionnumber === '') {
+            showMessage('أدخل رقم الإذن أولاً.', true);
+            return;
+        }
+
+        $.post('/Im_Permissions/Stopping_Permission/UpdateUserDatal', {
+            ImPermission_Number: permisionnumber,
+            __RequestVerificationToken: stoppingToken
+        }).done(function (data) {
+            if (data && data.Result === 'OK') {
+                document.getElementById('ActivatePrint').style.display = 'none';
+                showMessage('تم إيقاف الإذن بنجاح.', false);
+            } else {
+                showMessage((data && data.Message) || 'تعذر إيقاف الإذن.', true);
+            }
+        }).fail(function () {
+            showMessage('تعذر إيقاف الإذن.', true);
+        });
+    }
+</script>
