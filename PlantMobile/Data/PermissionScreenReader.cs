@@ -153,7 +153,7 @@ public sealed class PermissionScreenReader
     {
         const string sql = """
             UPDATE dbo.Im_PermissionRequest
-            SET Im_CheckRequest_ID = 0
+            SET Im_CheckRequest_ID = NULL
             WHERE ImPermission_Number = @PermissionNumber;
             """;
 
