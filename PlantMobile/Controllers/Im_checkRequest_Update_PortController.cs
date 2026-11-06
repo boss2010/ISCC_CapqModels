@@ -25,6 +25,7 @@ public sealed class Im_checkRequest_Update_PortController : Controller
     }
 
     [HttpGet("Index")]
+    [HttpGet] // bare menu URL Im_CheckRequests/Im_checkRequest_Update_Port (MVC5 default-action behavior)
     public IActionResult Index()
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated")

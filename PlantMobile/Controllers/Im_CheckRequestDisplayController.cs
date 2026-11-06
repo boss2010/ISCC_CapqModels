@@ -24,6 +24,7 @@ public sealed class Im_CheckRequestDisplayController : Controller
     }
 
     [HttpGet("Index")]
+    [HttpGet] // bare menu URL Im_CheckRequests/Im_CheckRequestDisplay/... (MVC5 default-action behavior)
     public async Task<IActionResult> Index(string ImCheckRequest_Number, long? OutLet_ID)
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated")
