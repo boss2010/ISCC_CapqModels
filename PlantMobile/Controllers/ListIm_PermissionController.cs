@@ -95,7 +95,8 @@ public class ListIm_PermissionController : Controller
         INTO #Base
         FROM dbo.Im_PermissionRequest cc
         INNER JOIN dbo.Im_RequestData rr ON rr.Im_PermissionRequest_ID=cc.ID
-        WHERE cc.User_Deletion_Id IS NULL AND cc.Arrival_Date>=@FromDate AND cc.Arrival_Date<DATEADD(day,1,@ToDate)
+        WHERE cc.User_Deletion_Id IS NULL
+          AND (@Permission<>N'' OR (cc.Arrival_Date>=@FromDate AND cc.Arrival_Date<DATEADD(day,1,@ToDate)))
           AND (@CountryId IS NULL OR rr.ExportCountry_Id=@CountryId)
           AND (@CompanyId IS NULL OR rr.Importer_ID=@CompanyId)
           AND (@Permission=N'' OR CONVERT(nvarchar(100),CONVERT(decimal(38,0),cc.ImPermission_Number)) LIKE N'%'+@Permission+N'%')
