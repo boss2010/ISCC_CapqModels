@@ -1,5 +1,5 @@
 -- 20261104_PR_Menu_AddRootScreens.sql
--- Adds the two application root screens to the menu tree in dbPrivilage (172.16.45.11):
+-- Adds the two application root screens to the menu tree in dbPrivilage (DESKTOP-3OTJB3D):
 --   255  «طلبات الوارد»   ImportRequests      (Android: enabled)
 --   256  «نتيجة المعمل»   LaboratoryResult    (Android: enabled)
 -- One module per screen, under its own group (the layers the app reads):

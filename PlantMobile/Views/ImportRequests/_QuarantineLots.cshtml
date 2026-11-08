@@ -40,9 +40,12 @@
                         }
                         else if (lot.IsReady)
                         {
+                            var availableStatuses = lot.LaboratoryResultComplete
+                                ? Model.Statuses
+                                : Model.Statuses.Where(status => status.Name.Contains("التحفظ", StringComparison.OrdinalIgnoreCase)).ToList();
                             <input type="hidden" name="Lots[@index].LotId" value="@lot.LotId" />
                             <div class="row g-2">
-                                <div class="col-md-6"><label class="form-label fw-bold">موقف الحجر</label><select class="form-select quarantine-status" name="Lots[@index].StatusId" required><option value="" selected>— اختر موقف الحجر —</option>@foreach (var status in Model.Statuses) { <option value="@status.Id" data-continue="@status.IsContinue.ToString().ToLowerInvariant()">@status.Name</option> }</select><div class="alert alert-secondary py-2 mt-2 mb-0 terminal-status-message d-none">هذا الموقف ينهي الإجراءات على اللوط ولن يتم استكمال أي إجراء آخر عليه.</div></div>
+                                <div class="col-md-6"><label class="form-label fw-bold">موقف الحجر</label><select class="form-select quarantine-status" name="Lots[@index].StatusId" required><option value="" selected>— اختر موقف الحجر —</option>@foreach (var status in availableStatuses) { <option value="@status.Id" data-continue="@status.IsContinue.ToString().ToLowerInvariant()">@status.Name</option> }</select>@if (!lot.LaboratoryResultComplete) { <div class="alert alert-warning py-2 mt-2 mb-0">نتيجة المعمل لم تُرفع بعد؛ المتاح حاليًا هو وضع الرسالة تحت التحفظ فقط.</div> }<div class="alert alert-secondary py-2 mt-2 mb-0 terminal-status-message d-none">هذا الموقف ينهي الإجراءات على اللوط ولن يتم استكمال أي إجراء آخر عليه.</div></div>
                                 <div class="col-md-6"><label class="form-label fw-bold">ملاحظات</label><input class="form-control" name="Lots[@index].Notes" /></div>
                             </div>
                             index++;

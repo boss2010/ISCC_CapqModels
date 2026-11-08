@@ -160,6 +160,37 @@ public class ImportRequestsController : Controller
                                   WHERE c.ImCheckRequest_ID=@CheckRequestId AND c.CommitteeType_ID IN (11,13) AND c.User_Deletion_Id IS NULL
                                     AND s.LotData_ID=lot.ID AND s.User_Deletion_Id IS NULL
                                     AND (s.SampleSize IS NULL OR s.SampleSize<=0 OR ISNULL(c.IsFinishedAll,0)=0))
+                  AND
+                  (
+                    NOT EXISTS
+                    (
+                        SELECT 1
+                        FROM dbo.Im_CheckRequest_SampleData sample
+                        JOIN dbo.Im_RequestCommittee sampleCommittee ON sampleCommittee.ID=sample.Im_RequestCommittee_ID
+                          AND sampleCommittee.User_Deletion_Id IS NULL
+                        WHERE sampleCommittee.ImCheckRequest_ID=@CheckRequestId
+                          AND sampleCommittee.CommitteeType_ID IN (11,13)
+                          AND sample.LotData_ID=lot.ID
+                          AND sample.User_Deletion_Id IS NULL
+                          AND
+                          (
+                            sample.IsAccepted IS NULL
+                            OR NOT EXISTS
+                            (
+                                SELECT 1 FROM dbo.A_AttachmentData attachment
+                                WHERE attachment.RowId=sample.ID
+                                  AND attachment.A_AttachmentTableNameId=12
+                                  AND attachment.User_Deletion_Id IS NULL
+                            )
+                          )
+                    )
+                    OR EXISTS
+                    (
+                        SELECT 1 FROM dbo.Im_CheckRequest_Lot_Result_Status selectedStatus
+                        WHERE selectedStatus.ID=@StatusId
+                          AND COALESCE(selectedStatus.Name_AR,N'') LIKE N'%التحفظ%'
+                    )
+                  )
                 """;
             const string saveSql="""
                 UPDATE dbo.Im_CheckRequest_Items_Lot_Result SET IS_Status_Committee=0 WHERE Im_CheckRequest_Items_Lot_Category_ID=@LotId;
@@ -169,7 +200,7 @@ public class ImportRequestsController : Controller
             foreach(var lot in input.Lots)
             {
                 await using var ready=new SqlCommand(PlantMobile.Infrastructure.ImportCommitteeEligibility.Filter(readySql),connection,transaction);
-                ready.Parameters.AddWithValue("@LotId",lot.LotId); ready.Parameters.AddWithValue("@CheckRequestId",input.CheckRequestId); ready.Parameters.AddWithValue("@UserId",userId);
+                ready.Parameters.AddWithValue("@LotId",lot.LotId); ready.Parameters.AddWithValue("@CheckRequestId",input.CheckRequestId); ready.Parameters.AddWithValue("@UserId",userId); ready.Parameters.AddWithValue("@StatusId",lot.StatusId);
                 if(Convert.ToInt32(await ready.ExecuteScalarAsync())!=1) throw new InvalidOperationException($"اللوط {lot.LotId} غير جاهز لتسجيل موقف الحجر.");
                 await using var save=new SqlCommand(saveSql,connection,transaction);
                 save.Parameters.AddWithValue("@LotId",lot.LotId); save.Parameters.AddWithValue("@Notes",(object?)lot.Notes?.Trim()??DBNull.Value); save.Parameters.AddWithValue("@UserId",userId); save.Parameters.AddWithValue("@StatusId",lot.StatusId);

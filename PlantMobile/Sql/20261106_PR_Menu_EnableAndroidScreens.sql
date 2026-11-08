@@ -1,7 +1,7 @@
 -- 20261106_PR_Menu_EnableAndroidScreens.sql
 -- Enables the migrated screens for the Android client (dbPrivilage.dbo.PR_Menu).
 --
--- State captured from the live server (172.16.45.11 / dbPrivilage) on 2026-11-06,
+-- State captured from the live server (DESKTOP-3OTJB3D / dbPrivilage) on 2026-11-06,
 -- after the owner enabled them from SSMS. Running this script on any server
 -- reproduces exactly that state (idempotent: re-running is a no-op).
 --

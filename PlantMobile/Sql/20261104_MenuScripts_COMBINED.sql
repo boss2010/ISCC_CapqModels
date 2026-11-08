@@ -7,7 +7,7 @@
 -- Project: PlantMobile (ISCC) - path: PlantMobile/Sql
 -- git: boss2010/ISCC_CapqModels @ master (788bd54)
 --
--- IMPLEMENTED / EXECUTED ON: 172.16.45.11 (WIN-272BMNKC9OI) - dbPrivilage
+-- IMPLEMENTED / EXECUTED ON: DESKTOP-3OTJB3D (WIN-272BMNKC9OI) - dbPrivilage
 --   the current database used by the NEW PlantMobile application
 -- NOT EXECUTED ON: 10.7.7.225 (DESKTOP-044HRJM) - dbPrivilage
 --   the current database used by the LEGACY PlantQuar web app
@@ -196,7 +196,7 @@ GO
 -- ============================================================
 
 -- 20261104_PR_Menu_AddRootScreens.sql
--- Adds the two application root screens to the menu tree in dbPrivilage (172.16.45.11):
+-- Adds the two application root screens to the menu tree in dbPrivilage (DESKTOP-3OTJB3D):
 --   255  «طلبات الوارد»   ImportRequests      (Android: enabled)
 --   256  «نتيجة المعمل»   LaboratoryResult    (Android: enabled)
 -- One module per screen, under its own group (the layers the app reads):

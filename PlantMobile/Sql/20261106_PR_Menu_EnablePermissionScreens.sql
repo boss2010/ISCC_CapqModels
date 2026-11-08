@@ -12,7 +12,7 @@
 --
 -- Other group variants (185/186/188/189/191/192/194/195) are intentionally NOT enabled.
 --
--- Applied on the test server 172.16.45.11 / dbPrivilage on 2026-11-06.
+-- Applied on the test server DESKTOP-3OTJB3D / dbPrivilage on 2026-11-06.
 -- Idempotent: re-running is a no-op.
 
 -- 1) Remove leading/trailing spaces from menu URLs.
