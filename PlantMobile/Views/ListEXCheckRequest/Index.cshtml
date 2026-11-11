@@ -1,0 +1,42 @@
+@model ViewModels.ExportInspectionRequestListVm
+@{
+    ViewData["Title"] = "طلبات الفحص الجديدة";
+    int first = Model.TotalCount == 0 ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
+    int last = Math.Min(Model.Page * Model.PageSize, Model.TotalCount);
+}
+<style>
+    .ex-page{direction:rtl;max-width:1500px;margin:auto;padding:28px 18px;color:#243940}.ex-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:20px}.ex-head h2{margin:0;color:#176c70;font-weight:800}.ex-head p{margin:6px 0 0;color:#718289}
+    .ex-filter,.ex-card{background:#fff;border:1px solid #e2ebed;border-radius:16px;box-shadow:0 7px 24px rgba(24,62,70,.07)}.ex-filter{padding:20px;margin-bottom:20px}.filter-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end}.ex-filter label{display:block;font-weight:700;margin-bottom:7px}.ex-filter .form-control{height:42px;border-radius:8px}
+    .ex-actions{display:flex;gap:7px}.ex-actions .btn{height:42px;min-width:85px;border-radius:8px}.ex-card{overflow:hidden}.card-head{padding:16px 20px;border-bottom:1px solid #e8eef0;display:flex;justify-content:space-between;align-items:center}.card-head h3{font-size:18px;margin:0}.count{background:#edf7f7;color:#176c70;padding:7px 13px;border-radius:20px;font-weight:700}
+    .ex-table{margin:0}.ex-table thead{background:#247d80;color:#fff}.ex-table th,.ex-table td{text-align:center;vertical-align:middle;padding:12px 9px;border:0}.ex-table tbody td{border-bottom:1px solid #edf1f2;font-size:14px}.ex-table tbody tr:nth-child(even){background:#f8fafb}.request-link{color:#176c70;font-weight:800}.place{min-width:180px;max-width:270px}.badge-state{display:inline-block;padding:6px 11px;border-radius:18px;font-size:12px;font-weight:700}.pending{background:#fff1d4;color:#97600a}.finished{background:#e4f5eb;color:#197044}.closed{background:#e8edf0;color:#53666e}.details-link{display:inline-block;background:#e5f4f4;color:#176c70;padding:7px 13px;border-radius:8px;font-weight:700;text-decoration:none}.details-link:hover{background:#176c70;color:#fff}
+    .pager-wrap{display:flex;justify-content:center;padding:18px}.pagination{margin:0}.page-link{color:#176c70}.page-item.active .page-link{background:#247d80;border-color:#247d80}.empty{padding:42px!important;color:#74868d}.mobile-results{display:none}
+    @@media(max-width:1000px){.filter-grid{grid-template-columns:repeat(2,1fr)}.ex-actions{grid-column:1/-1;justify-content:center}}
+    @@media(max-width:700px){.ex-page{padding:16px 10px}.ex-head{align-items:flex-start;flex-direction:column}.filter-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-results{display:grid;gap:12px;padding:12px}.mobile-item{border:1px solid #e3ebed;border-radius:12px;padding:15px}.mobile-title{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}.mobile-item dl{display:grid;grid-template-columns:105px 1fr;margin:0;gap:8px}.mobile-item dt{color:#718289}.mobile-item dd{margin:0;font-weight:600}.mobile-item .details-link{display:block;text-align:center;margin-top:12px}}
+</style>
+<div class="ex-page">
+    <div class="ex-head"><div><h2>طلبات الفحص الجديدة</h2><p>متابعة طلبات فحص رسائل الصادر ونتائجها @if(Model.StationId.HasValue){<strong>— محطة: @Model.StationName</strong>}</p></div>@if(Model.StationId.HasValue){<a asp-action="Stations" class="btn btn-outline-secondary">العودة للمحطات</a>}</div>
+    @if(ViewBag.PageError is string error){<div class="alert alert-danger">@error</div>}
+    <form method="get" asp-action="Index" class="ex-filter"><input type="hidden" name="stationId" value="@Model.StationId" />
+        <div class="filter-grid">
+            <div><label for="requestNumber">رقم طلب الفحص</label><input id="requestNumber" name="requestNumber" value="@Model.RequestNumber" class="form-control" placeholder="اكتب رقم الطلب أو جزءًا منه" /></div>
+            <div><label for="fromDate">من تاريخ</label><input type="date" id="fromDate" name="fromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" class="form-control" /></div>
+            <div><label for="toDate">إلى تاريخ</label><input type="date" id="toDate" name="toDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" class="form-control" /></div>
+            <div><label for="status">حالة الطلب</label><select id="status" name="status" class="form-control"><option value="0" selected="@(Model.Status==0)">الكل</option><option value="1" selected="@(Model.Status==1)">جاري الفحص</option><option value="2" selected="@(Model.Status==2)">ظهرت النتيجة</option><option value="3" selected="@(Model.Status==3)">مغلق</option></select></div>
+            <div class="ex-actions"><button class="btn btn-primary" type="submit">بحث</button><a asp-action="Index" asp-route-stationId="@Model.StationId" class="btn btn-outline-secondary">مسح</a></div>
+        </div>
+    </form>
+    <div class="ex-card">
+        <div class="card-head"><h3>قائمة الطلبات</h3><span class="count">عرض @first–@last من @Model.TotalCount</span></div>
+        <div class="table-responsive desktop-table"><table class="table ex-table"><thead><tr><th>م</th><th>رقم الطلب</th><th>صاحب الرسالة</th><th>دولة التصدير</th><th>تاريخ الطلب</th><th>مكان الفحص</th><th>مكان الجنش</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>
+        @if(Model.Results.Count==0){<tr><td colspan="9" class="empty">لا توجد طلبات مطابقة للبحث</td></tr>}
+        @foreach(var row in Model.Results){<tr><td>@row.RowNumber</td><td><a asp-action="Details" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a></td><td><small>@row.ImporterType</small><br />@row.ImporterName</td><td>@row.Country</td><td>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</td><td class="place">@(Text(row.ExaminationPlace))</td><td class="place">@(Text(row.GenshiPlace))</td><td>@Status(row)</td><td><a asp-action="Details" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></td></tr>}
+        </tbody></table></div>
+        <div class="mobile-results">@foreach(var row in Model.Results){<article class="mobile-item"><div class="mobile-title"><a asp-action="Details" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a>@Status(row)</div><dl><dt>صاحب الرسالة</dt><dd>@row.ImporterName</dd><dt>الدولة</dt><dd>@row.Country</dd><dt>تاريخ الطلب</dt><dd>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</dd><dt>مكان الفحص</dt><dd>@Text(row.ExaminationPlace)</dd></dl><a asp-action="Details" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></article>}</div>
+        @if(Model.TotalPages>1){int start=Math.Max(1,Model.Page-2),end=Math.Min(Model.TotalPages,Model.Page+2);<nav class="pager-wrap"><ul class="pagination"><li class="page-item @(Model.Page==1?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page-1)">السابق</a></li>@for(int p=start;p<=end;p++){<li class="page-item @(p==Model.Page?"active":"")"><a class="page-link" href="@PageUrl(p)">@p</a></li>}<li class="page-item @(Model.Page>=Model.TotalPages?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page+1)">التالي</a></li></ul></nav>}
+    </div>
+</div>
+@functions{
+    string Text(string value)=>string.IsNullOrWhiteSpace(value)?"—":value;
+    Microsoft.AspNetCore.Html.IHtmlContent Status(ViewModels.ExportInspectionRequestRowVm row){var (css,text)=row.ClosedRequest==1?("closed","مغلق"):row.FinalResultId>0?("finished",string.IsNullOrWhiteSpace(row.FinalResultName)?"ظهرت النتيجة":row.FinalResultName):("pending","جاري الفحص");return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge-state {css}\">{System.Net.WebUtility.HtmlEncode(text)}</span>");}
+    string PageUrl(int page)=>Url.Action("Index",new{page,requestNumber=Model.RequestNumber,fromDate=Model.FromDate?.ToString("yyyy-MM-dd"),toDate=Model.ToDate?.ToString("yyyy-MM-dd"),status=Model.Status,stationId=Model.StationId})??"#";
+}
