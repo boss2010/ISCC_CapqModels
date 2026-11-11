@@ -1,13 +1,56 @@
 @model ViewModels.ImPermissionDetailVm
 @{
     ViewData["Title"] = "تفاصيل إذن الاستيراد";
+    string Dash(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+    string DateText(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "—";
+    string AcceptedText(bool? value) => value switch { true => "مقبول", false => "مرفوض", _ => "قيد الانتظار" };
+    string AcceptedClass(bool? value) => value switch { true => "pd-badge-ok", false => "pd-badge-no", _ => "pd-badge-wait" };
 }
 
-<div class="container py-4" dir="rtl">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<style>
+    .pd-page { direction: rtl; max-width: 1400px; margin: 0 auto; padding: 24px 16px; color: #25343b; }
+    .pd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .pd-head h2 { color: #246b70; font-weight: 800; margin: 0 0 6px; }
+    .pd-head .pd-sub { color: #71838b; font-size: 15px; }
+    .pd-card { background: #fff; border: 0; border-radius: 16px; box-shadow: 0 8px 22px rgba(28, 52, 65, .10); padding: 20px 22px; margin-bottom: 18px; }
+    .pd-badge { display: inline-block; padding: 5px 14px; border-radius: 999px; font-weight: 700; font-size: 13px; margin-inline-start: 6px; }
+    .pd-badge-ok { background: #e2f5ec; color: #1c8a5c; }
+    .pd-badge-no { background: #fde8e8; color: #c0392b; }
+    .pd-badge-wait { background: #fdf3dd; color: #b07d10; }
+    .pd-badge-info { background: #e6f1f1; color: #246b70; }
+    .pd-tabs { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; border-bottom: 2px solid #287f82; }
+    .pd-tabs li { cursor: pointer; padding: 11px 20px; border-radius: 10px 10px 0 0; background: #eef5f5; color: #246b70; font-weight: 700; user-select: none; }
+    .pd-tabs li.active { background: #287f82; color: #fff; }
+    .pd-pane { display: none; padding-top: 18px; }
+    .pd-pane.active { display: block; }
+    .pd-section { font-weight: 800; color: #246b70; margin: 6px 0 12px; font-size: 16px; }
+    .pd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .pd-field { background: #f7fafa; border: 1px solid #e6efef; border-radius: 12px; padding: 10px 14px; }
+    .pd-field label { display: block; color: #71838b; font-size: 12.5px; margin-bottom: 4px; font-weight: 700; }
+    .pd-field span { display: block; color: #25343b; font-weight: 600; word-break: break-word; }
+    .pd-table { width: 100%; border-collapse: collapse; margin-top: 8px; background: #fff; }
+    .pd-table thead th { background: #287f82; color: #fff; text-align: right; padding: 10px 12px; font-size: 13.5px; white-space: nowrap; }
+    .pd-table tbody td { border: 1px solid #e6efef; padding: 9px 12px; font-size: 13.5px; vertical-align: top; }
+    .pd-table tbody tr:nth-child(even) { background: #f7fafa; }
+    .pd-sub-table thead th { background: #3f9a9d; }
+    .pd-empty { background: #f7fafa; border: 1px dashed #cfe0e0; border-radius: 12px; padding: 14px; color: #71838b; text-align: center; }
+    .pd-btn { display: inline-block; background: #287f82; color: #fff !important; border: 0; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-decoration: none; }
+    .pd-btn:hover { background: #1f6c6f; }
+    .pd-text { white-space: pre-wrap; }
+    .pd-note { background: #f7fafa; border: 1px solid #e6efef; border-radius: 12px; padding: 12px 14px; white-space: pre-wrap; }
+</style>
+
+<div class="pd-page">
+    <div class="pd-head">
         <div>
-            <h2 class="text-primary mb-1">تفاصيل إذن الاستيراد</h2>
-            <span class="text-muted">رقم الإذن: @(string.IsNullOrWhiteSpace(Model.PermissionNumber) ? "—" : Model.PermissionNumber)</span>
+            <h2>تفاصيل إذن الاستيراد</h2>
+            <div class="pd-sub">
+                رقم الإذن: <strong>@Dash(Model.PermissionNumber)</strong>
+                @if (!string.IsNullOrWhiteSpace(Model.OperationType))
+                {
+                    <span class="pd-badge pd-badge-info">@Model.OperationType</span>
+                }
+            </div>
         </div>
         <a asp-controller="ListIm_Permission" asp-action="Index" class="btn btn-outline-secondary">العودة إلى الأذون</a>
     </div>
@@ -24,44 +67,459 @@
     }
     else
     {
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-dark text-white">بيانات الإذن</div>
-            <div class="card-body"><div class="row g-3">
-                <div class="col-md-4"><strong>رقم الإذن</strong><div>@Model.PermissionNumber</div></div>
-                <div class="col-md-4"><strong>تاريخ الوصول</strong><div>@(Model.ArrivalDate?.ToString("yyyy/MM/dd") ?? "—")</div></div>
-                <div class="col-md-4"><strong>مدة الإذن</strong><div>@(Model.StartDate?.ToString("yyyy/MM/dd") ?? "—") — @(Model.EndDate?.ToString("yyyy/MM/dd") ?? "—")</div></div>
-                <div class="col-md-4"><strong>الدولة</strong><div>@(string.IsNullOrWhiteSpace(Model.Country) ? "—" : Model.Country)</div></div>
-                <div class="col-md-4"><strong>الشركة</strong><div>@(string.IsNullOrWhiteSpace(Model.Company) ? "—" : Model.Company)</div></div>
-                <div class="col-md-4"><strong>نوع المستورد</strong><div>@(string.IsNullOrWhiteSpace(Model.ImporterType) ? "—" : Model.ImporterType)</div></div>
-                <div class="col-md-4"><strong>نوع العملية</strong><div>@(string.IsNullOrWhiteSpace(Model.OperationType) ? "—" : Model.OperationType)</div></div>
-                <div class="col-md-4"><strong>الحالة</strong><div>@(Model.IsAccepted == true ? "مقبول" : Model.IsAccepted == false ? "مرفوض" : "تحت الإجراء")</div></div>
-                <div class="col-md-4"><strong>الدفع</strong><div>@(Model.IsPaid == true ? "تم الدفع" : "غير مدفوع")</div></div>
-            </div></div>
+        <div class="pd-card">
+            <div class="pd-grid">
+                <div class="pd-field"><label>دولة التصدير</label><span>@Dash(Model.Country)</span></div>
+                <div class="pd-field"><label>تاريخ الوصول</label><span>@DateText(Model.ArrivalDate)</span></div>
+                <div class="pd-field"><label>تاريخ البداية</label><span>@DateText(Model.StartDate)</span></div>
+                <div class="pd-field"><label>تاريخ النهاية</label><span>@DateText(Model.EndDate)</span></div>
+                <div class="pd-field">
+                    <label>حالة الإذن</label>
+                    <span>
+                        <span class="pd-badge @AcceptedClass(Model.IsAccepted)">@AcceptedText(Model.IsAccepted)</span>
+                        @if (Model.IsPaid == true)
+                        {
+                            <span class="pd-badge pd-badge-ok">مدفوع</span>
+                        }
+                        else if (Model.IsPaid == false)
+                        {
+                            <span class="pd-badge pd-badge-no">غير مدفوع</span>
+                        }
+                        @if (Model.RenewalStatus.HasValue && Model.RenewalStatus.Value > 0)
+                        {
+                            <span class="pd-badge pd-badge-info">تجديد</span>
+                        }
+                    </span>
+                </div>
+            </div>
         </div>
 
-        <div class="card shadow-sm">
-            <div class="card-header d-flex justify-content-between"><strong>الأصناف</strong><span class="badge bg-info text-dark">@Model.Items.Count</span></div>
-            <div class="table-responsive"><table class="table table-striped align-middle mb-0">
-                <thead><tr><th>رقم الصنف</th><th>الصنف</th><th>الاسم المختصر</th><th>دولة المنشأ</th><th>عدد العبوات</th><th>وزن العبوة</th><th>الوزن الإجمالي</th><th>الحجم</th><th>الحالة</th></tr></thead>
-                <tbody>
-                @if (Model.Items.Count == 0) { <tr><td colspan="9" class="text-center text-muted py-4">لا توجد أصناف مرتبطة بهذا الإذن.</td></tr> }
+        <div class="pd-card">
+            <ul class="pd-tabs">
+                <li class="active" data-target="#pd-tab-req">بيانات الطلب</li>
+                <li data-target="#pd-tab-companies">الشركات الموردة</li>
+                <li data-target="#pd-tab-details">تفاصيل الرسالة</li>
+                <li data-target="#pd-tab-files">المرفقات</li>
+                <li data-target="#pd-tab-constrains">الاشتراطات</li>
+                @if (Model.IsAccepted == false)
+                {
+                    <li data-target="#pd-tab-refuse">أسباب الرفض</li>
+                }
+            </ul>
+
+            <!-- بيانات الطلب -->
+            <div class="pd-pane active" id="pd-tab-req">
+                <div class="pd-section">بيانات الجهة المستوردة</div>
+                <div class="pd-grid">
+                    <div class="pd-field"><label>نوع المستورد</label><span>@Dash(Model.ImporterType)</span></div>
+                    <div class="pd-field"><label>اسم المستورد</label><span>@Dash(Model.ImporterName)</span></div>
+                    <div class="pd-field"><label>عنوان المستورد</label><span>@Dash(Model.ImporterAddress)</span></div>
+                    <div class="pd-field"><label>اسم المندوب</label><span>@Dash(Model.DelegateName)</span></div>
+                    <div class="pd-field">
+                        <label>@(Model.ImporterTypeId == 6 ? "عنوان المندوب" : "الرقم القومي")</label>
+                        <span>@Dash(Model.ImporterTypeId == 6 ? Model.DelegateAddress : Model.PersonIdNo)</span>
+                    </div>
+                </div>
+
+                <div class="pd-section" style="margin-top:18px">مسار الرسالة</div>
+                <div class="pd-grid">
+                    <div class="pd-field"><label>دولة التصدير</label><span>@Dash(Model.Country)</span></div>
+                    <div class="pd-field"><label>ميناء الشحن</label><span>@Dash(Model.TransportPortName)</span></div>
+                    <div class="pd-field"><label>نوع ميناء الشحن</label><span>@Dash(Model.TransportPortNameType)</span></div>
+                    <div class="pd-field"><label>ميناء الوصول</label><span>@Dash(Model.ArrivePortName)</span></div>
+                    <div class="pd-field"><label>نوع ميناء الوصول</label><span>@Dash(Model.ArrivePortNameType)</span></div>
+                    <div class="pd-field"><label>وسيلة النقل</label><span>@Dash(Model.TransportMeanName)</span></div>
+                    <div class="pd-field"><label>وسيلة الشحن</label><span>@Dash(Model.ShipmentMeanName)</span></div>
+                    <div class="pd-field"><label>اسم الوسيلة / الرحلة</label><span>@Dash(Model.ShipName)</span></div>
+                </div>
+
+                <div class="pd-section" style="margin-top:18px">أنشطة الشركة</div>
+                @if (Model.CompanyActivities.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد أنشطة مسجلة.</div>
+                }
                 else
                 {
-                    @foreach (var item in Model.Items)
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>نوع النشاط</th>
+                                <th>رقم التسجيل</th>
+                                <th>نوع التسجيل</th>
+                                <th>التاريخ من</th>
+                                <th>التاريخ إلى</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var activity in Model.CompanyActivities)
+                            {
+                                <tr>
+                                    <td>@Dash(activity.ActivityType)</td>
+                                    <td>@Dash(activity.EnrollmentNumber)</td>
+                                    <td>@Dash(activity.EnrollmentType)</td>
+                                    <td>@Dash(activity.EnrollmentStart)</td>
+                                    <td>@Dash(activity.EnrollmentEnd)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                <div class="pd-section" style="margin-top:18px">بيانات الاتصال</div>
+                @if (Model.Contacts.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد بيانات اتصال مسجلة.</div>
+                }
+                else if (Model.ImporterTypeId is 6 or 7)
+                {
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>نوع بيان الاتصال</th>
+                                <th>البيان</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var contact in Model.Contacts)
+                            {
+                                <tr>
+                                    <td>@Dash(contact.TypeName)</td>
+                                    <td>@Dash(contact.Value)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>البريد الإلكتروني</th>
+                                <th>الهاتف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var contact in Model.Contacts)
+                            {
+                                <tr>
+                                    <td>@Dash(contact.TypeName)</td>
+                                    <td>@Dash(contact.Value)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <!-- الشركات الموردة -->
+            <div class="pd-pane" id="pd-tab-companies">
+                <div class="pd-section">الشركات الموردة خارج مصر</div>
+                @if (Model.ImporterCompanies.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد شركات موردة مسجلة.</div>
+                }
+                else
+                {
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>اسم الشركة</th>
+                                <th>اسم الشركة (إنجليزي)</th>
+                                <th>العنوان</th>
+                                <th>العنوان (إنجليزي)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var company in Model.ImporterCompanies)
+                            {
+                                <tr>
+                                    <td>@Dash(company.Company)</td>
+                                    <td>@Dash(company.CompanyEn)</td>
+                                    <td>@Dash(company.Address)</td>
+                                    <td>@Dash(company.AddressEn)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <!-- تفاصيل الرسالة -->
+            <div class="pd-pane" id="pd-tab-details">
+                <div class="pd-section">بيانات البنود</div>
+                @if (Model.Items.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد بنود مسجلة.</div>
+                }
+                else
+                {
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>مسمى البند</th>
+                                <th>اسم الصنف</th>
+                                <th>اسم الصنف (إنجليزي)</th>
+                                <th>المجموعة النوعية</th>
+                                <th>الجزء النباتي</th>
+                                <th>الحالة</th>
+                                <th>الغرض</th>
+                                <th>المسمى المختصر</th>
+                                <th>الاسم العلمي</th>
+                                <th>الحجم</th>
+                                <th>عدد العبوات</th>
+                                <th>وزن العبوة</th>
+                                <th>عدد الوحدات</th>
+                                <th>نوع العبوة</th>
+                                <th>مادة العبوة</th>
+                                <th>الرتبة</th>
+                                <th>دولة المنشأ</th>
+                                <th>الوزن الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                <tr>
+                                    <td>@Dash(item.ItemPermissionNumber)</td>
+                                    <td>@Dash(item.ItemName)</td>
+                                    <td>@Dash(item.ItemNameEn)</td>
+                                    <td>@Dash(item.QualitativeGroup)</td>
+                                    <td>@Dash(item.SubPartName)</td>
+                                    <td>@Dash(item.Status)</td>
+                                    <td>@Dash(item.Purpose)</td>
+                                    <td>@Dash(item.ShortName)</td>
+                                    <td>@Dash(item.ScientificName)</td>
+                                    <td>@(item.Size?.ToString() ?? "—")</td>
+                                    <td>@(item.PackageCount?.ToString() ?? "—")</td>
+                                    <td>@(item.PackageWeight?.ToString() ?? "—")</td>
+                                    <td>@(item.UnitsNumber?.ToString() ?? "—")</td>
+                                    <td>@Dash(item.PackageType)</td>
+                                    <td>@Dash(item.PackageMaterial)</td>
+                                    <td>@Dash(item.OrderText)</td>
+                                    <td>@Dash(item.OriginCountry)</td>
+                                    <td>@(item.GrossWeight?.ToString() ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                @if (Model.Items.Count > 0)
+                {
+                    <div class="pd-section" style="margin-top:20px">تصنيفات البنود</div>
+                    foreach (var item in Model.Items)
                     {
-                        <tr>
-                            <td>@(string.IsNullOrWhiteSpace(item.ItemPermissionNumber) ? "—" : item.ItemPermissionNumber)</td>
-                            <td>@(string.IsNullOrWhiteSpace(item.ItemName) ? "—" : item.ItemName)</td>
-                            <td>@(string.IsNullOrWhiteSpace(item.ShortName) ? "—" : item.ShortName)</td>
-                            <td>@(string.IsNullOrWhiteSpace(item.OriginCountry) ? "—" : item.OriginCountry)</td>
-                            <td>@(item.PackageCount?.ToString() ?? "—")</td><td>@(item.PackageWeight?.ToString("0.###") ?? "—")</td>
-                            <td>@(item.GrossWeight?.ToString("0.###") ?? "—")</td><td>@(item.Size?.ToString("0.###") ?? "—")</td>
-                            <td>@(item.IsAccepted ? "مقبول" : "غير مقبول")</td>
-                        </tr>
+                        <div class="pd-field" style="margin-bottom:6px">
+                            <label>البند</label>
+                            <span>@Dash(item.ItemName) @Dash(item.QualitativeGroup) @Dash(item.ShortName)</span>
+                        </div>
+                        if (item.Categories.Count == 0)
+                        {
+                            <div class="pd-empty" style="margin-bottom:16px">لا توجد تصنيفات لهذا البند.</div>
+                        }
+                        else
+                        {
+                            <table class="pd-table pd-sub-table" style="margin-bottom:16px">
+                                <thead>
+                                    <tr>
+                                        <th>المجموعة الصنفية</th>
+                                        <th>اسم الصنف</th>
+                                        <th>الحجم</th>
+                                        <th>عدد العبوات</th>
+                                        <th>وزن العبوة</th>
+                                        <th>عدد الوحدات</th>
+                                        <th>نوع العبوة</th>
+                                        <th>مادة العبوة</th>
+                                        <th>الرتبة</th>
+                                        <th>مسجل</th>
+                                        <th>سبب التسجيل</th>
+                                        <th>الوزن الإجمالي</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var category in item.Categories)
+                                    {
+                                        <tr>
+                                            <td>@Dash(category.ItemCatGroup)</td>
+                                            <td>@Dash(category.CategoryName)</td>
+                                            <td>@(category.Size?.ToString() ?? "—")</td>
+                                            <td>@(category.PackageCount?.ToString() ?? "—")</td>
+                                            <td>@(category.PackageWeight?.ToString() ?? "—")</td>
+                                            <td>@(category.UnitsNumber?.ToString() ?? "—")</td>
+                                            <td>@Dash(category.PackageType)</td>
+                                            <td>@Dash(category.PackageMaterial)</td>
+                                            <td>@Dash(category.OrderText)</td>
+                                            <td>@(category.IsRegister switch { true => "نعم", false => "لا", _ => "—" })</td>
+                                            <td>@Dash(category.RegisterReason)</td>
+                                            <td>@(category.GrossWeight?.ToString() ?? "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
                     }
                 }
-                </tbody>
-            </table></div>
+            </div>
+
+            <!-- المرفقات -->
+            <div class="pd-pane" id="pd-tab-files">
+                <div class="pd-section">المرفقات</div>
+                @if (Model.Attachments.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد مرفقات لهذا الإذن.</div>
+                }
+                else
+                {
+                    <table class="pd-table">
+                        <thead>
+                            <tr>
+                                <th>اسم المرفق</th>
+                                <th>رقم المرفق</th>
+                                <th>تاريخ البداية</th>
+                                <th>تاريخ الانتهاء</th>
+                                <th>الملف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var attachment in Model.Attachments)
+                            {
+                                <tr>
+                                    <td>@Dash(attachment.TypeName)</td>
+                                    <td>@Dash(attachment.Number)</td>
+                                    <td>@DateText(attachment.StartDate)</td>
+                                    <td>@DateText(attachment.EndDate)</td>
+                                    <td>
+                                        <a class="pd-btn" target="_blank" rel="noopener"
+                                           href="@Url.Action("ViewAttachment", "Im_permissionDetail", new { area = "", id = attachment.Id })">عرض الصورة</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <!-- الاشتراطات -->
+            <div class="pd-pane" id="pd-tab-constrains">
+                <div class="pd-section">الاشتراطات</div>
+                @if (Model.Items.Count == 0)
+                {
+                    <div class="pd-empty">لا توجد بنود مسجلة.</div>
+                }
+                else
+                {
+                    foreach (var item in Model.Items)
+                    {
+                        <table class="pd-table" style="margin-bottom:16px">
+                            <thead>
+                                <tr>
+                                    <th>اسم الصنف</th>
+                                    <th>الجزء النباتي</th>
+                                    <th>الحالة</th>
+                                    <th>الغرض</th>
+                                    <th>المسمى المختصر</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@Dash(item.ItemName) @Dash(item.QualitativeGroup)</td>
+                                    <td>@Dash(item.SubPartName)</td>
+                                    <td>@Dash(item.Status)</td>
+                                    <td>@Dash(item.Purpose)</td>
+                                    <td>@Dash(item.ShortName)</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="5" style="background:#287f82;color:#fff;font-weight:700">الاشتراطات</td>
+                                </tr>
+                                @if (item.Constrains.Texts.Count == 0 && item.Constrains.Ports.Count == 0)
+                                {
+                                    <tr><td colspan="5">لا توجد اشتراطات لهذا البند.</td></tr>
+                                }
+                                else
+                                {
+                                    if (item.Constrains.Texts.Count > 0)
+                                    {
+                                        <tr>
+                                            <td>@Dash(item.Constrains.Country)</td>
+                                            <td colspan="4">
+                                                @foreach (var text in item.Constrains.Texts)
+                                                {
+                                                    <div class="pd-text">@text</div>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    if (item.Constrains.Ports.Count > 0)
+                                    {
+                                        <tr>
+                                            <td>المواني</td>
+                                            <td colspan="4">
+                                                @foreach (var port in item.Constrains.Ports)
+                                                {
+                                                    <div class="pd-text">
+                                                        نوع الميناء: @Dash(port.PortType) — الميناء: @Dash(port.PortName)
+                                                        <br />
+                                                        <span style="color:#71838b">Port type: @Dash(port.PortTypeEn) — Port: @Dash(port.PortNameEn)</span>
+                                                    </div>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    }
+                }
+            </div>
+
+            @if (Model.IsAccepted == false)
+            {
+                <!-- أسباب الرفض -->
+                <div class="pd-pane" id="pd-tab-refuse">
+                    <div class="pd-section">أسباب الرفض</div>
+                    @if (Model.RefuseReasons.Count == 0)
+                    {
+                        <div class="pd-empty">لا توجد أسباب رفض مسجلة.</div>
+                    }
+                    else
+                    {
+                        <table class="pd-table">
+                            <thead>
+                                <tr>
+                                    <th>السبب</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var reason in Model.RefuseReasons)
+                                {
+                                    <tr>
+                                        <td>@Dash(reason.NameAr)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="pd-section" style="margin-top:18px">ملاحظات</div>
+                        <div class="pd-note">@Dash(Model.RefuseReasons[0].Note)</div>
+                    }
+                </div>
+            }
         </div>
     }
 </div>
+
+<script>
+    (function () {
+        var tabs = document.querySelectorAll('.pd-tabs li');
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var target = tab.getAttribute('data-target');
+                document.querySelectorAll('.pd-tabs li').forEach(function (t) { t.classList.remove('active'); });
+                document.querySelectorAll('.pd-pane').forEach(function (p) { p.classList.remove('active'); });
+                tab.classList.add('active');
+                var pane = document.querySelector(target);
+                if (pane) { pane.classList.add('active'); }
+            });
+        });
+    })();
+</script>
