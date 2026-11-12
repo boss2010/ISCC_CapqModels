@@ -119,3 +119,18 @@ public sealed class ContinueDisplayRequestVm
     public long Outlet_ID { get; set; }
     public string Completion_Notes { get; set; } = string.Empty;
 }
+
+public sealed class EditShippingDateVm
+{
+    public long RequestId { get; set; }
+    public int CustomsMessageId { get; set; }
+    public string CheckRequestNumber { get; set; } = string.Empty;
+    public string CustomsCertificateNumber { get; set; } = string.Empty;
+    public DateTime? ArrivalDate { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "من فضلك اختر تاريخ الشحن.")]
+    [System.ComponentModel.DataAnnotations.DataType(System.ComponentModel.DataAnnotations.DataType.Date)]
+    public DateTime? ShippingDate { get; set; }
+
+    public string ReturnUrl { get; set; } = string.Empty;
+}

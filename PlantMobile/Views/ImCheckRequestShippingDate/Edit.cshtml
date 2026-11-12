@@ -1,0 +1,47 @@
+@model EditShippingDateVm
+@{
+    ViewData["Title"] = "تعديل تاريخ الشحن";
+}
+
+<style>
+    .shipping-date-page{direction:rtl;max-width:760px;margin:30px auto;padding:0 15px}.shipping-date-card{background:#fff;border:1px solid #dfe9eb;border-radius:16px;box-shadow:0 8px 28px rgba(30,74,82,.09);overflow:hidden}.shipping-date-title{padding:20px 24px;background:#edf8f8;color:#226f73}.shipping-date-title h2{font-size:24px;font-weight:800;margin:0 0 6px}.shipping-date-title p{margin:0;color:#58767b}.shipping-date-body{padding:24px}.request-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}.summary-item{background:#f7fafb;border:1px solid #e5edef;border-radius:10px;padding:13px}.summary-item span{display:block;color:#71868b;font-size:13px;margin-bottom:4px}.summary-item strong{color:#263f43}.shipping-date-body label{font-weight:800;margin-bottom:8px}.shipping-date-body .form-control{height:46px;border-radius:9px}.validation-summary-errors,.field-validation-error{color:#a52e38}.actions{display:flex;gap:10px;justify-content:center;margin-top:24px}.actions .btn{min-width:140px;border-radius:9px;padding:10px 18px}@@media(max-width:600px){.request-summary{grid-template-columns:1fr}.actions{flex-direction:column}.actions .btn{width:100%}}
+</style>
+
+<div class="shipping-date-page">
+    <div class="shipping-date-card">
+        <header class="shipping-date-title">
+            <h2>تعديل تاريخ الشحن</h2>
+            <p>تحديث تاريخ الشحن المسجل على طلب فحص الوارد</p>
+        </header>
+        <div class="shipping-date-body">
+            <div class="request-summary">
+                <div class="summary-item"><span>رقم طلب الفحص</span><strong>@Model.CheckRequestNumber</strong></div>
+                <div class="summary-item"><span>رقم الشهادة الجمركية</span><strong>@(string.IsNullOrWhiteSpace(Model.CustomsCertificateNumber) ? "—" : Model.CustomsCertificateNumber)</strong></div>
+                <div class="summary-item"><span>تاريخ الوصول</span><strong>@(Model.ArrivalDate?.ToString("dd/MM/yyyy") ?? "غير مسجل")</strong></div>
+                <div class="summary-item"><span>تاريخ الشحن الحالي</span><strong>@(Model.ShippingDate?.ToString("dd/MM/yyyy") ?? "غير مسجل")</strong></div>
+            </div>
+
+            <form asp-action="Edit" method="post">
+                @Html.AntiForgeryToken()
+                <input asp-for="RequestId" type="hidden" />
+                <input asp-for="CustomsMessageId" type="hidden" />
+                <input asp-for="CheckRequestNumber" type="hidden" />
+                <input asp-for="CustomsCertificateNumber" type="hidden" />
+                <input asp-for="ArrivalDate" type="hidden" />
+                <input asp-for="ReturnUrl" type="hidden" />
+
+                <div asp-validation-summary="ModelOnly" class="mb-3"></div>
+                <div class="form-group">
+                    <label asp-for="ShippingDate">تاريخ الشحن الجديد</label>
+                    <input asp-for="ShippingDate" type="date" class="form-control" />
+                    <span asp-validation-for="ShippingDate"></span>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">حفظ التاريخ</button>
+                    <a href="@Model.ReturnUrl" class="btn btn-outline-secondary">رجوع بدون حفظ</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -30,6 +30,104 @@ public sealed class ImCheckRequestDisplayReader
         return model;
     }
 
+    public async Task<EditShippingDateVm?> ReadShippingDateAsync(
+        string checkNumber,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT TOP (1)
+                   request.ID,
+                   customs.ID,
+                   request.CheckRequest_Number,
+                   COALESCE(customs.Customs_Certificate_Number, N''),
+                   customs.Shipment_Date,
+                   customs.Arrival_Date
+            FROM dbo.Im_CheckRequest request
+            INNER JOIN dbo.Im_CheckRequest_Customs_Message customs
+                ON customs.Im_CheckRequest_ID = request.ID
+            WHERE request.CheckRequest_Number = @CheckNumber
+            ORDER BY customs.ID DESC;
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = 30 };
+        command.Parameters.Add("@CheckNumber", SqlDbType.VarChar, 50).Value = checkNumber.Trim();
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        return new EditShippingDateVm
+        {
+            RequestId = Convert.ToInt64(reader.GetValue(0)),
+            CustomsMessageId = Convert.ToInt32(reader.GetValue(1)),
+            CheckRequestNumber = ReadString(reader, 2),
+            CustomsCertificateNumber = ReadString(reader, 3),
+            ShippingDate = ReadNullableDateTime(reader, 4),
+            ArrivalDate = ReadNullableDateTime(reader, 5)
+        };
+    }
+
+    public async Task UpdateShippingDateAsync(
+        EditShippingDateVm model,
+        short userId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            IF EXISTS
+            (
+                SELECT 1
+                FROM dbo.Im_CheckRequest_Customs_Message customs
+                INNER JOIN dbo.Im_CheckRequest request
+                    ON request.ID = customs.Im_CheckRequest_ID
+                WHERE customs.ID = @CustomsMessageId
+                  AND request.ID = @RequestId
+                  AND request.CheckRequest_Number = @CheckNumber
+                  AND customs.Arrival_Date IS NOT NULL
+                  AND @ShippingDate > customs.Arrival_Date
+            )
+                THROW 50001, N'تاريخ الشحن لا يمكن أن يكون بعد تاريخ الوصول.', 1;
+
+            UPDATE customs
+               SET customs.Shipment_Date = @ShippingDate,
+                   customs.User_Updation_Id = @UserId,
+                   customs.User_Updation_Date = SYSDATETIME()
+            FROM dbo.Im_CheckRequest_Customs_Message customs
+            INNER JOIN dbo.Im_CheckRequest request
+                ON request.ID = customs.Im_CheckRequest_ID
+            WHERE customs.ID = @CustomsMessageId
+              AND request.ID = @RequestId
+              AND request.CheckRequest_Number = @CheckNumber;
+
+            SELECT @@ROWCOUNT;
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = 30 };
+        command.Parameters.Add("@ShippingDate", SqlDbType.Date).Value = model.ShippingDate!.Value.Date;
+        command.Parameters.Add("@UserId", SqlDbType.SmallInt).Value = userId;
+        command.Parameters.Add("@CustomsMessageId", SqlDbType.Int).Value = model.CustomsMessageId;
+        command.Parameters.Add("@RequestId", SqlDbType.BigInt).Value = model.RequestId;
+        command.Parameters.Add("@CheckNumber", SqlDbType.VarChar, 50).Value = model.CheckRequestNumber.Trim();
+
+        int affectedRows;
+        try
+        {
+            affectedRows = Convert.ToInt32(
+                await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (SqlException ex) when (ex.Number == 50001)
+        {
+            throw new InvalidOperationException(
+                "تاريخ الشحن لا يمكن أن يكون بعد تاريخ الوصول.", ex);
+        }
+
+        if (affectedRows != 1)
+            throw new InvalidOperationException("لم يتم العثور على الطلب أو تم تغيير بياناته قبل الحفظ.");
+    }
+
     private async Task<ImCheckRequestDisplayVm?> ReadHeaderAsync(SqlConnection connection, string checkNumber, CancellationToken cancellationToken)
     {
         const string sql = """

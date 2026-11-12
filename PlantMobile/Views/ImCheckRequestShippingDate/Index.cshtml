@@ -1,0 +1,28 @@
+@{
+    ViewData["Title"] = "تعديل تاريخ شحن طلب وارد";
+}
+
+<style>
+    .shipping-search-page{direction:rtl;max-width:720px;margin:35px auto;padding:0 15px}.shipping-search-card{background:#fff;border:1px solid #dfe9eb;border-radius:16px;box-shadow:0 8px 28px rgba(30,74,82,.09);overflow:hidden}.shipping-search-title{padding:20px 24px;background:#edf8f8;color:#226f73}.shipping-search-title h2{font-size:24px;font-weight:800;margin:0 0 6px}.shipping-search-title p{margin:0;color:#58767b}.shipping-search-body{padding:25px}.shipping-search-body label{font-weight:800;margin-bottom:8px}.search-actions{margin-top:18px;text-align:center}.search-actions .btn{min-width:160px;border-radius:9px;padding:10px 18px}
+</style>
+
+<div class="shipping-search-page">
+    <section class="shipping-search-card">
+        <header class="shipping-search-title">
+            <h2>تعديل تاريخ شحن طلب وارد</h2>
+            <p>أدخل رقم طلب الفحص للوصول إلى بيانات تاريخ الشحن</p>
+        </header>
+        <div class="shipping-search-body">
+            <form asp-action="Edit" method="get">
+                <div class="form-group">
+                    <label for="requestNumber">رقم طلب الفحص</label>
+                    <input id="requestNumber" name="ImCheckRequest_Number" class="form-control"
+                           maxlength="50" autocomplete="off" required />
+                </div>
+                <div class="search-actions">
+                    <button type="submit" class="btn btn-primary">عرض وتعديل التاريخ</button>
+                </div>
+            </form>
+        </div>
+    </section>
+</div>

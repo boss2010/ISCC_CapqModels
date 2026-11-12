@@ -14,6 +14,7 @@ builder.Services.AddSingleton<PlantMobile.Data.MenuReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionPrintReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionScreenReader>();
 builder.Services.AddSingleton<PlantMobile.Data.PermissionMenuAccessReader>();
+builder.Services.AddSingleton<PlantMobile.Data.MenuAccessReader>();
 builder.Services.AddSingleton<PlantMobile.Data.CheckRequestPortReader>();
 builder.Services.AddSingleton<PlantMobile.Data.CheckRequestOutletReader>();
 builder.Services.AddSingleton<PlantMobile.Data.ImCheckRequestDisplayReader>();

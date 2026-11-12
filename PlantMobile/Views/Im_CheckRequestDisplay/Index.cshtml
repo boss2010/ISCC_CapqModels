@@ -199,6 +199,14 @@
 
             <input type="date" class="form-control" readonly value='@(Model.Shipping_Date?.ToString("yyyy-MM-dd"))' />
 
+            @if (ViewBag.CanEditShippingDate == true)
+            {
+                <a class="btn btn-sm btn-outline-primary mt-2"
+                   href="@Url.Action("Edit", "ImCheckRequestShippingDate", new { ImCheckRequest_Number = Model.CheckRequest_Number, returnUrl = Context.Request.PathBase.Value + Context.Request.Path.Value + Context.Request.QueryString.Value })">
+                    تعديل تاريخ الشحن
+                </a>
+            }
+
         </div>
 
         <div class="col-md-4">

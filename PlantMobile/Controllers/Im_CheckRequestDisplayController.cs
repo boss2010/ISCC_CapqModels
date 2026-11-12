@@ -11,14 +11,17 @@ public sealed class Im_CheckRequestDisplayController : Controller
 {
     private readonly ImCheckRequestDisplayReader _displayReader;
     private readonly IAntiforgery _antiforgery;
+    private readonly MenuAccessReader _menuAccessReader;
     private readonly ILogger<Im_CheckRequestDisplayController> _logger;
 
     public Im_CheckRequestDisplayController(
         ImCheckRequestDisplayReader displayReader,
+        MenuAccessReader menuAccessReader,
         IAntiforgery antiforgery,
         ILogger<Im_CheckRequestDisplayController> logger)
     {
         _displayReader = displayReader;
+        _menuAccessReader = menuAccessReader;
         _antiforgery = antiforgery;
         _logger = logger;
     }
@@ -53,6 +56,11 @@ public sealed class Im_CheckRequestDisplayController : Controller
                 model.ErrorMessage = $"لم يتم العثور على طلب فحص برقم {model.CheckRequest_Number}.";
                 return View(model);
             }
+
+            ViewBag.CanEditShippingDate = await _menuAccessReader.CanViewAsync(
+                userId,
+                MenuAccessReader.ShippingDateMenuUrl,
+                HttpContext.RequestAborted).ConfigureAwait(false);
 
             return View(result);
         }
