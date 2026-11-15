@@ -51,7 +51,16 @@
                 }
             </div>
         </div>
-        <a asp-controller="ListIm_Permission" asp-action="Index" class="btn btn-outline-secondary">العودة إلى الأذون</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            @if (ViewBag.CanChangeOrigin == true && string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <a asp-controller="PermissionOriginChange" asp-action="Index"
+                   asp-route-ImPermission_Number="@Model.PermissionNumber"
+                   asp-route-returnUrl="@(Context.Request.PathBase.Value + Context.Request.Path.Value + Context.Request.QueryString.Value)"
+                   class="btn btn-primary">تعديل المنشأ</a>
+            }
+            <a asp-controller="ListIm_Permission" asp-action="Index" class="btn btn-outline-secondary">العودة إلى الأذون</a>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))

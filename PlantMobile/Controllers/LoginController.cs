@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlantMobile.Infrastructure;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace PlantMobile.Controllers
@@ -8,11 +9,16 @@ namespace PlantMobile.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<LoginController> _logger;
+        private readonly IMenuService _menuService;
 
-        public LoginController(IConfiguration configuration, ILogger<LoginController> logger)
+        public LoginController(
+            IConfiguration configuration,
+            ILogger<LoginController> logger,
+            IMenuService menuService)
         {
             _configuration = configuration;
             _logger = logger;
+            _menuService = menuService;
         }
 
         [AllowAnonymous]
@@ -76,6 +82,7 @@ namespace PlantMobile.Controllers
                 HttpContext.Session.SetString("UserName", loginName);
                 HttpContext.Session.SetString("UserId", userId.ToString());
                 HttpContext.Session.SetString("EmployeeId", employeeId.ToString());
+                _menuService.Invalidate(Convert.ToInt32(userId));
                 return RedirectToAction("Index", "ImportRequests");
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)

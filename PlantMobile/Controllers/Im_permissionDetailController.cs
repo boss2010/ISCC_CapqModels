@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using PlantMobile.Infrastructure;
+using PlantMobile.Data;
 using ViewModels;
 
 namespace PlantMobile.Controllers;
@@ -14,12 +15,15 @@ public class Im_permissionDetailController : Controller
     private readonly string _attachmentServer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<Im_permissionDetailController> _logger;
+    private readonly MenuAccessReader _menuAccessReader;
 
     public Im_permissionDetailController(
         IConfiguration configuration,
+        MenuAccessReader menuAccessReader,
         ILogger<Im_permissionDetailController> logger)
     {
         _configuration = configuration;
+        _menuAccessReader = menuAccessReader;
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
         _attachmentServer = configuration["Path_NetworkShare"] is { Length: > 0 } share
@@ -55,6 +59,13 @@ public class Im_permissionDetailController : Controller
         try
         {
             await LoadDetailAsync(model, permissionNumber);
+            if (short.TryParse(HttpContext.Session.GetString("UserId"), out short userId))
+            {
+                ViewBag.CanChangeOrigin = await _menuAccessReader.CanViewAsync(
+                    userId,
+                    MenuAccessReader.PermissionOriginChangeMenuUrl,
+                    HttpContext.RequestAborted).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {

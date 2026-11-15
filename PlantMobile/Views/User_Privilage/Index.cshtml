@@ -1,0 +1,102 @@
+@model ViewModels.UserPrivilegePageVm
+@{
+    ViewData["Title"] = "صلاحيات المستخدمين";
+}
+
+<style>
+    .priv-page{direction:rtl;max-width:1450px;margin:auto;padding:24px 16px}.priv-header h2{margin:0;color:#246f73;font-weight:800}.priv-header p{margin:7px 0 20px;color:#6f8388}.priv-card{background:#fff;border:1px solid #e0eaec;border-radius:15px;box-shadow:0 6px 22px rgba(27,61,68,.07);margin-bottom:18px;overflow:visible}.priv-card-title{background:#eef8f8;color:#246f73;padding:14px 18px;font-weight:800;font-size:17px}.priv-filters{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px}.priv-filters label{font-weight:700;margin-bottom:7px}.priv-filters .form-control{height:43px;border-radius:8px}.employee-picker{position:relative}.employee-picker-button{width:100%;height:43px;border:1px solid #ced4da;border-radius:8px;background:#fff;padding:7px 12px;text-align:right;color:#495057;display:flex;align-items:center;justify-content:space-between}.employee-picker-button:after{content:'▾';color:#6c7c80}.employee-picker-button:disabled{background:#e9ecef;color:#7b8588}.employee-picker-panel{display:none;position:absolute;z-index:1100;top:calc(100% + 4px);right:0;left:0;background:#fff;border:1px solid #cedadd;border-radius:10px;box-shadow:0 10px 28px rgba(23,57,63,.18);padding:9px}.employee-picker.open .employee-picker-panel{display:block}.employee-picker-search{height:39px!important;margin-bottom:7px}.employee-list{max-height:280px;overflow:auto}.employee-row{display:block;width:100%;border:0;border-bottom:1px solid #edf1f2;background:#fff;padding:9px 10px;text-align:right;border-radius:6px}.employee-row:last-child{border-bottom:0}.employee-row:hover,.employee-row.active{background:#eaf7f7;color:#1e696d}.employee-name{font-weight:700}.employee-meta{display:block;color:#718186;font-size:12px;margin-top:2px}.employee-empty{padding:20px;text-align:center;color:#74858a}.priv-table th,.priv-table td{text-align:center;vertical-align:middle}.priv-table thead{background:#287f82;color:#fff}.priv-table th{border:0!important}.screen-cell{text-align:right!important}.screen-url{display:block;color:#849297;font-size:11px;direction:ltr;text-align:left;margin-top:3px}.permission-check{width:18px;height:18px}.empty{padding:35px!important;color:#74858a}.save-bar{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-top:1px solid #e5edef}.save-bar .btn{min-width:170px;border-radius:8px}.selected-employee{font-weight:700;color:#246f73}.loading{opacity:.55;pointer-events:none}.message{display:none;margin-bottom:15px}.bulk-actions{display:flex;gap:8px}.bulk-actions button{border:1px solid #cddbdd;background:#fff;border-radius:7px;padding:6px 10px;color:#356d70}@@media(max-width:1000px){.priv-filters{grid-template-columns:repeat(2,1fr)}}@@media(max-width:600px){.priv-page{padding:15px 8px}.priv-filters{grid-template-columns:1fr!important}.save-bar{align-items:stretch;flex-direction:column;gap:10px}.save-bar .btn{width:100%}}
+</style>
+
+<div class="priv-page">
+    <header class="priv-header">
+        <h2>صلاحيات المستخدمين</h2>
+        <p>اختر الجهة والموظف ثم حدد الشاشات والصلاحيات المطلوبة</p>
+    </header>
+    @Html.AntiForgeryToken()
+    <div id="message" class="alert message"></div>
+
+    <section class="priv-card">
+        <div class="priv-card-title">اختيار الموظف</div>
+        <div class="priv-filters" style="grid-template-columns:1fr 1fr">
+            <div>
+                <label for="outletId">الجهة / المنفذ</label>
+                <select id="outletId" class="form-control">
+                    <option value="">اختر الجهة</option>
+                    @foreach (var item in Model.Outlets)
+                    {
+                        <option value="@item.Id">@item.Text</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>الموظف</label>
+                <div id="employeePicker" class="employee-picker">
+                    <button id="employeePickerButton" type="button" class="employee-picker-button" disabled>اختر الجهة أولًا</button>
+                    <div class="employee-picker-panel">
+                        <input id="employeeSearch" type="search" class="form-control employee-picker-search"
+                               placeholder="ابحث بالاسم أو الرقم الوظيفي أو اسم الدخول" autocomplete="off" />
+                        <div id="employeeList" class="employee-list"><div class="employee-empty">لا يوجد موظفون</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="priv-card">
+        <div class="priv-card-title">اختيار الشاشات</div>
+        <div class="priv-filters">
+            <div style="grid-column:span 2">
+                <label for="groupId">المجموعة</label>
+                <select id="groupId" class="form-control" disabled>
+                    <option value="">اختر المجموعة</option>
+                    @foreach (var item in Model.Groups)
+                    {
+                        <option value="@item.Id">@item.Text</option>
+                    }
+                </select>
+            </div>
+            <div style="grid-column:span 2">
+                <label for="moduleId">القسم</label>
+                <select id="moduleId" class="form-control" disabled><option value="">اختر القسم</option></select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table priv-table mb-0">
+                <thead><tr><th class="screen-cell">الشاشة</th><th>عرض</th><th>إضافة</th><th>تعديل</th><th>حذف</th></tr></thead>
+                <tbody id="menuRows"><tr><td colspan="5" class="empty">اختر الموظف والمجموعة والقسم</td></tr></tbody>
+            </table>
+        </div>
+        <div class="save-bar">
+            <div>
+                <span class="selected-employee" id="selectedEmployee">لم يتم اختيار موظف</span>
+                <div class="bulk-actions mt-2">
+                    <button type="button" id="selectView">تفعيل العرض للكل</button>
+                    <button type="button" id="clearAll">إلغاء الكل</button>
+                </div>
+            </div>
+            <button type="button" id="savePrivileges" class="btn btn-primary" disabled>حفظ الصلاحيات</button>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+<script>
+$(function(){
+    var employees=[], selectedUser=null;
+    var outlet=$('#outletId'), picker=$('#employeePicker'), pickerButton=$('#employeePickerButton'), search=$('#employeeSearch'), list=$('#employeeList'), group=$('#groupId'), module=$('#moduleId'), rows=$('#menuRows'), save=$('#savePrivileges');
+    function message(text,ok){$('#message').removeClass('alert-success alert-danger').addClass(ok?'alert-success':'alert-danger').text(text).show();window.scrollTo({top:0,behavior:'smooth'});}
+    function escapeHtml(value){return $('<div>').text(value||'').html();}
+    function renderEmployees(){var q=(search.val()||'').trim().toLowerCase(), filtered=employees.filter(function(x){return !q||(x.name+' '+x.employeeId+' '+x.loginName).toLowerCase().indexOf(q)>=0;});list.empty();if(!filtered.length){list.html('<div class="employee-empty">لا توجد نتائج</div>');return;}filtered.forEach(function(x){$('<button type="button" class="employee-row">').attr('data-id',x.id).append('<span class="employee-name">'+escapeHtml(x.name)+'</span><span class="employee-meta">رقم وظيفي: '+x.employeeId+(x.loginName?' — دخول: '+escapeHtml(x.loginName):'')+'</span>').toggleClass('active',selectedUser&&selectedUser.id===x.id).on('click',function(){selectedUser=x;pickerButton.text(x.name+' — '+x.employeeId);picker.removeClass('open');search.val('');$('#selectedEmployee').text('الموظف: '+x.name);group.prop('disabled',false);module.prop('disabled',true).html('<option value="">اختر القسم</option>');rows.html('<tr><td colspan="5" class="empty">اختر المجموعة والقسم</td></tr>');save.prop('disabled',true);renderEmployees();}).appendTo(list);});}
+    pickerButton.on('click',function(){if($(this).prop('disabled'))return;picker.toggleClass('open');if(picker.hasClass('open')){search.val('');renderEmployees();search.trigger('focus');}});
+    $(document).on('click',function(e){if(!$(e.target).closest('#employeePicker').length)picker.removeClass('open');});
+    outlet.on('change',function(){selectedUser=null;employees=[];search.val('');picker.removeClass('open');pickerButton.prop('disabled',true).text('اختر الجهة أولًا');group.val('').prop('disabled',true);module.html('<option value="">اختر القسم</option>').prop('disabled',true);rows.html('<tr><td colspan="5" class="empty">اختر الموظف والمجموعة والقسم</td></tr>');$('#selectedEmployee').text('لم يتم اختيار موظف');save.prop('disabled',true);if(!this.value){list.html('<div class="employee-empty">اختر الجهة أولًا</div>');return;}pickerButton.text('جاري تحميل الموظفين...');list.html('<div class="employee-empty">جاري التحميل...</div>');$.getJSON('@Url.Action("Users")',{outletId:this.value}).done(function(data){employees=data||[];pickerButton.prop('disabled',employees.length===0).text(employees.length?'اختر الموظف':'لا يوجد موظفون في هذه الجهة');renderEmployees();}).fail(function(){pickerButton.text('تعذر تحميل الموظفين');list.html('<div class="employee-empty">تعذر تحميل الموظفين</div>');});});
+    search.on('input',renderEmployees);
+    group.on('change',function(){module.html('<option value="">جاري التحميل...</option>').prop('disabled',true);rows.html('<tr><td colspan="5" class="empty">اختر القسم</td></tr>');save.prop('disabled',true);if(!this.value)return;$.getJSON('@Url.Action("Modules")',{groupId:this.value}).done(function(data){module.html('<option value="">اختر القسم</option>');(data||[]).forEach(function(x){module.append($('<option>').val(x.id).text(x.text));});module.prop('disabled',false);}).fail(function(){module.html('<option value="">تعذر تحميل الأقسام</option>');});});
+    module.on('change',loadMenus);
+    function loadMenus(){if(!selectedUser||!group.val()||!module.val())return;rows.html('<tr><td colspan="5" class="empty">جاري تحميل الشاشات...</td></tr>');save.prop('disabled',true);$.getJSON('@Url.Action("Menus")',{userId:selectedUser.id,groupId:group.val(),moduleId:module.val()}).done(function(data){rows.empty();if(!data||!data.length){rows.html('<tr><td colspan="5" class="empty">لا توجد شاشات في هذا القسم</td></tr>');return;}data.forEach(function(x){var tr=$('<tr>').attr('data-menu-id',x.menuId);tr.append('<td class="screen-cell"><strong>'+escapeHtml(x.menuTitle)+'</strong><span class="screen-url">'+escapeHtml(x.menuUrl)+'</span></td>');['canView','canAdd','canEdit','canDelete'].forEach(function(key){tr.append($('<td>').append($('<input type="checkbox" class="permission-check">').attr('data-key',key).prop('checked',x[key]===true)));});rows.append(tr);});save.prop('disabled',false);}).fail(function(){rows.html('<tr><td colspan="5" class="empty">تعذر تحميل الشاشات</td></tr>');});}
+    $('#selectView').on('click',function(){rows.find('[data-key="canView"]').prop('checked',true);});
+    $('#clearAll').on('click',function(){rows.find('.permission-check').prop('checked',false);});
+    save.on('click',function(){if(!selectedUser||!group.val()||!module.val())return;var menus=[];rows.find('tr[data-menu-id]').each(function(){var tr=$(this),item={menuId:parseInt(tr.data('menu-id'))};tr.find('.permission-check').each(function(){item[$(this).data('key')]=$(this).is(':checked');});menus.push(item);});if(!menus.length)return;save.prop('disabled',true).text('جاري الحفظ...');$.ajax({url:'@Url.Action("Save")',type:'POST',contentType:'application/json; charset=utf-8',headers:{RequestVerificationToken:$('input[name="__RequestVerificationToken"]').val()},data:JSON.stringify({userId:selectedUser.id,groupId:parseInt(group.val()),moduleId:parseInt(module.val()),menus:menus})}).done(function(result){message(result.message||'تم الحفظ بنجاح',true);loadMenus();}).fail(function(xhr){message((xhr.responseJSON&&xhr.responseJSON.message)||'تعذر حفظ الصلاحيات',false);save.prop('disabled',false);}).always(function(){save.text('حفظ الصلاحيات');});});
+});
+</script>
+}

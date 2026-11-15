@@ -6,6 +6,8 @@ namespace PlantMobile.Data;
 public sealed class MenuAccessReader
 {
     public const string ShippingDateMenuUrl = "Im_CheckRequests/ShippingDate/Index";
+    public const string UserPrivilegeMenuUrl = "EX_User/User_Privilage";
+    public const string PermissionOriginChangeMenuUrl = "Im_Permissions/OriginChange/Index";
 
     private readonly string _connectionString;
     private readonly int _applicationCategoryId;
