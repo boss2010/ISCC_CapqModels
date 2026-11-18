@@ -618,6 +618,36 @@ public class ListEXCheckRequestController : Controller
         return RedirectToAction(nameof(Details),new{id});
     }
 
+    [HttpPost("Details/{id:long}/Decision")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveDecision(long id,string decision,string? notes,CancellationToken ct)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
+        if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)||!await _menuAccess.CanModifyAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
+        if(!await CanAccessRequestAsync(id,userId,ct))return Forbid();
+        decision=(decision??string.Empty).Trim().ToLowerInvariant();notes=notes?.Trim();
+        if(decision is not("approve" or "reject" or "complete")){TempData["DecisionError"]="الحالة المختارة غير صحيحة.";return RedirectToAction(nameof(Details),new{id});}
+        if((decision is "reject" or "complete")&&string.IsNullOrWhiteSpace(notes)){TempData["DecisionError"]="اكتب سبب الرفض أو البيانات المطلوب استكمالها.";return RedirectToAction(nameof(Details),new{id});}
+        const string sql="""
+        UPDATE dbo.Ex_CheckRequest
+        SET IsAccepted=CASE WHEN @Decision='approve' THEN 1 WHEN @Decision='reject' THEN 0 ELSE NULL END,
+            IsActive=CASE WHEN @Decision='reject' THEN 0 ELSE 1 END,
+            Notes_Reject=CASE WHEN @Decision='approve' THEN NULL ELSE @Notes END,
+            IsAccepted_Date=CASE WHEN @Decision IN('approve','reject') THEN GETDATE() ELSE NULL END,
+            User_Updation_Id=@UserId,User_Updation_Date=GETDATE()
+        WHERE ID=@Id AND User_Deletion_Id IS NULL;
+        """;
+        try
+        {
+            await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);
+            await using var command=new SqlCommand(sql,connection);command.Parameters.Add("@Id",SqlDbType.BigInt).Value=id;command.Parameters.Add("@Decision",SqlDbType.VarChar,20).Value=decision;command.Parameters.Add("@Notes",SqlDbType.NVarChar,-1).Value=(object?)notes??DBNull.Value;command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
+            if(await command.ExecuteNonQueryAsync(ct)==0)return NotFound();
+            TempData["DecisionSuccess"]=decision switch{"approve"=>"تمت الموافقة على الطلب.","reject"=>"تم رفض الطلب.",_=>"تم إرسال الطلب لاستكمال البيانات."};
+        }
+        catch(Exception ex){_logger.LogError(ex,"Failed to update export request decision {RequestId}; TraceId={TraceId}",id,HttpContext.TraceIdentifier);TempData["DecisionError"]=$"تعذر حفظ موقف الطلب. رقم التتبع: {HttpContext.TraceIdentifier}";}
+        return RedirectToAction(nameof(Details),new{id});
+    }
+
     private static string Text(SqlDataReader r,string name)=>r[name] is DBNull?string.Empty:Convert.ToString(r[name])??string.Empty;
     private static DateTime? Date(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToDateTime(r[name]);
     private static bool? Bool(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToBoolean(r[name]);
