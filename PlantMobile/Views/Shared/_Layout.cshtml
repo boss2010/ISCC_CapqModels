@@ -1,5 +1,7 @@
 ﻿@{
     var showMenu = Context.Session.GetString("UserSession") == "Authenticated";
+    var headerUserName = Context.Session.GetString("UserFullName") ?? Context.Session.GetString("UserName") ?? "";
+    var headerOutletName = Context.Session.GetString("OutletName") ?? "غير محدد";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -22,6 +24,16 @@
     <link href="~/css/custom.css" rel="stylesheet"  />
     <link href="~/css/menu-sidebar.css" rel="stylesheet" />
     <script src="~/lib/jquery/jquery.min.js"></script>
+    <style>
+        .header-account{display:flex;align-items:center;gap:10px;margin-left:12px;padding:5px 7px 5px 5px;border:1px solid rgba(255,255,255,.18);border-radius:11px;background:rgba(255,255,255,.07)}
+        .header-user-summary{display:flex;align-items:center;gap:13px;color:#fff;text-align:right;font-size:.84rem;line-height:1.2;white-space:nowrap}
+        .header-user-summary span{display:inline-flex;align-items:center;white-space:nowrap}
+        .header-user-summary i{color:#e7b04b;font-size:.8rem}
+        .header-logout{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border:0;border-radius:8px;background:#b94343;color:#fff;font-weight:700;white-space:nowrap;box-shadow:none}
+        .header-logout:hover,.header-logout:focus{background:#9f3030;color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+        @@media(max-width:991.98px){.site-header-actions{flex-wrap:wrap;justify-content:center;gap:8px}.header-account{order:5;width:100%;justify-content:center;margin:4px 0 0}.site-header-actions .ml-2{margin-left:0!important}}
+        @@media(max-width:575.98px){.header-account{gap:7px;padding:5px}.header-user-summary{gap:8px;font-size:.76rem;overflow-x:auto}.header-user-summary i{display:none}.header-logout{padding:6px 9px;font-size:.78rem}}
+    </style>
 
 </head>
 <body>
@@ -42,9 +54,18 @@
                                 aria-controls="pq-sidebar" aria-expanded="false" aria-label="القائمة">
                             <i class="fas fa-bars"></i>
                         </button>
-                        <form asp-controller="Login" asp-action="Logout" method="post" class="ml-3">
-                            <button type="submit" class="btn btn-outline-light">تسجيل الخروج</button>
-                        </form>
+                        @if (showMenu)
+                        {
+                            <div class="header-account" dir="rtl">
+                                <div class="header-user-summary">
+                                    <span><i class="fas fa-user ml-1"></i>@headerUserName</span>
+                                    <span><i class="fas fa-map-marker-alt ml-1"></i>@headerOutletName</span>
+                                </div>
+                                <form asp-controller="Login" asp-action="Logout" method="post" class="m-0">
+                                    <button type="submit" class="header-logout"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></button>
+                                </form>
+                            </div>
+                        }
                         <a asp-controller="LaboratoryResult" asp-action="Index" class="btn btn-warning ml-2">نتيجة المعمل</a>
                         <a href="" class="navbar-brand">
                             <img src="~/img/logo-capq2.png" class="logo" />

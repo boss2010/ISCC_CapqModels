@@ -2,6 +2,8 @@ using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using ViewModels;
+using PlantMobile.Data;
+using PlantMobile.Infrastructure;
 
 namespace PlantMobile.Controllers;
 
@@ -10,12 +12,55 @@ public class ListEXCheckRequestController : Controller
 {
     private readonly string _connectionString;
     private readonly ILogger<ListEXCheckRequestController> _logger;
+    private readonly MenuAccessReader _menuAccess;
+    private readonly IConfiguration _configuration;
+    private readonly string _attachmentServer;
 
-    public ListEXCheckRequestController(IConfiguration configuration, ILogger<ListEXCheckRequestController> logger)
+    public ListEXCheckRequestController(IConfiguration configuration, ILogger<ListEXCheckRequestController> logger, MenuAccessReader menuAccess)
     {
         _connectionString = configuration.GetConnectionString("DBConnection")
             ?? throw new InvalidOperationException("DBConnection is not configured.");
         _logger = logger;
+        _menuAccess = menuAccess;
+        _configuration=configuration;
+        _attachmentServer=configuration["Path_NetworkShare"] is {Length:>0} share?@"\\"+share.Trim().Trim('\\','/'):string.Empty;
+    }
+
+    [HttpGet("Supervisor")]
+    public async Task<IActionResult> Supervisor(string? requestNumber,DateTime? fromDate,DateTime? toDate,int status=0,int page=1,CancellationToken cancellationToken=default)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return RedirectToAction("Index","Login");
+        if(!await HasSupervisorAccessAsync(cancellationToken))return Forbid();
+        var model=new ExportInspectionRequestListVm{IsSupervisorReadOnly=true,RequestNumber=requestNumber?.Trim()??string.Empty,FromDate=fromDate?.Date,ToDate=toDate?.Date,Status=status is >=0 and <=3?status:0,Page=Math.Max(1,page)};
+        if(model.FromDate.HasValue&&model.ToDate.HasValue&&model.FromDate>model.ToDate)(model.FromDate,model.ToDate)=(model.ToDate,model.FromDate);
+        try{await LoadListAsync(model,0,false,cancellationToken);}catch(Exception ex){_logger.LogError(ex,"Failed to load export supervisor requests; TraceId={TraceId}",HttpContext.TraceIdentifier);ViewBag.PageError=$"تعذر تحميل طلبات الصادر. رقم تتبع المشكلة: {HttpContext.TraceIdentifier}";}
+        return View("Index",model);
+    }
+
+    [HttpGet("Supervisor/Details/{id:long}")]
+    public async Task<IActionResult> SupervisorDetails(long id,CancellationToken cancellationToken)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return RedirectToAction("Index","Login");
+        if(!await HasSupervisorAccessAsync(cancellationToken))return Forbid();
+        var model=await LoadDetailsAsync(id,cancellationToken);if(model is null)return NotFound();model.IsSupervisorReadOnly=true;return View("Details",model);
+    }
+
+    [HttpGet("DelegateAttachment/{id:long}")]
+    public async Task<IActionResult> DelegateAttachment(long id,CancellationToken ct)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
+        await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);
+        const string sql="SELECT AttachmentPath_Binary,AttachmentPath,Attachment_TypeName,Attachment_Number FROM dbo.A_AttachmentData WHERE Id=@Id AND User_Deletion_Id IS NULL";
+        await using var command=new SqlCommand(sql,connection);command.Parameters.Add("@Id",SqlDbType.BigInt).Value=id;
+        await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return NotFound();
+        var path=reader.IsDBNull(1)?string.Empty:reader.GetString(1);var name=reader.IsDBNull(3)?string.Empty:reader.GetString(3);
+        var contentType=ImportAttachmentFiles.ContentType(string.IsNullOrWhiteSpace(path)?name:path,reader.IsDBNull(2)?null:reader.GetString(2));
+        if(!reader.IsDBNull(0)&&((byte[])reader[0]).Length>0)return File((byte[])reader[0],contentType);
+        await reader.CloseAsync();if(Uri.TryCreate(path,UriKind.Absolute,out var uri)&&uri.Scheme is "http" or "https")return Redirect(path);
+        if(string.IsNullOrWhiteSpace(path)||string.IsNullOrWhiteSpace(_attachmentServer))return NotFound();
+        var resolved=ImportAttachmentFiles.ResolvePath(path,_attachmentServer);
+        try{AttachmentShareConnection.Connect(resolved,_configuration);return File(await System.IO.File.ReadAllBytesAsync(resolved,ct),contentType);}
+        catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){_logger.LogError(ex,"Unable to open export delegate attachment {AttachmentId}",id);return NotFound("تعذر فتح صورة المندوب من السيرفر.");}
     }
 
     [HttpGet("")]
@@ -25,6 +70,8 @@ public class ListEXCheckRequestController : Controller
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated")
             return RedirectToAction("Index", "Login");
+        if (!await HasOperationalAccessAsync(cancellationToken))
+            return Forbid();
 
         var model = new ExportInspectionRequestListVm
         {
@@ -38,7 +85,8 @@ public class ListEXCheckRequestController : Controller
         if (model.FromDate.HasValue && model.ToDate.HasValue && model.FromDate > model.ToDate)
             (model.FromDate, model.ToDate) = (model.ToDate, model.FromDate);
 
-        try { await LoadListAsync(model, cancellationToken); }
+        short currentUserId=short.TryParse(HttpContext.Session.GetString("UserId"),out var listUserId)?listUserId:(short)0;
+        try { await LoadListAsync(model, currentUserId, true, cancellationToken); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load export inspection requests; TraceId={TraceId}", HttpContext.TraceIdentifier);
@@ -52,6 +100,14 @@ public class ListEXCheckRequestController : Controller
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated")
             return RedirectToAction("Index", "Login");
+        if (!await HasOperationalAccessAsync(cancellationToken))
+        {
+            if (await HasSupervisorAccessAsync(cancellationToken))
+                return RedirectToAction(nameof(SupervisorDetails), new { id });
+            return Forbid();
+        }
+        short currentUserId=short.TryParse(HttpContext.Session.GetString("UserId"),out var detailsUserId)?detailsUserId:(short)0;
+        if(!await CanAccessRequestAsync(id,currentUserId,cancellationToken))return Forbid();
         try
         {
             var model = await LoadDetailsAsync(id, cancellationToken);
@@ -87,18 +143,84 @@ public class ListEXCheckRequestController : Controller
             : RedirectToAction(nameof(Details), new { id = Convert.ToInt64(result) });
     }
 
-    private async Task LoadListAsync(ExportInspectionRequestListVm model, CancellationToken ct)
+    private async Task LoadListAsync(ExportInspectionRequestListVm model, short userId, bool restrictToUser, CancellationToken ct)
     {
         const string sql = """
         SET NOCOUNT ON;
-        SELECT ROW_NUMBER() OVER(ORDER BY Ex_CheckRequest_ID DESC) RowNumber, * INTO #Results
-        FROM dbo.Ex_List
-        WHERE (@Number=N'' OR ImCheckRequest_Number LIKE N'%'+@Number+N'%')
-          AND (@FromDate IS NULL OR Creation_Date>=@FromDate)
-          AND (@ToDate IS NULL OR Creation_Date<DATEADD(day,1,@ToDate))
-          AND (@StationId IS NULL OR Station_Examination_ID=@StationId)
-          AND (@Status=0 OR (@Status=1 AND ISNULL(Final_Result_ID,0)=0 AND ISNULL(Closed_Request,0)=0)
-             OR (@Status=2 AND ISNULL(Final_Result_ID,0)>0) OR (@Status=3 AND ISNULL(Closed_Request,0)=1));
+        CREATE TABLE #AllowedRequests(Ex_CheckRequest_ID bigint NOT NULL PRIMARY KEY);
+        IF @RestrictToUser=1
+        BEGIN
+          INSERT #AllowedRequests(Ex_CheckRequest_ID)
+          SELECT allowed.Ex_CheckRequest_ID
+          FROM
+          (
+            SELECT p.Ex_CheckRequest_ID
+            FROM dbo.Ex_CheckRequest_Places p
+            INNER JOIN dbo.Station_Emp se ON se.Emp_Id=@UserId AND se.IsActive=1 AND se.User_Deletion_Id IS NULL
+              AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date))
+              AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date))
+              AND se.Station_Id IN(p.Station_Examination_ID,p.Station_Genshi_ID)
+            UNION
+            SELECT p.Ex_CheckRequest_ID
+            FROM dbPrivilage.dbo.PR_User currentUser
+            INNER JOIN dbo.Outlet accessOutlet ON accessOutlet.ID_HR=currentUser.Outlet_ID
+            INNER JOIN dbo.Ex_CheckRequest_Places p ON accessOutlet.ID IN(p.Outlet_Exmainiation_ID,p.Outlet_Genshi_ID)
+            WHERE currentUser.Id=@UserId AND currentUser.Active=1
+            UNION
+            SELECT committee.ExCheckRequest_ID
+            FROM dbo.CommitteeEmployee employee
+            INNER JOIN dbo.Ex_RequestCommittee committee ON committee.ID=employee.Committee_ID AND committee.User_Deletion_Id IS NULL
+            WHERE employee.Employee_Id=@UserId AND employee.User_Deletion_Id IS NULL
+          ) allowed
+          GROUP BY allowed.Ex_CheckRequest_ID;
+        END;
+        ELSE
+          INSERT #AllowedRequests(Ex_CheckRequest_ID)
+          SELECT ID FROM dbo.Ex_CheckRequest WHERE User_Deletion_Id IS NULL;
+        SELECT ROW_NUMBER() OVER(ORDER BY request.ID DESC) RowNumber,
+          request.ID Ex_CheckRequest_ID,request.CheckRequest_Number ImCheckRequest_Number,
+          request.User_Creation_Date Creation_Date,country.Ar_Name ExportCountryName,
+          systemCode.ValueName ImporterTypeName,
+          CASE requestData.ImporterType_Id WHEN 6 THEN company.Name_Ar WHEN 7 THEN organization.Name_Ar WHEN 8 THEN person.Name ELSE N'' END ImporterName,
+          COALESCE(examinationOutlet.Ar_Name,examinationCenterOutlet.Ar_Name) Outlet_Examination_Name,
+          examinationStation.Ar_Name Station_Examination_Name,
+          COALESCE(genshiOutlet.Ar_Name,genshiPortOutlet.Ar_Name) Outlet_Genshi_Name,
+          genshiStation.Ar_Name Station_Genshi_Name,
+          place.Station_Examination_ID,request.IsAccepted,request.IsPaid,
+          ISNULL(finalResult.ResultCount,0) Closed_Request,ISNULL(finalResult.Ex_Final_Result_ID,0) Final_Result_ID,
+          ISNULL(finalResult.Final_Result_Name,N'') Final_Result_Name
+        INTO #Results
+        FROM #AllowedRequests allowed
+        INNER JOIN dbo.Ex_CheckRequest request ON request.ID=allowed.Ex_CheckRequest_ID
+        OUTER APPLY(SELECT TOP(1) data.* FROM dbo.Ex_CheckRequest_Data data WHERE data.Ex_CheckRequest_ID=request.ID AND data.User_Deletion_Id IS NULL ORDER BY data.ID DESC) requestData
+        LEFT JOIN dbo.Country country ON country.ID=requestData.ExportCountry_Id
+        LEFT JOIN dbo.A_SystemCode systemCode ON systemCode.Id=requestData.ImporterType_Id
+        LEFT JOIN dbo.Company_National company ON company.ID=requestData.Importer_ID AND requestData.ImporterType_Id=6
+        LEFT JOIN dbo.Public_Organization organization ON organization.ID=requestData.Importer_ID AND requestData.ImporterType_Id=7
+        LEFT JOIN dbo.Person person ON person.ID=requestData.Importer_ID AND requestData.ImporterType_Id=8
+        OUTER APPLY(SELECT TOP(1) p.* FROM dbo.Ex_CheckRequest_Places p WHERE p.Ex_CheckRequest_ID=request.ID ORDER BY p.ID DESC) place
+        LEFT JOIN dbo.Outlet examinationOutlet ON examinationOutlet.ID=place.Outlet_Exmainiation_ID
+        LEFT JOIN dbo.Center examinationCenter ON examinationCenter.ID=place.Center_ID
+        LEFT JOIN dbo.Outlet examinationCenterOutlet ON examinationCenterOutlet.ID=examinationCenter.Outlet_ID
+        LEFT JOIN dbo.Station examinationStation ON examinationStation.ID=place.Station_Examination_ID
+        LEFT JOIN dbo.Outlet genshiOutlet ON genshiOutlet.ID=place.Outlet_Genshi_ID
+        LEFT JOIN dbo.Outlet genshiPortOutlet ON genshiPortOutlet.PortNational_ID=place.PortNational_ID
+        LEFT JOIN dbo.Station genshiStation ON genshiStation.ID=place.Station_Genshi_ID
+        OUTER APPLY
+        (
+          SELECT TOP(1) resultRow.Ex_Final_Result_ID,resultType.Ar_Name Final_Result_Name,
+            COUNT(*) OVER() ResultCount
+          FROM dbo.Ex_CheckRequest_Final_Result resultRow
+          LEFT JOIN dbo.Ex_Final_Result resultType ON resultType.ID=resultRow.Ex_Final_Result_ID AND resultType.IsActive=1
+          WHERE resultRow.Ex_CheckRequest_ID=request.ID AND resultRow.User_Deletion_Id IS NULL
+          ORDER BY resultRow.ID DESC
+        ) finalResult
+        WHERE (@Number=N'' OR request.CheckRequest_Number LIKE N'%'+@Number+N'%')
+          AND (@FromDate IS NULL OR request.User_Creation_Date>=@FromDate)
+          AND (@ToDate IS NULL OR request.User_Creation_Date<DATEADD(day,1,@ToDate))
+          AND (@StationId IS NULL OR place.Station_Examination_ID=@StationId)
+          AND (@Status=0 OR (@Status=1 AND ISNULL(finalResult.Ex_Final_Result_ID,0)=0 AND ISNULL(finalResult.ResultCount,0)=0)
+             OR (@Status=2 AND ISNULL(finalResult.Ex_Final_Result_ID,0)>0) OR (@Status=3 AND ISNULL(finalResult.ResultCount,0)>0));
         SELECT COUNT(*) FROM #Results;
         SELECT RowNumber,Ex_CheckRequest_ID,ImCheckRequest_Number,Creation_Date,ExportCountryName,
           ImporterTypeName,ImporterName,Outlet_Examination_Name,Station_Examination_Name,
@@ -115,6 +237,8 @@ public class ListEXCheckRequestController : Controller
         command.Parameters.Add("@ToDate", SqlDbType.Date).Value = model.ToDate ?? (object)DBNull.Value;
         command.Parameters.Add("@Status", SqlDbType.Int).Value = model.Status;
         command.Parameters.Add("@StationId",SqlDbType.BigInt).Value=model.StationId??(object)DBNull.Value;
+        command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
+        command.Parameters.Add("@RestrictToUser",SqlDbType.Bit).Value=restrictToUser;
         command.Parameters.Add("@Page", SqlDbType.Int).Value = model.Page;
         command.Parameters.Add("@PageSize", SqlDbType.Int).Value = model.PageSize;
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -162,13 +286,13 @@ public class ListEXCheckRequestController : Controller
           ISNULL(committees.InspectionCount,0) InspectionCount,ISNULL(committees.SamplingCount,0) SamplingCount,
           ISNULL(committees.TreatmentCount,0) TreatmentCount,ISNULL(engineers.CurrentEngineerCount,0) CurrentEngineerCount
         FROM #Stations s
-        OUTER APPLY(SELECT COUNT(DISTINCT p.Ex_CheckRequest_ID) RequestCount FROM dbo.Ex_CheckRequest_Places p WHERE p.Station_Examination_ID=s.ID) requests
+        OUTER APPLY(SELECT COUNT(DISTINCT p.Ex_CheckRequest_ID) RequestCount FROM dbo.Ex_CheckRequest_Places p WHERE p.Station_Examination_ID=s.ID OR p.Station_Genshi_ID=s.ID) requests
         OUTER APPLY(SELECT COUNT(DISTINCT c.ID) CommitteeCount,
           COUNT(DISTINCT CASE WHEN c.CommitteeType_ID=1 THEN c.ID END) InspectionCount,
           COUNT(DISTINCT CASE WHEN c.CommitteeType_ID=3 THEN c.ID END) SamplingCount,
           COUNT(DISTINCT CASE WHEN c.CommitteeType_ID=6 THEN c.ID END) TreatmentCount
           FROM dbo.Ex_CheckRequest_Places p INNER JOIN dbo.Ex_RequestCommittee c ON c.ExCheckRequest_ID=p.Ex_CheckRequest_ID
-          WHERE p.Station_Examination_ID=s.ID AND c.CommitteeType_ID IN(1,3,6) AND c.User_Deletion_Id IS NULL) committees
+          WHERE ((c.CommitteeType_ID=2 AND p.Station_Genshi_ID=s.ID) OR (c.CommitteeType_ID IN(1,3,6) AND p.Station_Examination_ID=s.ID)) AND c.User_Deletion_Id IS NULL) committees
         OUTER APPLY(SELECT COUNT(DISTINCT se.Emp_Id) CurrentEngineerCount FROM dbo.Station_Emp se WHERE se.Station_Id=s.ID AND se.IsActive=1 AND se.User_Deletion_Id IS NULL
           AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date))) engineers
         WHERE s.RowNumber BETWEEN ((@Page-1)*@PageSize)+1 AND @Page*@PageSize ORDER BY s.RowNumber OPTION(RECOMPILE);
@@ -188,28 +312,45 @@ public class ListEXCheckRequestController : Controller
           r.NationalIDCompanyOwner,r.IsAccepted,r.IsPaid,r.Amount,r.Notes_Reject,
           l.ExportCountryName,l.ImporterTypeName,l.ImporterName,l.Outlet_Examination_Name,l.Station_Examination_Name,
           l.Outlet_Genshi_Name,l.Station_Genshi_Name,ISNULL(l.Closed_Request,0) Closed_Request,l.Final_Result_Name,
-          d.DelegateName,d.DelegateAddress,d.Ship_Name,sm.Ar_Name ShipmentMean,tm.Ar_Name TransportMean,
+          COALESCE(NULLIF(d.DelegateName,N''),delegateData.DelegateName) DelegateName,
+          d.DelegateAddress,delegateData.NationalID DelegateNationalId,d.Ship_Name,
+          COALESCE(NULLIF(sm.Ar_Name COLLATE DATABASE_DEFAULT,N''),NULLIF(international.Ar_Name COLLATE DATABASE_DEFAULT,N''),international.TransferMethod COLLATE DATABASE_DEFAULT) ShipmentMean,
+          COALESCE(NULLIF(tm.Ar_Name COLLATE DATABASE_DEFAULT,N''),NULLIF(international.TransferMethod COLLATE DATABASE_DEFAULT,N''),international.Ar_Name COLLATE DATABASE_DEFAULT) TransportMean,
           COALESCE(extra.OwnerName,CASE d.ImporterType_Id WHEN 6 THEN company.Owner_Ar WHEN 7 THEN org.Person_Responsible_Name WHEN 8 THEN person.Name END) OwnerName,
           COALESCE(extra.OwnerAddress,CASE d.ImporterType_Id WHEN 6 THEN company.Address_Ar WHEN 7 THEN org.Address_Ar WHEN 8 THEN person.Address END) OwnerAddress,
-          extra.ImportCompany,extra.ImporeterCompanyAddress,extra.Reciever_Name,
+          COALESCE(NULLIF(extra.ImportCompany,N''),NULLIF(d.Receiver_Name,N'')) ImportCompany,
+          COALESCE(NULLIF(extra.ImporeterCompanyAddress,N''),NULLIF(d.Receiver_Address,N'')) ImporeterCompanyAddress,
+          COALESCE(NULLIF(d.Receiver_Name,N''),NULLIF(extra.Reciever_Name,N'')) Reciever_Name,
+          delegateAttachment.Id DelegateAttachmentId,delegateAttachment.AttachmentPath DelegateAttachmentPath,
           shippingPort.Name_Ar ShippingPort,arrivalType.Name_Ar ArrivalPortType,arrivalPort.Name_Ar ArrivalPort,
           transitCountry.Ar_Name TransitCountry,transitType.Name_Ar TransitPortType,transitPort.Name_Ar TransitPort,
           place.Examination_location,gov.Ar_Name ExaminationGovernorate,center.Ar_Name ExaminationCenter,
           place.Station_Examination_ID,station.Ar_Name ExaminationStationName,place.Outlet_Exmainiation_ID,
+          place.Station_Genshi_ID,genshiStation.Ar_Name GenshiStationName,place.Outlet_Genshi_ID,
           fr.Date FinalResultDate
         FROM dbo.Ex_CheckRequest r
         LEFT JOIN dbo.Ex_List l ON l.Ex_CheckRequest_ID=r.ID
         LEFT JOIN dbo.Ex_CheckRequest_Data d ON d.Ex_CheckRequest_ID=r.ID AND d.User_Deletion_Id IS NULL
         LEFT JOIN dbo.Shipment_Mean sm ON sm.ID=d.Shipment_Mean_Id
         LEFT JOIN dbo.Transport_Mean tm ON tm.ID=d.Transport_Mean_Id
+        LEFT JOIN dbo.InternationalTransportation international ON international.ID=d.InternationalTransportation_ID
         LEFT JOIN dbo.Ex_CheckRequestData_Extra extra ON extra.Ex_CheckRequest_Data_ID=d.ID AND extra.User_Deletion_Id IS NULL
         LEFT JOIN dbo.Company_National company ON company.ID=d.Importer_ID AND d.ImporterType_Id=6
         LEFT JOIN dbo.Public_Organization org ON org.ID=d.Importer_ID AND d.ImporterType_Id=7
         LEFT JOIN dbo.Person person ON person.ID=d.Importer_ID AND d.ImporterType_Id=8
+        OUTER APPLY(SELECT TOP(1) x.ID,x.DelegateName,x.NationalID FROM dbo.Delegates x
+          WHERE x.EntityTypeID=d.ImporterType_Id AND x.EntityID=d.Importer_ID AND x.IsActive=1 AND x.User_Deletion_Date IS NULL
+          ORDER BY CASE WHEN LTRIM(RTRIM(x.DelegateName))=LTRIM(RTRIM(d.DelegateName)) THEN 0 ELSE 1 END,x.ID DESC) delegateData
+        OUTER APPLY(SELECT TOP(1) a.Id,a.AttachmentPath FROM dbo.A_AttachmentData a
+          WHERE a.RowId=d.Importer_ID AND a.User_Deletion_Id IS NULL
+            AND a.A_AttachmentTableNameId=CASE d.ImporterType_Id WHEN 6 THEN 1 WHEN 7 THEN 7 WHEN 8 THEN 6 ELSE -1 END
+            AND (a.Attachment_TypeName LIKE N'%صورة%' OR a.Attachment_TypeName LIKE N'%بطاق%' OR a.AttachmentPath LIKE '%.jpg' OR a.AttachmentPath LIKE '%.jpeg' OR a.AttachmentPath LIKE '%.png')
+          ORDER BY CASE WHEN a.Attachment_TypeName LIKE N'%صورة بطاقة%' THEN 0 ELSE 1 END,a.Id DESC) delegateAttachment
         LEFT JOIN dbo.Ex_CheckRequest_Places place ON place.Ex_CheckRequest_ID=r.ID
         LEFT JOIN dbo.Governate gov ON gov.ID=place.Govern_ID
         LEFT JOIN dbo.Center center ON center.ID=place.Center_ID
         LEFT JOIN dbo.Station station ON station.ID=place.Station_Examination_ID
+        LEFT JOIN dbo.Station genshiStation ON genshiStation.ID=place.Station_Genshi_ID
         LEFT JOIN dbo.Country transitCountry ON transitCountry.ID=d.TransitCountry_Id
         OUTER APPLY(SELECT TOP(1) pn.Name_Ar FROM dbo.Ex_CheckRequest_Port ep LEFT JOIN dbo.PortNational pn ON pn.ID=ep.Port_ID WHERE ep.Ex_CheckRequest_Data_ID=d.ID AND ep.ReqPortType_ID=9 AND ep.User_Deletion_Id IS NULL ORDER BY ep.ID DESC) shippingPort
         OUTER APPLY(SELECT TOP(1) pi.Name_Ar,pi.PortTypeID FROM dbo.Ex_CheckRequest_Port ep LEFT JOIN dbo.Port_International pi ON pi.ID=ep.Port_ID WHERE ep.Ex_CheckRequest_Data_ID=d.ID AND ep.ReqPortType_ID=10 AND ep.User_Deletion_Id IS NULL ORDER BY ep.ID DESC) arrivalPort
@@ -247,8 +388,25 @@ public class ListEXCheckRequestController : Controller
         LEFT JOIN dbo.A_AttachmentTableType t ON t.ID=a.A_AttachmentTableType_ID
         WHERE a.Ex_CheckRequest_ID=@Id AND a.User_Deletion_Id IS NULL ORDER BY a.Id;
 
-        SELECT Total_GrossWeight,Fee_Value,Total_Amount,is_Fee_Rounding
-        FROM dbo.Ex_CheckRequest_Fees WHERE Ex_CheckRequest_ID=@Id ORDER BY ID;
+        SELECT N'رسوم طلب الفحص الصادر' FeeType,N'الطلب' FeeSource,CAST(NULL AS nvarchar(100)) OrderNumber,
+          r.IsPaid,fee.Total_GrossWeight,fee.Fee_Value,fee.Total_Amount,fee.is_Fee_Rounding,fee.ID SortId
+        FROM dbo.Ex_CheckRequest_Fees fee INNER JOIN dbo.Ex_CheckRequest r ON r.ID=fee.Ex_CheckRequest_ID
+        WHERE fee.Ex_CheckRequest_ID=@Id
+        UNION ALL
+        SELECT COALESCE(NULLIF(action.Name_Ar COLLATE DATABASE_DEFAULT,N''),NULLIF(feeType.Name_Ar COLLATE DATABASE_DEFAULT,N''),N'رسوم لجنة صادر'),
+          COALESCE(NULLIF(committeeType.Name_Ar COLLATE DATABASE_DEFAULT,N''),N'لجنة صادر'),transactionData.OrderNumber COLLATE DATABASE_DEFAULT,
+          transactionData.IsSuccess_Bank,CAST(NULL AS decimal(18,6)),CAST(NULL AS money),
+          COALESCE(detail.Amount,transactionData.Amount_Total),CAST(NULL AS bit),transactionData.ID
+        FROM dbo.Fees_Transactions transactionData
+        LEFT JOIN dbo.Fees_Transactions_Detiles detail ON detail.Fees_Transactions_ID=transactionData.ID AND detail.User_Deletion_Id IS NULL
+        LEFT JOIN dbo.Fees_Action action ON action.ID=detail.Fees_Action_ID
+        LEFT JOIN dbo.FeesType feeType ON feeType.ID=action.FeesType_Id
+        LEFT JOIN dbo.Ex_RequestCommittee committee ON committee.ID=transactionData.Table_ID AND transactionData.TableName_ID=9
+        LEFT JOIN dbo.CommitteeType committeeType ON committeeType.ID=committee.CommitteeType_ID
+        WHERE transactionData.User_Deletion_Id IS NULL
+          AND ((transactionData.TableName_ID=8 AND transactionData.Table_ID=@Id)
+            OR (transactionData.TableName_ID=9 AND committee.ExCheckRequest_ID=@Id))
+        ORDER BY SortId;
 
         SELECT DISTINCT employees.Id,employees.EmpId,employees.FullName FROM(
           SELECT u.Id,u.EmpId,u.FullName
@@ -264,15 +422,41 @@ public class ListEXCheckRequestController : Controller
           WHERE p.Ex_CheckRequest_ID=@Id AND p.Station_Examination_ID IS NULL AND p.Outlet_Exmainiation_ID IS NOT NULL
         )employees ORDER BY employees.FullName;
 
+        SELECT DISTINCT employees.Id,employees.EmpId,employees.FullName FROM(
+          SELECT u.Id,u.EmpId,u.FullName
+          FROM dbo.Ex_CheckRequest_Places p
+          INNER JOIN dbo.Station_Emp se ON se.Station_Id=p.Station_Genshi_ID AND se.IsActive=1 AND se.User_Deletion_Id IS NULL
+            AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date))
+          INNER JOIN dbPrivilage.dbo.PR_User u ON u.Id=se.Emp_Id AND u.Active=1
+          WHERE p.Ex_CheckRequest_ID=@Id AND p.Station_Genshi_ID IS NOT NULL
+          UNION ALL
+          SELECT u.Id,u.EmpId,u.FullName
+          FROM dbo.Ex_CheckRequest_Places p INNER JOIN dbo.Outlet o ON o.ID=p.Outlet_Genshi_ID
+          INNER JOIN dbPrivilage.dbo.PR_User u ON u.Outlet_ID=o.ID_HR AND u.Active=1
+          WHERE p.Ex_CheckRequest_ID=@Id AND p.Station_Genshi_ID IS NULL AND p.Outlet_Genshi_ID IS NOT NULL
+        )employees ORDER BY employees.FullName;
+
+        SELECT DISTINCT o.ID,o.Ar_Name
+        FROM dbo.Outlet o
+        INNER JOIN dbPrivilage.dbo.PR_User u ON u.Outlet_ID=o.ID_HR AND u.Active=1
+        WHERE o.IsActive=1 AND o.User_Deletion_Id IS NULL
+        ORDER BY o.Ar_Name;
+
+        SELECT DISTINCT u.Id,u.EmpId,u.FullName,o.ID OutletId,o.Ar_Name OutletName
+        FROM dbo.Outlet o
+        INNER JOIN dbPrivilage.dbo.PR_User u ON u.Outlet_ID=o.ID_HR AND u.Active=1
+        WHERE o.IsActive=1 AND o.User_Deletion_Id IS NULL
+        ORDER BY o.Ar_Name,u.FullName;
+
         SELECT c.ID,CONVERT(tinyint,c.CommitteeType_ID) CommitteeType_ID,ct.Name_Ar,c.Delegation_Date,
           STRING_AGG(CONVERT(nvarchar(max),u.FullName),N'، ') Employees,
-          CASE c.CommitteeType_ID WHEN 1 THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult r WHERE r.Committee_ID=c.ID AND r.User_Deletion_Id IS NULL)
-            WHEN 3 THEN (SELECT COUNT(*) FROM dbo.Ex_CheckRequest_SampleData s WHERE s.Ex_RequestCommittee_ID=c.ID AND s.User_Deletion_Id IS NULL)
-            WHEN 6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL) ELSE 0 END LotCount
+          CASE WHEN c.CommitteeType_ID IN(1,2) THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult r WHERE r.Committee_ID=c.ID AND r.User_Deletion_Id IS NULL)
+            WHEN c.CommitteeType_ID=3 THEN (SELECT COUNT(*) FROM dbo.Ex_CheckRequest_SampleData s WHERE s.Ex_RequestCommittee_ID=c.ID AND s.User_Deletion_Id IS NULL)
+            WHEN c.CommitteeType_ID=6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL) ELSE 0 END LotCount
         FROM dbo.Ex_RequestCommittee c INNER JOIN dbo.CommitteeType ct ON ct.ID=c.CommitteeType_ID
         LEFT JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.OperationType=73 AND ce.User_Deletion_Id IS NULL
         LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id=ce.Employee_Id
-        WHERE c.ExCheckRequest_ID=@Id AND c.CommitteeType_ID IN(1,3,6) AND c.User_Deletion_Id IS NULL
+        WHERE c.ExCheckRequest_ID=@Id AND c.CommitteeType_ID IN(1,2,3,6) AND c.User_Deletion_Id IS NULL
         GROUP BY c.ID,c.CommitteeType_ID,ct.Name_Ar,c.Delegation_Date ORDER BY c.ID DESC;
         """;
         await using var connection = new SqlConnection(_connectionString);
@@ -291,7 +475,8 @@ public class ListEXCheckRequestController : Controller
             OwnerName=Text(reader,"OwnerName"),OwnerAddress=Text(reader,"OwnerAddress"),
             ExaminationPlace=JoinPlace(Text(reader,"Outlet_Examination_Name"),Text(reader,"Station_Examination_Name")),
             GenshiPlace=JoinPlace(Text(reader,"Outlet_Genshi_Name"),Text(reader,"Station_Genshi_Name")),
-            DelegateName=Text(reader,"DelegateName"),DelegateAddress=Text(reader,"DelegateAddress"),ShipName=Text(reader,"Ship_Name"),
+            DelegateName=Text(reader,"DelegateName"),DelegateAddress=Text(reader,"DelegateAddress"),DelegateNationalId=Text(reader,"DelegateNationalId"),
+            DelegateAttachmentId=reader["DelegateAttachmentId"] is DBNull?null:Convert.ToInt64(reader["DelegateAttachmentId"]),DelegateAttachmentPath=Text(reader,"DelegateAttachmentPath"),ShipName=Text(reader,"Ship_Name"),
             ShipmentMean=Text(reader,"ShipmentMean"),TransportMean=Text(reader,"TransportMean"),ClosedRequest=Convert.ToInt32(reader["Closed_Request"]),
             ImportCompany=Text(reader,"ImportCompany"),ImportCompanyAddress=Text(reader,"ImporeterCompanyAddress"),ReceiverName=Text(reader,"Reciever_Name"),
             ShippingPort=Text(reader,"ShippingPort"),ArrivalPortType=Text(reader,"ArrivalPortType"),ArrivalPort=Text(reader,"ArrivalPort"),
@@ -299,6 +484,9 @@ public class ListEXCheckRequestController : Controller
             ExaminationAddress=Text(reader,"Examination_location"),ExaminationGovernorate=Text(reader,"ExaminationGovernorate"),ExaminationCenter=Text(reader,"ExaminationCenter"),
             ExaminationStationId=reader["Station_Examination_ID"] is DBNull?(reader["Outlet_Exmainiation_ID"] is DBNull?null:0L):Convert.ToInt64(reader["Station_Examination_ID"]),ExaminationStationName=reader["Station_Examination_ID"] is DBNull?Text(reader,"Outlet_Examination_Name"):Text(reader,"ExaminationStationName"),
             ExaminationOutletId=reader["Outlet_Exmainiation_ID"] is DBNull?null:Convert.ToInt64(reader["Outlet_Exmainiation_ID"]),
+            GenshiStationId=reader["Station_Genshi_ID"] is DBNull?null:Convert.ToInt64(reader["Station_Genshi_ID"]),
+            GenshiStationName=reader["Station_Genshi_ID"] is DBNull?Text(reader,"Outlet_Genshi_Name"):Text(reader,"GenshiStationName"),
+            GenshiOutletId=reader["Outlet_Genshi_ID"] is DBNull?null:Convert.ToInt64(reader["Outlet_Genshi_ID"]),
             FinalResult=Text(reader,"Final_Result_Name"),FinalResultDate=Date(reader,"FinalResultDate")
         };
         await reader.NextResultAsync(ct);
@@ -318,9 +506,15 @@ public class ListEXCheckRequestController : Controller
         await reader.NextResultAsync(ct);
         while(await reader.ReadAsync(ct)) model.Attachments.Add(new ExportInspectionAttachmentVm { Id=Convert.ToInt64(reader["Id"]),Name=Text(reader,"AttachmentName"),Number=Text(reader,"Attachment_Number"),Path=Text(reader,"AttachmentPath"),StartDate=Date(reader,"StartDate"),EndDate=Date(reader,"EndDate") });
         await reader.NextResultAsync(ct);
-        while(await reader.ReadAsync(ct)) model.Fees.Add(new ExportInspectionFeeVm { TotalGrossWeight=Decimal(reader,"Total_GrossWeight"),FeeValue=Decimal(reader,"Fee_Value"),TotalAmount=Decimal(reader,"Total_Amount"),IsRounded=Bool(reader,"is_Fee_Rounding") });
+        while(await reader.ReadAsync(ct)) model.Fees.Add(new ExportInspectionFeeVm { FeeType=Text(reader,"FeeType"),Source=Text(reader,"FeeSource"),OrderNumber=Text(reader,"OrderNumber"),IsPaid=Bool(reader,"IsPaid"),TotalGrossWeight=Decimal(reader,"Total_GrossWeight"),FeeValue=Decimal(reader,"Fee_Value"),TotalAmount=Decimal(reader,"Total_Amount"),IsRounded=Bool(reader,"is_Fee_Rounding") });
         await reader.NextResultAsync(ct);
         while(await reader.ReadAsync(ct)) model.StationEngineers.Add(new ExportStationEngineerVm { UserId=Convert.ToInt64(reader["Id"]),EmployeeId=reader["EmpId"] is DBNull?null:Convert.ToInt64(reader["EmpId"]),Name=Text(reader,"FullName") });
+        await reader.NextResultAsync(ct);
+        while(await reader.ReadAsync(ct)) model.GenshiEngineers.Add(new ExportStationEngineerVm { UserId=Convert.ToInt64(reader["Id"]),EmployeeId=reader["EmpId"] is DBNull?null:Convert.ToInt64(reader["EmpId"]),Name=Text(reader,"FullName") });
+        await reader.NextResultAsync(ct);
+        while(await reader.ReadAsync(ct)) model.CommitteeOutlets.Add(new ExportCommitteeOutletVm { Id=Convert.ToInt64(reader["ID"]),Name=Text(reader,"Ar_Name") });
+        await reader.NextResultAsync(ct);
+        while(await reader.ReadAsync(ct)) model.OutletEngineers.Add(new ExportStationEngineerVm { UserId=Convert.ToInt64(reader["Id"]),EmployeeId=reader["EmpId"] is DBNull?null:Convert.ToInt64(reader["EmpId"]),Name=Text(reader,"FullName"),OutletId=Convert.ToInt64(reader["OutletId"]),OutletName=Text(reader,"OutletName") });
         await reader.NextResultAsync(ct);
         while(await reader.ReadAsync(ct)) model.Committees.Add(new ExportRequestCommitteeVm { Id=Convert.ToInt64(reader["ID"]),CommitteeTypeId=Convert.ToByte(reader["CommitteeType_ID"]),CommitteeType=Text(reader,"Name_Ar"),DelegationDate=Date(reader,"Delegation_Date"),Employees=Text(reader,"Employees"),LotCount=Convert.ToInt32(reader["LotCount"]) });
         return model;
@@ -328,10 +522,11 @@ public class ListEXCheckRequestController : Controller
 
     [HttpPost("Details/{id:long}/Committees")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateCommittee(long id,byte committeeTypeId,DateTime delegationDate,TimeSpan startTime,TimeSpan endTime,long adminEmployeeId,List<long> employeeIds,CancellationToken ct)
+    public async Task<IActionResult> CreateCommittee(long id,byte committeeTypeId,DateTime delegationDate,TimeSpan startTime,TimeSpan endTime,long adminEmployeeId,List<long> employeeIds,long? selectedOutletId,CancellationToken ct)
     {
         if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
-        if(committeeTypeId is not(1 or 3 or 6)){TempData["CommitteeError"]="نوع اللجنة غير صحيح.";return RedirectToAction(nameof(Details),new{id});}
+        if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var accessUser)||!await _menuAccess.CanModifyAsync(accessUser,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
+        if(committeeTypeId is not(1 or 2 or 3 or 6)){TempData["CommitteeError"]="نوع اللجنة غير صحيح.";return RedirectToAction(nameof(Details),new{id});}
         employeeIds=(employeeIds??[]).Distinct().ToList();if(!employeeIds.Contains(adminEmployeeId))employeeIds.Add(adminEmployeeId);
         if(employeeIds.Count==0||startTime>=endTime){TempData["CommitteeError"]="اختر مهندسًا واحدًا على الأقل وتأكد من توقيت اللجنة.";return RedirectToAction(nameof(Details),new{id});}
         short creator=short.TryParse(HttpContext.Session.GetString("UserId"),out var sessionUser)?sessionUser:(short)0;
@@ -339,14 +534,24 @@ public class ListEXCheckRequestController : Controller
         SET XACT_ABORT ON;BEGIN TRANSACTION;
         DECLARE @Employees TABLE(Id bigint PRIMARY KEY);
         INSERT @Employees(Id) SELECT DISTINCT TRY_CONVERT(bigint,[value]) FROM OPENJSON(@EmployeesJson) WHERE TRY_CONVERT(bigint,[value]) IS NOT NULL;
-        DECLARE @StationId bigint,@OutletId bigint,@OutletHrId bigint;
-        SELECT TOP(1) @StationId=Station_Examination_ID,@OutletId=Outlet_Exmainiation_ID FROM dbo.Ex_CheckRequest_Places WHERE Ex_CheckRequest_ID=@RequestId;
+        DECLARE @StationId bigint,@OutletId bigint,@OutletHrId bigint,@HasStationEmployees bit=0;
+        SELECT TOP(1)
+          @StationId=CASE WHEN @CommitteeTypeId=2 THEN Station_Genshi_ID ELSE Station_Examination_ID END,
+          @OutletId=CASE WHEN @CommitteeTypeId=2 THEN Outlet_Genshi_ID ELSE Outlet_Exmainiation_ID END
+        FROM dbo.Ex_CheckRequest_Places WHERE Ex_CheckRequest_ID=@RequestId;
         SELECT @OutletHrId=ID_HR FROM dbo.Outlet WHERE ID=@OutletId;
-        IF @StationId IS NULL AND @OutletId IS NULL THROW 50010,N'لم يتم تحديد محطة أو منفذ فحص للطلب.',1;
+        IF @StationId IS NULL AND @OutletId IS NULL THROW 50010,N'لم يتم تحديد محطة أو منفذ للمرحلة المطلوبة.',1;
+        IF @StationId IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.Station_Emp se WHERE se.Station_Id=@StationId AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=@DelegationDate) AND (se.Date_To IS NULL OR se.Date_To>=@DelegationDate)) SET @HasStationEmployees=1;
+        IF @StationId IS NOT NULL AND @HasStationEmployees=0
+        BEGIN
+          IF @SelectedOutletId IS NULL THROW 50016,N'لا يوجد موظفون مسكنون على المحطة في تاريخ اللجنة؛ اختر منفذًا لعرض موظفيه.',1;
+          SELECT @OutletHrId=ID_HR FROM dbo.Outlet WHERE ID=@SelectedOutletId AND IsActive=1 AND User_Deletion_Id IS NULL;
+          IF @OutletHrId IS NULL THROW 50017,N'المنفذ المختار غير صحيح.',1;
+        END;
         IF EXISTS(SELECT 1 FROM @Employees e WHERE NOT EXISTS(
-          SELECT 1 FROM dbo.Station_Emp se WHERE @StationId IS NOT NULL AND se.Station_Id=@StationId AND se.Emp_Id=e.Id AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=@DelegationDate) AND (se.Date_To IS NULL OR se.Date_To>=@DelegationDate)
-          UNION ALL SELECT 1 FROM dbPrivilage.dbo.PR_User u WHERE @StationId IS NULL AND u.Id=e.Id AND u.Outlet_ID=@OutletHrId AND u.Active=1))
-          THROW 50011,N'أحد الموظفين المختارين غير تابع لمكان الفحص في تاريخ اللجنة.',1;
+          SELECT 1 FROM dbo.Station_Emp se WHERE @StationId IS NOT NULL AND @HasStationEmployees=1 AND se.Station_Id=@StationId AND se.Emp_Id=e.Id AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=@DelegationDate) AND (se.Date_To IS NULL OR se.Date_To>=@DelegationDate)
+          UNION ALL SELECT 1 FROM dbPrivilage.dbo.PR_User u WHERE (@StationId IS NULL OR @HasStationEmployees=0) AND u.Id=e.Id AND u.Outlet_ID=@OutletHrId AND u.Active=1))
+          THROW 50011,N'أحد الموظفين المختارين غير تابع لمكان المرحلة في تاريخ اللجنة.',1;
         IF EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee WHERE ExCheckRequest_ID=@RequestId AND CommitteeType_ID=@CommitteeTypeId AND Delegation_Date=@DelegationDate AND User_Deletion_Id IS NULL AND Is_Cancel IS NULL)
           THROW 50012,N'توجد لجنة من نفس النوع على الطلب في هذا التاريخ.',1;
         IF NOT EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Items i JOIN dbo.Ex_CheckRequest_Items_Lot_Category l ON l.Ex_CheckRequest_Items_ID=i.ID WHERE i.Ex_CheckRequest_ID=@RequestId AND i.User_Deletion_Id IS NULL AND l.User_Deletion_Id IS NULL)
@@ -358,7 +563,7 @@ public class ListEXCheckRequestController : Controller
         VALUES(@CommitteeId,@RequestId,@CommitteeTypeId,@DelegationDate,@StartTime,@EndTime,0,1,0,@UserId,GETDATE());
         INSERT dbo.CommitteeEmployee(Committee_ID,Employee_Id,ISAdmin,OperationType,User_Creation_Id,User_Creation_Date)
         SELECT @CommitteeId,Id,CASE WHEN Id=@AdminEmployeeId THEN 1 ELSE 0 END,73,@UserId,GETDATE() FROM @Employees;
-        IF @CommitteeTypeId=1
+        IF @CommitteeTypeId IN(1,2)
           INSERT dbo.Ex_CommitteeResult(ID,Committee_ID,Ex_Request_Item_Id,LotData_ID,IS_Total,Item_ShortName_ID,User_Creation_Id,User_Creation_Date,IS_Total_Android)
           SELECT NEXT VALUE FOR dbo.Ex_CommitteeResult_SEQ,@CommitteeId,i.ID,l.ID,1,i.Item_ShortName_ID,@UserId,GETDATE(),1 FROM dbo.Ex_CheckRequest_Items i JOIN dbo.Ex_CheckRequest_Items_Lot_Category l ON l.Ex_CheckRequest_Items_ID=i.ID WHERE i.Ex_CheckRequest_ID=@RequestId AND i.User_Deletion_Id IS NULL AND l.User_Deletion_Id IS NULL;
         IF @CommitteeTypeId=3
@@ -372,11 +577,11 @@ public class ListEXCheckRequestController : Controller
         try
         {
             await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);await using var command=new SqlCommand(sql,connection){CommandTimeout=60};
-            command.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=id;command.Parameters.Add("@CommitteeTypeId",SqlDbType.TinyInt).Value=committeeTypeId;command.Parameters.Add("@DelegationDate",SqlDbType.Date).Value=delegationDate.Date;command.Parameters.Add("@StartTime",SqlDbType.Time).Value=startTime;command.Parameters.Add("@EndTime",SqlDbType.Time).Value=endTime;command.Parameters.Add("@AdminEmployeeId",SqlDbType.BigInt).Value=adminEmployeeId;command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=creator;
+            command.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=id;command.Parameters.Add("@CommitteeTypeId",SqlDbType.TinyInt).Value=committeeTypeId;command.Parameters.Add("@DelegationDate",SqlDbType.Date).Value=delegationDate.Date;command.Parameters.Add("@StartTime",SqlDbType.Time).Value=startTime;command.Parameters.Add("@EndTime",SqlDbType.Time).Value=endTime;command.Parameters.Add("@AdminEmployeeId",SqlDbType.BigInt).Value=adminEmployeeId;command.Parameters.Add("@SelectedOutletId",SqlDbType.BigInt).Value=selectedOutletId??(object)DBNull.Value;command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=creator;
             command.Parameters.Add("@EmployeesJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(employeeIds);
             await command.ExecuteNonQueryAsync(ct);TempData["CommitteeSuccess"]="تم تشكيل اللجنة وتحديد كل لوطات الطلب تلقائيًا.";
         }
-        catch(SqlException ex)when(ex.Number is >=50010 and <=50015){TempData["CommitteeError"]=ex.Message;}
+        catch(SqlException ex)when(ex.Number is >=50010 and <=50017){TempData["CommitteeError"]=ex.Message;}
         return RedirectToAction(nameof(Details),new{id});
     }
 
@@ -386,4 +591,30 @@ public class ListEXCheckRequestController : Controller
     private static decimal? Decimal(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToDecimal(r[name]);
     private static int? Int(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToInt32(r[name]);
     private static string JoinPlace(string outlet,string station)=>string.Join(" - ",new[]{outlet,station}.Where(x=>!string.IsNullOrWhiteSpace(x)));
+    private async Task<bool> HasSupervisorAccessAsync(CancellationToken ct)=>short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)&&await _menuAccess.CanViewAsync(userId,MenuAccessReader.ExportSupervisorMenuUrl,ct);
+    private async Task<bool> HasOperationalAccessAsync(CancellationToken ct)=>short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)&&await _menuAccess.CanViewAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct);
+    private async Task<bool> CanAccessRequestAsync(long requestId,short userId,CancellationToken ct)
+    {
+        const string sql="""
+        SELECT CASE WHEN EXISTS
+        (
+          SELECT 1 FROM dbo.Ex_CheckRequest_Places p
+          WHERE p.Ex_CheckRequest_ID=@RequestId AND
+          (
+            EXISTS(SELECT 1 FROM dbo.Station_Emp se WHERE se.Emp_Id=@UserId AND se.IsActive=1 AND se.User_Deletion_Id IS NULL
+              AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date))
+              AND se.Station_Id IN(p.Station_Examination_ID,p.Station_Genshi_ID))
+            OR EXISTS(SELECT 1 FROM dbPrivilage.dbo.PR_User u INNER JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID
+              AND o.ID IN(p.Outlet_Exmainiation_ID,p.Outlet_Genshi_ID) WHERE u.Id=@UserId AND u.Active=1)
+            OR EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee c INNER JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID
+              AND e.Employee_Id=@UserId AND e.User_Deletion_Id IS NULL WHERE c.ExCheckRequest_ID=@RequestId AND c.User_Deletion_Id IS NULL)
+          )
+        ) THEN 1 ELSE 0 END;
+        """;
+        await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);
+        await using var command=new SqlCommand(sql,connection){CommandTimeout=30};
+        command.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=requestId;
+        command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(ct))==1;
+    }
 }

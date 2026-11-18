@@ -4,6 +4,7 @@ using EF.Imports;
 using Microsoft.EntityFrameworkCore;
 using PlantMobile.Data;
 using static ViewModels.ExportImportActivity_API;
+using System.Data;
 
 namespace PlantMobile.Controllers;
 
@@ -212,10 +213,53 @@ public class ImportRequestsController : Controller
         catch(Exception ex){ await transaction.RollbackAsync(); return BadRequest(ex.Message); }
     }
 
-    public Task<IActionResult> Index(DateTime? date) => LoadRequests(date, null);
+    public Task<IActionResult> Index(DateTime? date,string tab="import") =>
+        string.Equals(tab,"export",StringComparison.OrdinalIgnoreCase)?LoadExportRequests(date,null):LoadRequests(date,null);
 
     [HttpGet]
-    public Task<IActionResult> Committees(long checkRequestId, DateTime? date) => LoadRequests(date, checkRequestId);
+    public Task<IActionResult> Committees(long checkRequestId, DateTime? date,string tab="import") =>
+        string.Equals(tab,"export",StringComparison.OrdinalIgnoreCase)?LoadExportRequests(date,checkRequestId):LoadRequests(date,checkRequestId);
+
+    private async Task<IActionResult> LoadExportRequests(DateTime? date,long? checkRequestId)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated"||!short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)||!long.TryParse(HttpContext.Session.GetString("EmployeeId"),out var employeeId))return RedirectToAction("Index","Login");
+        var selectedDate=(date??DateTime.Today).Date;var result=new List<Ex_Im_CheckRequest_GetAllByUser_DateVM>();
+        const string sql="""
+        SELECT c.ID,c.ExCheckRequest_ID,r.CheckRequest_Number,COALESCE(NULLIF(l.ImporterName,N''),NULLIF(r.ExportCompany,N''),N'غير محدد') CompanyName,
+          c.CommitteeType_ID,ct.Name_Ar,CONVERT(bit,ISNULL(ce.ISAdmin,0)) IsAdmin,CONVERT(bit,ISNULL(c.IsFinishedAll,0)) IsFinished,
+          CONVERT(bit,ISNULL(c.Status,0)) Status,c.Is_Cancel,
+          STRING_AGG(CONVERT(nvarchar(max),CONCAT(u.FullName,CASE WHEN ISNULL(allMembers.ISAdmin,0)=1 THEN N' (أدمن)' ELSE N' (مساعد)' END)),N'|') CommitteeMembers,
+          CASE c.CommitteeType_ID WHEN 1 THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult x WHERE x.Committee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.CommitteeResultType_ID IS NOT NULL)
+            WHEN 2 THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult x WHERE x.Committee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.CommitteeResultType_ID IS NOT NULL)
+            WHEN 3 THEN (SELECT COUNT(*) FROM dbo.Ex_CheckRequest_SampleData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.WithdrawDate IS NOT NULL AND x.SampleSize>0)
+            WHEN 6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.User_Updation_Date IS NOT NULL) ELSE 0 END WorkCount
+        FROM dbo.Ex_RequestCommittee c
+        JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.Employee_Id=@UserId AND ce.User_Deletion_Id IS NULL
+        JOIN dbo.Ex_CheckRequest r ON r.ID=c.ExCheckRequest_ID
+        LEFT JOIN dbo.Ex_List l ON l.Ex_CheckRequest_ID=r.ID
+        JOIN dbo.CommitteeType ct ON ct.ID=c.CommitteeType_ID
+        LEFT JOIN dbo.CommitteeEmployee allMembers ON allMembers.Committee_ID=c.ID AND allMembers.User_Deletion_Id IS NULL
+        LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id=allMembers.Employee_Id
+        WHERE c.User_Deletion_Id IS NULL AND c.CommitteeType_ID IN(1,2,3,6)
+          AND c.Delegation_Date=@Date AND (@RequestId IS NULL OR c.ExCheckRequest_ID=@RequestId)
+        GROUP BY c.ID,c.ExCheckRequest_ID,r.CheckRequest_Number,l.ImporterName,r.ExportCompany,c.CommitteeType_ID,ct.Name_Ar,ce.ISAdmin,c.IsFinishedAll,c.Status,c.Is_Cancel
+        ORDER BY c.ID DESC;
+        """;
+        try
+        {
+            await using var connection=new SqlConnection(_configuration.GetConnectionString("DBConnection"));await connection.OpenAsync();
+            await using var command=new SqlCommand(sql,connection){CommandTimeout=60};command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;command.Parameters.Add("@Date",SqlDbType.Date).Value=selectedDate;command.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=checkRequestId??(object)DBNull.Value;
+            await using var reader=await command.ExecuteReaderAsync();var row=0;while(await reader.ReadAsync())
+            {
+                bool finished=reader.GetBoolean(7)||reader.GetBoolean(8),canceled=!reader.IsDBNull(9),started=reader.GetInt32(11)>0;string key=canceled?"canceled":finished?"completed":started?"working":"new";
+                result.Add(new(){Row_Num=++row,IsExport=1,Committee_ID=reader.GetInt64(0),checkRequest_Id=reader.GetInt64(1),CheckRequest_Number=Convert.ToString(reader[2])??"",CompanyName=Convert.ToString(reader[3])??"غير محدد",Committee_Type_Id=Convert.ToByte(reader[4]),Committee_Type_Name=Convert.ToString(reader[5])??"",IsAdmin=reader.GetBoolean(6),IsReadOnly=finished||canceled,WorkStatusKey=key,WorkStatusName=key switch{"completed"=>"تم الانتهاء","working"=>"جاري العمل","canceled"=>"ملغي",_=>"جديد"},RequestCommittee_Status=key,RequiresCommitteeCompletion=!finished&&!canceled,CommitteeMembers=Convert.ToString(reader[10])??""});
+            }
+            ViewBag.SelectedDate=selectedDate.ToString("yyyy-MM-dd");ViewBag.UserId=userId;ViewBag.EmployeeId=employeeId;ViewBag.UserName=HttpContext.Session.GetString("UserName");ViewBag.CheckRequestId=checkRequestId;ViewBag.IsExportTab=true;
+        }
+        catch(Exception ex){_logger.LogError(ex,"Failed to load export committees for user {UserId}",userId);ViewBag.PageError=$"تعذر تحميل طلبات الصادر: {ex.Message}";ViewBag.SelectedDate=selectedDate.ToString("yyyy-MM-dd");ViewBag.IsExportTab=true;}
+        if(checkRequestId.HasValue&&result.Count==0&&ViewBag.PageError==null)return RedirectToAction(nameof(Index),new{date=selectedDate.ToString("yyyy-MM-dd"),tab="export"});
+        return View("Index",result);
+    }
 
     [HttpGet]
     public async Task<IActionResult> AfterCompletion(long checkRequestId)

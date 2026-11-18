@@ -1,7 +1,8 @@
 @model List<ViewModels.ExportImportActivity_API.Ex_Im_CheckRequest_GetAllByUser_DateVM>
 @{
     bool isCommitteePage = ViewBag.CheckRequestId != null;
-    ViewData["Title"] = isCommitteePage ? "لجان الطلب" : "طلبات الوارد";
+    bool isExportTab = ViewBag.IsExportTab == true;
+    ViewData["Title"] = isCommitteePage ? $"لجان طلب {(isExportTab?"الصادر":"الوارد")}" : $"طلبات {(isExportTab?"الصادر":"الوارد")}";
     int total = Model.Select(x => x.checkRequest_Id).Distinct().Count();
     int newCount = Model.Count(x => x.WorkStatusKey == "new");
     int workingCount = Model.Count(x => x.WorkStatusKey == "working");
@@ -49,6 +50,7 @@
     .request-choice strong,.request-choice span { display:block; }
     .request-choice small { color:#6c7e80; }
     .request-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .direction-tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid #d8e6e7}.direction-tab{padding:12px 28px;border-radius:10px 10px 0 0;text-decoration:none;font-weight:800;background:#eef5f6;color:#45676a}.direction-tab.active{background:#178b91;color:#fff}
     .request-tab { background:#f4faf9; border:1px solid #cfe6e3; border-radius:9px; color:#176f75; cursor:pointer; font-weight:700; padding:10px 14px; }
     .request-tab.active { background:#178b91; color:#fff; }
     .committee-list { display:grid; gap:12px; padding:16px; }
@@ -114,13 +116,14 @@
     {
         <div class="alert alert-success">@success</div>
     }
+    <nav class="direction-tabs" aria-label="نوع الطلبات"><a asp-action="Index" asp-route-date="@ViewBag.SelectedDate" asp-route-tab="import" class="direction-tab @(!isExportTab?"active":"")">طلبات الوارد</a><a asp-action="Index" asp-route-date="@ViewBag.SelectedDate" asp-route-tab="export" class="direction-tab @(isExportTab?"active":"")">طلبات الصادر</a></nav>
     <div class="request-page-header d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
             <h2 class="text-primary mb-2">@ViewData["Title"]</h2>
-            <div class="text-muted request-user-info"><span>اسم المستخدم: <strong>@ViewBag.UserName</strong></span><span>رقم المستخدم: <strong>@ViewBag.UserId</strong></span><span>رقم الموظف: <strong>@ViewBag.EmployeeId</strong></span></div>
         </div>
-@if (isCommitteePage) { <a asp-action="Index" asp-route-date="@ViewBag.SelectedDate" class="btn btn-outline-secondary">العودة للطلبات</a> } else {
+@if (isCommitteePage) { <a asp-action="Index" asp-route-date="@ViewBag.SelectedDate" asp-route-tab="@(isExportTab?"export":"import")" class="btn btn-outline-secondary">العودة للطلبات</a> } else {
         <form method="get" asp-controller="ImportRequests" asp-action="Index" class="request-date-filter d-flex align-items-end gap-2">
+            <input type="hidden" name="tab" value="@(isExportTab?"export":"import")" />
             <div><label for="date" class="form-label">تاريخ اللجنة</label><input id="date" name="date" type="date" value="@ViewBag.SelectedDate" class="form-control" /></div>
             <button type="submit" class="btn btn-primary">عرض</button>
         </form>
@@ -145,7 +148,7 @@
         }
         @if (Model.Count == 0)
         {
-            <div class="alert alert-info text-center">لا توجد طلبات وارد مسندة للمستخدم في التاريخ المحدد.</div>
+            <div class="alert alert-info text-center">لا توجد طلبات @(isExportTab?"صادر":"وارد") مسندة للمستخدم في التاريخ المحدد.</div>
         }
         else
         {
@@ -156,14 +159,13 @@
                     <div class="request-tabs" id="requestTabs">
                         <button type="button" class="request-tab active" data-request-filter="today">طلبات اليوم <span>@todayRequestGroups.Count</span></button>
                         <button type="button" class="request-tab" data-request-filter="completed">تم الانتهاء <span>@completedRequestGroups.Count</span></button>
-                        <button type="button" class="request-tab" data-request-filter="pending-lab">تنتظر نتيجة المعمل <span>@pendingLabRequestGroups.Count</span></button>
-                        <button type="button" class="request-tab" data-request-filter="pending-quarantine">تنتظر موقف الحجر <span>@pendingQuarantineRequestGroups.Count</span></button>
+                        @if(!isExportTab){<button type="button" class="request-tab" data-request-filter="pending-lab">تنتظر نتيجة المعمل <span>@pendingLabRequestGroups.Count</span></button><button type="button" class="request-tab" data-request-filter="pending-quarantine">تنتظر موقف الحجر <span>@pendingQuarantineRequestGroups.Count</span></button>}
                     </div>
                     <div class="request-list" id="requestList">
                     @foreach (var request in requestGroups)
                     {
                         var category = RequestCategory(request);
-                        <a asp-action="Committees" asp-route-checkRequestId="@request.Key.checkRequest_Id" asp-route-date="@ViewBag.SelectedDate" class="request-choice" hidden="@(category != "today")" data-request="@request.Key.checkRequest_Id" data-category="@category" data-statuses="@string.Join(',', request.Select(x => x.WorkStatusKey).Distinct())">
+                        <a asp-action="Committees" asp-route-checkRequestId="@request.Key.checkRequest_Id" asp-route-date="@ViewBag.SelectedDate" asp-route-tab="@(isExportTab?"export":"import")" class="request-choice" hidden="@(category != "today")" data-request="@request.Key.checkRequest_Id" data-category="@category" data-statuses="@string.Join(',', request.Select(x => x.WorkStatusKey).Distinct())">
                             <strong>طلب رقم @request.Key.CheckRequest_Number</strong>
                             <span>@request.Key.CompanyName</span>
                             <small>عدد اللجان: @request.Count()</small>
@@ -179,13 +181,13 @@
                 <section class="work-panel">
                     <div class="work-panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div><h4 class="mb-1 text-primary">اختر اللجنة</h4><div class="text-muted" id="selectedRequestText">طلب رقم @Model.First().CheckRequest_Number — @Model.First().CompanyName</div></div>
-                        <button type="button" class="btn btn-warning fw-bold" id="openQuarantine">موقف الحجر للطلب</button>
+                        @if(!isExportTab){<button type="button" class="btn btn-warning fw-bold" id="openQuarantine">موقف الحجر للطلب</button>}
                     </div>
                     <div class="committee-empty d-none" id="committeeEmpty"><div class="fs-1 mb-2">☝️</div><strong>اختر طلبًا من القائمة أولًا</strong></div>
                     <div class="committee-list" id="committeeList">
                     @foreach (var item in Model)
                     {
-                        string stage = item.Committee_Type_Id == 11 ? "الفحص ← السحب إن وجد ← موقف الحجر" : item.Committee_Type_Id == 13 ? "سحب العينات ← النتيجة" : "تنفيذ المعالجة";
+                        string stage = isExportTab ? item.Committee_Type_Id==1?"فحص رسالة الصادر":item.Committee_Type_Id==2?"الجشني":item.Committee_Type_Id==3?"سحب العينات":"تنفيذ المعالجة" : item.Committee_Type_Id == 11 ? "الفحص ← السحب إن وجد ← موقف الحجر" : item.Committee_Type_Id == 13 ? "سحب العينات ← النتيجة" : "تنفيذ المعالجة";
                         <article class="committee-card" data-request="@item.checkRequest_Id" data-status="@item.WorkStatusKey">
                             <div>
                                 <div class="committee-title">@item.Committee_Type_Name</div><div class="committee-stage">@stage</div>
@@ -213,7 +215,7 @@
                                 }
                                 </div>
                             </div>
-                                <a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly || (item.Committee_Type_Id == 11 && item.InspectionComplete && item.IsAdmin) || (item.Committee_Type_Id == 13 && item.IsAdmin) ? "btn-outline-secondary" : "btn-primary")">@item.ActionText</a>
+                                @if(isExportTab){<a asp-controller="ExportCommitteeWork" asp-action="Index" asp-route-committeeId="@item.Committee_ID" class="btn @(item.IsReadOnly?"btn-outline-secondary":"btn-primary")">@item.ActionText</a>}else{<a asp-controller="ImportRequestDetails" asp-action="Index" asp-route-checkRequestId="@item.checkRequest_Id" asp-route-committeeId="@item.Committee_ID" asp-route-committeeTypeId="@item.Committee_Type_Id" class="btn @(item.IsReadOnly || (item.Committee_Type_Id == 11 && item.InspectionComplete && item.IsAdmin) || (item.Committee_Type_Id == 13 && item.IsAdmin) ? "btn-outline-secondary" : "btn-primary")">@item.ActionText</a>}
                         </article>
                     }
                     </div>

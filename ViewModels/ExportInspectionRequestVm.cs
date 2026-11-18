@@ -2,6 +2,7 @@ namespace ViewModels;
 
 public class ExportInspectionRequestListVm
 {
+    public bool IsSupervisorReadOnly { get; set; }
     public string RequestNumber { get; set; } = string.Empty;
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
@@ -60,6 +61,7 @@ public class ExportInspectionRequestRowVm
 
 public class ExportInspectionRequestDetailsVm
 {
+    public bool IsSupervisorReadOnly { get; set; }
     public long Id { get; set; }
     public string RequestNumber { get; set; } = string.Empty;
     public DateTime? CreationDate { get; set; }
@@ -73,6 +75,9 @@ public class ExportInspectionRequestDetailsVm
     public string OwnerAddress { get; set; } = string.Empty;
     public string DelegateName { get; set; } = string.Empty;
     public string DelegateAddress { get; set; } = string.Empty;
+    public string DelegateNationalId { get; set; } = string.Empty;
+    public long? DelegateAttachmentId { get; set; }
+    public string DelegateAttachmentPath { get; set; } = string.Empty;
     public string ShipName { get; set; } = string.Empty;
     public string ShipmentMean { get; set; } = string.Empty;
     public string TransportMean { get; set; } = string.Empty;
@@ -91,6 +96,9 @@ public class ExportInspectionRequestDetailsVm
     public long? ExaminationStationId { get; set; }
     public string ExaminationStationName { get; set; } = string.Empty;
     public long? ExaminationOutletId { get; set; }
+    public long? GenshiStationId { get; set; }
+    public string GenshiStationName { get; set; } = string.Empty;
+    public long? GenshiOutletId { get; set; }
     public string ExaminationPlace { get; set; } = string.Empty;
     public string GenshiPlace { get; set; } = string.Empty;
     public bool? IsAccepted { get; set; }
@@ -104,6 +112,9 @@ public class ExportInspectionRequestDetailsVm
     public List<ExportInspectionAttachmentVm> Attachments { get; set; } = [];
     public List<ExportInspectionFeeVm> Fees { get; set; } = [];
     public List<ExportStationEngineerVm> StationEngineers { get; set; } = [];
+    public List<ExportStationEngineerVm> GenshiEngineers { get; set; } = [];
+    public List<ExportStationEngineerVm> OutletEngineers { get; set; } = [];
+    public List<ExportCommitteeOutletVm> CommitteeOutlets { get; set; } = [];
     public List<ExportRequestCommitteeVm> Committees { get; set; } = [];
 }
 
@@ -153,6 +164,10 @@ public class ExportInspectionAttachmentVm
 
 public class ExportInspectionFeeVm
 {
+    public string FeeType { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string OrderNumber { get; set; } = string.Empty;
+    public bool? IsPaid { get; set; }
     public decimal? TotalGrossWeight { get; set; }
     public decimal? FeeValue { get; set; }
     public decimal? TotalAmount { get; set; }
@@ -163,6 +178,14 @@ public class ExportStationEngineerVm
 {
     public long UserId { get; set; }
     public long? EmployeeId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public long? OutletId { get; set; }
+    public string OutletName { get; set; } = string.Empty;
+}
+
+public class ExportCommitteeOutletVm
+{
+    public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
 }
 

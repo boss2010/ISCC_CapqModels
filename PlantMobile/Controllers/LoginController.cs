@@ -54,11 +54,14 @@ namespace PlantMobile.Controllers
 
                 await using var command = connection.CreateCommand();
                 command.CommandText = @"
-                    SELECT TOP (1) Id, EmpId, LoginName
-                    FROM dbo.PR_User
-                    WHERE LoginName = @LoginName
-                      AND Password = @Password
-                      AND Active = 1";
+                    SELECT TOP (1) [user].Id, [user].EmpId, [user].LoginName,
+                           COALESCE(NULLIF([user].FullName, N''), [user].LoginName) AS FullName,
+                           COALESCE(NULLIF(outlet.Ar_Name COLLATE DATABASE_DEFAULT, N''), NULLIF(outlet.En_Name COLLATE DATABASE_DEFAULT, N''), N'غير محدد') AS OutletName
+                    FROM dbo.PR_User [user]
+                    LEFT JOIN PlantQuarantine_New.dbo.Outlet outlet ON outlet.ID_HR = [user].Outlet_ID
+                    WHERE [user].LoginName = @LoginName
+                      AND [user].Password = @Password
+                      AND [user].Active = 1";
                 command.Parameters.AddWithValue("@LoginName", userName.Trim());
                 command.Parameters.AddWithValue("@Password", password);
 
@@ -78,8 +81,12 @@ namespace PlantMobile.Controllers
                 long userId = Convert.ToInt64(reader.GetValue(0));
                 long employeeId = Convert.ToInt64(reader.GetValue(1));
                 string loginName = reader.GetString(2);
+                string fullName = reader.IsDBNull(3) ? loginName : reader.GetString(3);
+                string outletName = reader.IsDBNull(4) ? "غير محدد" : reader.GetString(4);
                 HttpContext.Session.SetString("UserSession", "Authenticated");
                 HttpContext.Session.SetString("UserName", loginName);
+                HttpContext.Session.SetString("UserFullName", fullName);
+                HttpContext.Session.SetString("OutletName", outletName);
                 HttpContext.Session.SetString("UserId", userId.ToString());
                 HttpContext.Session.SetString("EmployeeId", employeeId.ToString());
                 _menuService.Invalidate(Convert.ToInt32(userId));

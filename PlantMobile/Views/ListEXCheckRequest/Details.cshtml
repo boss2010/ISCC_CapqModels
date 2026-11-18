@@ -5,23 +5,189 @@
     .details-body{padding:24px}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.summary-box{background:#fff;border:1px solid #e0e7ed;border-radius:9px;padding:17px;box-shadow:0 3px 12px rgba(30,58,78,.05)}.summary-box span{display:block;color:#74868c;font-size:13px;margin-bottom:7px}.summary-box strong{font-size:17px}.state{color:#2c5282}
     .section-card{background:#fff;border:1px solid #e0e7ed;border-radius:9px;margin-bottom:20px;box-shadow:0 3px 12px rgba(30,58,78,.05);overflow:hidden}.section-title{margin:18px 20px 0;padding:9px 14px;background:#dfeccd;color:#34412b;font-size:18px;font-weight:800;border-radius:7px}.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:8px 20px 20px}.info{padding:14px;border-bottom:1px dashed #e1e8ea}.info span{display:block;color:#263b53;font-size:13px;font-weight:700;margin-bottom:6px}.info strong{font-weight:600}.full{grid-column:1/-1}
     .item-card{margin:16px 20px;border:1px solid #dde8ea;border-radius:12px;overflow:hidden}.item-head{display:flex;justify-content:space-between;align-items:center;background:#f7fafb;padding:13px 16px}.item-head h4{margin:0;font-size:16px}.item-stats{display:flex;gap:18px;padding:13px 16px;flex-wrap:wrap}.item-stats span{color:#71848b}.item-stats strong{color:#263b42}.lots{padding:0 16px 16px}.lots h5{font-size:14px;color:#176c70}.lots table{margin:0}.lots th,.lots td{text-align:center;font-size:13px;vertical-align:middle}.empty-section{padding:28px;text-align:center;color:#7b8b91}.accept{color:#1d7547}.reject{color:#ac3f48}
-    .committee-form{padding:18px 20px}.committee-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.committee-form label{display:block;font-weight:700;color:#263b53;margin-bottom:7px}.committee-form .form-control{height:41px}.engineers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}.engineer{border:1px solid #dce6e9;border-radius:8px;padding:10px;background:#fafcfc}.engineer input{margin-left:7px}.all-lots{background:#f2f8eb;border:1px solid #d8e9c7;border-radius:8px;padding:12px;margin:14px 0}.all-lots span{display:inline-block;margin:4px 8px;padding:5px 9px;background:#fff;border-radius:6px}.committee-submit{text-align:center}.committee-submit .btn{min-width:180px;background:#6ab529;border-color:#5da124}.committee-list{padding:0 20px 20px}
+    .committee-form{padding:18px 20px}.committee-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.committee-form label{display:block;font-weight:700;color:#263b53;margin-bottom:7px}.committee-form .form-control{height:41px}.committee-panel{border:1px solid #dce6e9;border-radius:10px;padding:16px;margin:16px 0;background:#fbfcfd}.committee-panel-title{font-size:16px;font-weight:800;color:#1a365d;margin:0 0 12px;border-right:4px solid #e5ad4f;padding-right:9px}.employee-search{position:relative;margin-bottom:12px;max-width:520px}.employee-search input{padding-right:38px}.employee-search i{position:absolute;right:13px;top:13px;color:#7c8d94}.employee-count{color:#63777f;font-size:13px;margin:8px 0}.engineers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}.engineer{border:1px solid #dce6e9;border-radius:8px;padding:11px;background:#fff;cursor:pointer;transition:.15s}.engineer:hover{border-color:#6ab529;background:#f7fbf2}.engineer.is-selected{border-color:#5da124;background:#f0f8e8;box-shadow:0 0 0 1px #79bd40 inset}.engineer input{margin-left:7px}.engineer small{display:block;margin:5px 24px 0 0;color:#74868c}.all-lots{background:#f2f8eb;border:1px solid #d8e9c7;border-radius:8px;padding:12px;margin:14px 0}.all-lots span{display:inline-block;margin:4px 8px;padding:5px 9px;background:#fff;border-radius:6px}.committee-submit{text-align:center}.committee-submit .btn{min-width:210px;background:#6ab529;border-color:#5da124;padding:10px 20px;font-weight:800}.committee-list{padding:0 20px 20px}
+    .section-card.accordion-card>.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;user-select:none;transition:background .2s;margin-bottom:18px}.section-card.accordion-card>.section-title:hover,.section-card.accordion-card>.section-title:focus{background:#d2e5b8;outline:2px solid transparent}.accordion-arrow{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#fff;color:#52752f;font-size:14px;transition:transform .2s}.accordion-card.is-open .accordion-arrow{transform:rotate(180deg)}.accordion-content[hidden]{display:none!important}.accordion-content{animation:accordionOpen .18s ease-out}@@keyframes accordionOpen{from{opacity:.25;transform:translateY(-4px)}to{opacity:1;transform:none}}
     @@media(max-width:850px){.summary{grid-template-columns:repeat(2,1fr)}.info-grid{grid-template-columns:repeat(2,1fr)}.committee-grid,.engineers{grid-template-columns:repeat(2,1fr)}}@@media(max-width:550px){.details-page{margin:12px 8px}.details-body{padding:12px}.details-head{flex-direction:column}.summary,.info-grid,.committee-grid,.engineers{grid-template-columns:1fr}.full{grid-column:auto}.item-head{align-items:flex-start;flex-direction:column;gap:7px}.summary-box{padding:14px}}
 </style>
+<style>
+    .committee-form{padding:22px;background:#f5f8f8}.committee-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}.committee-form label{color:#34495e;margin-bottom:8px}.committee-form .form-control{height:42px;border:1px solid #cfdddd;border-radius:7px;box-shadow:none}.committee-form .form-control:focus{border-color:#1e7c80;box-shadow:0 0 0 3px rgba(30,124,128,.12)}.committee-form .form-control[readonly]{background:#f4f8f8;color:#4d6263}.committee-panel{border:1px solid #e2ecec;border-radius:12px;padding:24px;background:#fff;box-shadow:0 5px 16px rgba(30,124,128,.08)}.committee-panel-title{font-size:18px;color:#167479;margin:0 0 20px;padding:0 0 12px;border:0;border-bottom:2px solid #e4f0f0}.fallback-outlet-field{padding:16px;margin-bottom:18px;background:#fff8e8;border:1px solid #eed49b;border-radius:8px}.fallback-outlet-field small{display:block;margin-top:7px;color:#785d24}.committee-submit{text-align:left;padding-top:18px;border-top:1px solid #e6eeee}.committee-submit .btn{background:#1e7c80;border-color:#176b6f;border-radius:7px}.committee-list{padding:20px;background:#fff}.committee-list h4{color:#167479;font-weight:800}.committee-list table thead{background:#252632;color:#fff}
+    .committee-page-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 25px;color:#fff;background:linear-gradient(135deg,#176f74,#245962)}.committee-page-header h3{margin:0 0 6px;color:#fff;font-size:22px;font-weight:800}.committee-page-header p{margin:0;color:#d9eeee}.committee-outlet{min-width:250px;padding:12px 16px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:9px}.committee-outlet span{display:block;font-size:12px;color:#cfe5e5}.committee-outlet strong{display:block;margin-top:4px}.import-committee-form{padding:24px;background:#f4f7f7}.committee-info-card,.employee-card,.message-card{padding:24px;margin-bottom:20px;background:#fff;border:1px solid #e2ecec;border-radius:12px;box-shadow:0 5px 16px rgba(30,124,128,.08)}.committee-info-title{margin:0 0 20px;padding-bottom:12px;color:#167479;font-size:18px;font-weight:800;border-bottom:2px solid #e4f0f0}.committee-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}.committee-field label,.employee-search-grid label{display:block;margin-bottom:7px;color:#34495e;font-weight:700}.committee-field .form-control,.employee-search-grid .form-control{height:42px;border:1px solid #cfdddd;border-radius:7px;box-shadow:none}.employee-help{color:#607779}.employee-search-grid{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:16px;margin:18px 0 20px}.employee-search-button{min-width:145px;height:42px;color:#fff;background:#1e7c80;border-color:#176b6f}.employee-table-title{margin:20px 0 10px;color:#167479;font-size:16px;font-weight:800}.employee-empty-message{display:none;padding:14px;margin:10px 0;text-align:center;color:#536b6d;background:#f4f8f8;border-radius:7px}.employee-card table th,.employee-card table td{text-align:center;vertical-align:middle}.employee-card table thead{color:#fff;background:#252632}.employee-select-check{width:18px;height:18px;cursor:pointer}.admin-radio{width:18px;height:18px}.remove-employee{padding:5px 12px;color:#a94442;background:#fbe9e8;border:1px solid #efc3c0;border-radius:6px}.committee-submit{padding:18px 24px;text-align:left;background:#fff}.committee-submit .btn{min-width:200px;padding:11px 26px}.fallback-outlet-field{max-width:620px}.committee-list table th,.committee-list table td{text-align:center;vertical-align:middle}
+    @@media(max-width:767px){.committee-page-header{align-items:stretch;flex-direction:column}.committee-outlet{min-width:0}.committee-fields,.employee-search-grid{grid-template-columns:1fr}.employee-search-button{width:100%}}
+</style>
 <div class="details-page">
-    <div class="details-head"><div><h2>تفاصيل طلب الفحص</h2><p>رقم الطلب: <strong>@Model.RequestNumber</strong></p></div><a asp-action="Index" class="back-link">العودة للقائمة</a></div>
+    <div class="details-head"><div><h2>@(Model.IsSupervisorReadOnly?"متابعة طلب صادر — عرض فقط":"تفاصيل طلب الفحص")</h2><p>رقم الطلب: <strong>@Model.RequestNumber</strong></p></div><a asp-action="@(Model.IsSupervisorReadOnly?"Supervisor":"Index")" class="back-link">العودة للقائمة</a></div>
     <div class="details-body">
-    @if(TempData["CommitteeSuccess"] is string committeeSuccess){<div class="alert alert-success">@committeeSuccess</div>}@if(TempData["CommitteeError"] is string committeeError){<div class="alert alert-danger">@committeeError</div>}
+    @if(Model.IsSupervisorReadOnly){<style>.committee-form{display:none!important}</style><div class="alert alert-info">صلاحية المشرف العام للعرض فقط. يمكنك مشاهدة أماكن الطلب واللجان والموظفين الذين عملوا عليه دون تعديل.</div>}@if(TempData["CommitteeSuccess"] is string committeeSuccess){<div class="alert alert-success">@committeeSuccess</div>}@if(TempData["CommitteeError"] is string committeeError){<div class="alert alert-danger">@committeeError</div>}
     <div class="summary"><div class="summary-box"><span>تاريخ الطلب</span><strong>@(Model.CreationDate?.ToString("dd/MM/yyyy hh:mm tt")??"—")</strong></div><div class="summary-box"><span>حالة الطلب</span><strong class="state">@RequestState()</strong></div><div class="summary-box"><span>النتيجة النهائية</span><strong>@Text(Model.FinalResult)</strong></div><div class="summary-box"><span>إجمالي الرسوم</span><strong>@(Model.Fees.Sum(x=>x.TotalAmount)?.ToString("N2")??Model.Amount?.ToString("N2")??"—")</strong></div></div>
-    <section class="section-card"><h3 class="section-title">بيانات الجهة المصدرة</h3><div class="info-grid"><div class="info"><span>نوع الجهة المصدرة</span><strong>@Text(Model.ImporterType)</strong></div><div class="info"><span>الشركة / الجهة المصدرة</span><strong>@Text(Model.ImporterName)</strong></div><div class="info"><span>صاحب الشركة / الشخص المسئول</span><strong>@Text(Model.OwnerName)</strong></div><div class="info"><span>عنوان الجهة</span><strong>@Text(Model.OwnerAddress)</strong></div><div class="info"><span>مندوب صاحب الرسالة</span><strong>@Text(Model.DelegateName)</strong></div><div class="info"><span>الرقم القومي للمندوب</span><strong>@Text(Model.DelegateAddress)</strong></div></div></section>
+    <section class="section-card"><h3 class="section-title">بيانات الجهة المصدرة والمندوب</h3><div class="info-grid"><div class="info"><span>نوع الجهة المصدرة</span><strong>@Text(Model.ImporterType)</strong></div><div class="info"><span>الشركة / الجهة المصدرة</span><strong>@Text(Model.ImporterName)</strong></div><div class="info"><span>صاحب الشركة / الشخص المسئول</span><strong>@Text(Model.OwnerName)</strong></div><div class="info"><span>عنوان الجهة</span><strong>@Text(Model.OwnerAddress)</strong></div><div class="info"><span>مندوب صاحب الرسالة</span><strong>@Text(Model.DelegateName)</strong></div><div class="info"><span>الرقم القومي للمندوب</span><strong>@Text(Model.DelegateNationalId)</strong></div>@if(Model.DelegateAttachmentId.HasValue){<div class="info full"><span>صورة المندوب المرفقة</span><a asp-action="DelegateAttachment" asp-route-id="@Model.DelegateAttachmentId" target="_blank"><img src="@Url.Action("DelegateAttachment",new{id=Model.DelegateAttachmentId})" alt="صورة المندوب" style="max-width:260px;max-height:190px;border:1px solid #dce6e9;border-radius:8px;padding:4px" /></a></div>}</div></section>
     <section class="section-card"><h3 class="section-title">مسار الرسالة</h3><div class="info-grid"><div class="info"><span>ميناء الشحن</span><strong>@Text(Model.ShippingPort)</strong></div><div class="info"><span>الدولة المستوردة</span><strong>@Text(Model.Country)</strong></div><div class="info"><span>نوع ميناء الوصول</span><strong>@Text(Model.ArrivalPortType)</strong></div><div class="info"><span>ميناء الوصول</span><strong>@Text(Model.ArrivalPort)</strong></div><div class="info"><span>دولة العبور</span><strong>@Text(Model.TransitCountry)</strong></div><div class="info"><span>نوع ميناء العبور</span><strong>@Text(Model.TransitPortType)</strong></div><div class="info"><span>ميناء العبور</span><strong>@Text(Model.TransitPort)</strong></div><div class="info"><span>اسم الباخرة</span><strong>@Text(Model.ShipName)</strong></div><div class="info"><span>وسيلة الشحن / النقل</span><strong>@Text(string.Join(" - ",new[]{Model.ShipmentMean,Model.TransportMean}.Where(x=>!string.IsNullOrWhiteSpace(x))))</strong></div><div class="info"><span>اسم الشركة المستوردة</span><strong>@Text(Model.ImportCompany)</strong></div><div class="info"><span>اسم المرسل إليه</span><strong>@Text(Model.ReceiverName)</strong></div><div class="info"><span>عنوان المرسل إليه</span><strong>@Text(Model.ImportCompanyAddress)</strong></div></div></section>
-    <section class="section-card"><h3 class="section-title">مكان الفحص ولجنة الفحص</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div><div class="info"><span>المحافظة</span><strong>@Text(Model.ExaminationGovernorate)</strong></div><div class="info"><span>المركز</span><strong>@Text(Model.ExaminationCenter)</strong></div><div class="info"><span>عنوان مكان الفحص</span><strong>@Text(Model.ExaminationAddress)</strong></div><div class="info"><span>منفذ / محطة لجنة الفحص</span><strong>@Text(Model.GenshiPlace)</strong></div><div class="info"><span>تاريخ النتيجة</span><strong>@(Model.FinalResultDate?.ToString("dd/MM/yyyy")??"—")</strong></div></div></section>
-    <section class="section-card"><h3 class="section-title">تشكيل لجان الصادر</h3>@if(!Model.ExaminationStationId.HasValue){<div class="empty-section">هذا الطلب غير مسجل على محطة فحص؛ تشكيل مهندسي المحطة متاح للطلبات المسجلة على محطة فقط.</div>}else if(Model.StationEngineers.Count==0){<div class="empty-section">لا يوجد مهندسون مسكنون على محطة @Text(Model.ExaminationStationName) في الفترة الحالية.</div>}else{<form asp-action="CreateCommittee" asp-route-id="@Model.Id" method="post" class="committee-form" id="committeeForm">@Html.AntiForgeryToken()<div class="committee-grid"><div><label for="committeeTypeId">نوع اللجنة</label><select id="committeeTypeId" name="committeeTypeId" class="form-control" required><option value="1">لجنة فحص</option><option value="3">لجنة سحب عينات</option><option value="6">لجنة معالجة</option></select></div><div><label for="delegationDate">تاريخ اللجنة</label><input id="delegationDate" name="delegationDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control" required /></div><div><label for="startTime">من الساعة</label><input id="startTime" name="startTime" type="time" value="09:00" class="form-control" required /></div><div><label for="endTime">إلى الساعة</label><input id="endTime" name="endTime" type="time" value="14:00" class="form-control" required /></div></div><h4>مهندسو محطة @Text(Model.ExaminationStationName)</h4><div class="engineers">@foreach(var engineer in Model.StationEngineers){<label class="engineer"><input type="checkbox" name="employeeIds" value="@engineer.UserId" /><strong>@engineer.Name</strong>@if(engineer.EmployeeId.HasValue){<small> — @engineer.EmployeeId</small>}</label>}</div><div><label for="adminEmployeeId">رئيس اللجنة</label><select id="adminEmployeeId" name="adminEmployeeId" class="form-control" required><option value="">اختر رئيس اللجنة من المهندسين</option>@foreach(var engineer in Model.StationEngineers){<option value="@engineer.UserId">@engineer.Name</option>}</select></div><div class="all-lots"><strong>نطاق اللجنة: كلي</strong><p>سيتم اختيار كل لوطات الطلب تلقائيًا:</p>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<span><i class="fa fa-check"></i> @Text(item.ShortName) — لوط @Text(lot.LotNumber)</span>}}</div><div class="committee-submit"><button type="submit" class="btn btn-success">حفظ وتشكيل اللجنة</button></div></form>}@if(Model.Committees.Count>0){<div class="committee-list"><h4>اللجان المشكلة على الطلب</h4><div class="table-responsive"><table class="table table-striped"><thead><tr><th>رقم اللجنة</th><th>النوع</th><th>التاريخ</th><th>المهندسون</th><th>السجلات الكلية</th></tr></thead><tbody>@foreach(var committee in Model.Committees){<tr><td>@committee.Id</td><td>@committee.CommitteeType</td><td>@(committee.DelegationDate?.ToString("dd/MM/yyyy")??"—")</td><td>@Text(committee.Employees)</td><td>@committee.LotCount</td></tr>}</tbody></table></div></div>}</section>
+    <section class="section-card"><h3 class="section-title">مكان الفحص</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div><div class="info"><span>المحافظة</span><strong>@Text(Model.ExaminationGovernorate)</strong></div><div class="info"><span>المركز</span><strong>@Text(Model.ExaminationCenter)</strong></div><div class="info full"><span>عنوان مكان الفحص</span><strong>@Text(Model.ExaminationAddress)</strong></div></div></section>
+    <section class="section-card"><h3 class="section-title">مكان الجشني</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الجشني</span><strong>@Text(Model.GenshiPlace)</strong></div><div class="info"><span>نوع المكان</span><strong>@(Model.GenshiStationId.HasValue?"محطة":Model.GenshiOutletId.HasValue?"منفذ":"—")</strong></div><div class="info"><span>تاريخ النتيجة</span><strong>@(Model.FinalResultDate?.ToString("dd/MM/yyyy")??"—")</strong></div></div></section>
+    <section class="section-card committee-section">
+        <h3 class="section-title">تشكيل لجان الصادر</h3>
+        <div class="committee-page-header">
+            <div><h3>تسجيل بيانات لجنة الصادر</h3><p>أدخل بيانات اللجنة ثم اختر أعضاء اللجنة وبيانات الرسالة.</p></div>
+            <div class="committee-outlet"><span>مكان الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div>
+        </div>
+        @if(Model.StationEngineers.Count==0&&Model.GenshiEngineers.Count==0&&Model.OutletEngineers.Count==0)
+        {
+            <div class="empty-section">لا توجد حسابات موظفين فعالة يمكن تشكيل اللجنة منها.</div>
+        }
+        else
+        {
+            <form asp-action="CreateCommittee" asp-route-id="@Model.Id" method="post" class="committee-form import-committee-form" id="committeeForm">
+                @Html.AntiForgeryToken()
+                <div class="committee-info-card">
+                    <h4 class="committee-info-title">معلومات اللجنة</h4>
+                    <div class="committee-fields">
+                        <div class="committee-field"><label for="committeeTypeId">نوع اللجنة</label><select id="committeeTypeId" name="committeeTypeId" class="form-control" required><option value="">--- اختر ---</option><option value="1">لجنة فحص</option><option value="2">لجنة الجشني</option><option value="3">لجنة سحب</option><option value="6">لجنة معالجة</option></select></div>
+                        <div class="committee-field"><label>رقم طلب الفحص</label><input type="text" class="form-control" value="@Model.RequestNumber" readonly /></div>
+                        <div class="committee-field"><label>تاريخ تسجيل الطلب</label><input type="text" class="form-control" value="@(Model.CreationDate?.ToString("yyyy-MM-dd")??"—")" readonly /></div>
+                        <div class="committee-field"><label for="delegationDate">تاريخ اللجنة</label><input id="delegationDate" name="delegationDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control" required /></div>
+                        <div class="committee-field"><label for="startTime">من الساعة</label><input id="startTime" name="startTime" type="time" value="09:00" class="form-control" required /></div>
+                        <div class="committee-field"><label for="endTime">إلى الساعة</label><input id="endTime" name="endTime" type="time" value="14:00" class="form-control" required /></div>
+                    </div>
+                </div>
+                <div class="employee-card">
+                    <h4 class="committee-info-title">اختيار أعضاء اللجنة</h4>
+                    <p class="employee-help" id="engineersTitle"></p>
+                    <div class="fallback-outlet-field" hidden><label for="selectedOutletId">المنفذ البديل</label><select id="selectedOutletId" name="selectedOutletId" class="form-control"><option value="">--- اختر المنفذ ---</option>@foreach(var outlet in Model.CommitteeOutlets){<option value="@outlet.Id">@outlet.Name</option>}</select><small>لا يوجد موظفون مسكنون على المحطة؛ اختر منفذًا لعرض موظفيه.</small></div>
+                    <div class="employee-search-grid">
+                        <div><label for="employeeNameSearch">اسم الموظف</label><input id="employeeNameSearch" type="search" class="form-control" placeholder="اكتب اسم الموظف" autocomplete="off" /></div>
+                        <div><label for="employeeNumberSearch">رقم الموظف</label><input id="employeeNumberSearch" type="search" inputmode="numeric" class="form-control" placeholder="رقم الموظف" autocomplete="off" /></div>
+                        <div><button type="button" id="employeeSearchButton" class="btn employee-search-button">بحث</button></div>
+                    </div>
+                    <div id="employeeSearchMessage" class="employee-empty-message"></div>
+                    <h5 class="employee-table-title">نتائج البحث</h5>
+                    <div class="table-responsive">
+                        <table id="employeeResultsTable" class="table table-bordered table-striped">
+                            <thead><tr><th>رقم الموظف</th><th>اسم الموظف</th><th>المنفذ</th><th>تسجيل</th></tr></thead>
+                            <tbody>
+                            @foreach(var engineer in Model.StationEngineers){<tr class="employee-result" data-stage="inspection" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.ExaminationStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
+                            @foreach(var engineer in Model.GenshiEngineers){<tr class="employee-result" data-stage="genshi" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.GenshiStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
+                            @foreach(var engineer in Model.OutletEngineers){<tr class="employee-result" data-stage="outlet" data-outlet="@engineer.OutletId" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@engineer.OutletName</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                    <h5 class="employee-table-title">أعضاء اللجنة المختارون</h5>
+                    <div class="table-responsive">
+                        <table id="selectedEmployeesTable" class="table table-bordered table-striped"><thead><tr><th>اسم المهندس</th><th>كود المهندس</th><th>أدمن</th><th>حذف</th></tr></thead><tbody></tbody></table>
+                    </div>
+                    <input type="hidden" id="adminEmployeeId" name="adminEmployeeId" />
+                </div>
+                <div class="message-card">
+                    <h4 class="committee-info-title">بيانات الرسالة</h4>
+                    <div class="all-lots"><strong>نطاق اللجنة: كلي</strong><p>سيتم اختيار كل لوطات الطلب تلقائيًا:</p>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<span><i class="fa fa-check"></i> @Text(item.ShortName) — لوط @Text(lot.LotNumber)</span>}}</div>
+                </div>
+                <div class="committee-submit"><button type="submit" class="btn btn-primary">حفظ وتشكيل اللجنة</button></div>
+            </form>
+        }
+        @if(Model.Committees.Count>0)
+        {
+            <div class="committee-list"><h4>اللجان المشكلة على الطلب</h4><div class="table-responsive"><table class="table table-striped"><thead><tr><th>رقم اللجنة</th><th>النوع</th><th>التاريخ</th><th>المهندسون</th><th>السجلات الكلية</th></tr></thead><tbody>@foreach(var committee in Model.Committees){<tr><td>@committee.Id</td><td>@committee.CommitteeType</td><td>@(committee.DelegationDate?.ToString("dd/MM/yyyy")??"—")</td><td>@Text(committee.Employees)</td><td>@committee.LotCount</td></tr>}</tbody></table></div></div>
+        }
+    </section>
     <section class="section-card"><h3 class="section-title">بيانات الرسالة</h3>@if(Model.Items.Count==0){<div class="empty-section">لا توجد أصناف مسجلة على الطلب</div>}@foreach(var item in Model.Items){<article class="item-card"><div class="item-head"><h4>@Text(item.ShortName)</h4><strong class="@(item.IsAccepted?"accept":"reject")">@(item.IsAccepted?"مقبول":"غير مقبول")</strong></div><div class="item-stats"><span>اسم المنتج: <strong>@Text(item.Category)</strong></span><span>المجموعة: <strong>@Text(item.CategoryGroup)</strong></span><span>كود المزرعة: <strong>@Text(item.FarmCode)</strong></span><span>اسم المزرعة: <strong>@Text(item.FarmName)</strong></span></div>@if(item.Lots.Count>0){<div class="lots"><div class="table-responsive"><table class="table table-striped"><thead><tr><th>رقم اللوط</th><th>العدد ونوع العبوة</th><th>مادة العبوة</th><th>وزن العبوة القائم</th><th>وزن العبوة الصافي</th><th>الوزن الإجمالي</th><th>الوزن الصافي</th><th>رقم المزرعة</th><th>النتيجة</th></tr></thead><tbody>@foreach(var lot in item.Lots){<tr><td>@Text(lot.LotNumber)</td><td>@(lot.PackageCount?.ToString()??"—") @Text(lot.PackageType)</td><td>@Text(lot.PackageMaterial)</td><td>@(lot.PackageGrossWeight?.ToString("N3")??"—")</td><td>@(lot.PackageNetWeight?.ToString("N3")??"—")</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td>@(lot.NetWeight?.ToString("N3")??"—")</td><td>@Text(lot.GrowerNumber)</td><td class="@(lot.IsAccepted==false?"reject":"accept")">@(lot.IsAccepted==true?"مقبول":lot.IsAccepted==false?"مرفوض":"لم تحدد")</td></tr>}</tbody></table></div></div>}</article>}</section>
     <section class="section-card"><h3 class="section-title">المرفقات</h3>@if(Model.Attachments.Count==0){<div class="empty-section">لا توجد مرفقات على الطلب</div>}else{<div class="table-responsive lots"><table class="table table-striped"><thead><tr><th>م</th><th>نوع المرفق</th><th>رقم المرفق</th><th>تاريخ البداية</th><th>تاريخ النهاية</th><th>الملف</th></tr></thead><tbody>@for(int i=0;i<Model.Attachments.Count;i++){var attachment=Model.Attachments[i];<tr><td>@(i+1)</td><td>@Text(attachment.Name)</td><td>@Text(attachment.Number)</td><td>@(attachment.StartDate?.ToString("dd/MM/yyyy")??"—")</td><td>@(attachment.EndDate?.ToString("dd/MM/yyyy")??"—")</td><td>@if(!string.IsNullOrWhiteSpace(attachment.Path)){<a href="@attachment.Path" target="_blank" rel="noopener">عرض المرفق</a>}else{<span>—</span>}</td></tr>}</tbody></table></div>}</section>
-    <section class="section-card"><h3 class="section-title">الرسوم</h3>@if(Model.Fees.Count==0){<div class="empty-section">لا توجد رسوم مسجلة</div>}else{<div class="table-responsive lots"><table class="table table-striped"><thead><tr><th>إجمالي الوزن القائم</th><th>قيمة الرسم</th><th>إجمالي الرسوم</th><th>تقريب الرسوم</th></tr></thead><tbody>@foreach(var fee in Model.Fees){<tr><td>@(fee.TotalGrossWeight?.ToString("N3")??"—")</td><td>@(fee.FeeValue?.ToString("N2")??"—")</td><td>@(fee.TotalAmount?.ToString("N2")??"—")</td><td>@(fee.IsRounded==true?"نعم":"لا")</td></tr>}</tbody></table></div>}</section>
+    <section class="section-card"><h3 class="section-title">الرسوم وحالة السداد</h3><div class="info-grid"><div class="info full"><span>حالة سداد الطلب</span><strong class="@(Model.IsPaid==true?"accept":"reject")">@(Model.IsPaid==true?"تم الدفع":"لم يتم الدفع")</strong></div></div>@if(Model.Fees.Count==0){<div class="empty-section">لا توجد رسوم مسجلة</div>}else{<div class="table-responsive lots"><table class="table table-striped"><thead><tr><th>نوع الرسم</th><th>المصدر</th><th>رقم أمر الدفع</th><th>الوزن القائم</th><th>قيمة الرسم</th><th>الإجمالي</th><th>حالة الدفع</th><th>تقريب</th></tr></thead><tbody>@foreach(var fee in Model.Fees){<tr><td>@Text(fee.FeeType)</td><td>@Text(fee.Source)</td><td>@Text(fee.OrderNumber)</td><td>@(fee.TotalGrossWeight?.ToString("N3")??"—")</td><td>@(fee.FeeValue?.ToString("N2")??"—")</td><td>@(fee.TotalAmount?.ToString("N2")??"—")</td><td class="@(fee.IsPaid==true?"accept":"reject")">@(fee.IsPaid==true?"تم الدفع":"لم يتم الدفع")</td><td>@(fee.IsRounded==true?"نعم":fee.IsRounded==false?"لا":"—")</td></tr>}</tbody></table></div>}</section>
     @if(!string.IsNullOrWhiteSpace(Model.RejectNotes)){<section class="section-card"><h3 class="section-title">ملاحظات الرفض</h3><div class="info-grid"><div class="info full"><strong class="reject">@Model.RejectNotes</strong></div></div></section>}
     </div>
 </div>
 @functions{string Text(string? value)=>string.IsNullOrWhiteSpace(value)?"—":value;string RequestState()=>Model.ClosedRequest==1?"مغلق":!string.IsNullOrWhiteSpace(Model.FinalResult)?"ظهرت النتيجة":Model.IsAccepted==false?"مرفوض":"جاري الفحص";}
-@section Scripts{<script>$(function(){$('#adminEmployeeId').on('change',function(){var value=this.value;if(value)$('input[name="employeeIds"][value="'+value+'"]').prop('checked',true);});$('#committeeForm').on('submit',function(e){if(!$('input[name="employeeIds"]:checked').length){e.preventDefault();alert('اختر مهندسًا واحدًا على الأقل.');return;}if($('#startTime').val()>=$('#endTime').val()){e.preventDefault();alert('وقت البداية يجب أن يسبق وقت النهاية.');}});});</script>}
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.details-body>.section-card').forEach(function(card,index){
+        var title=card.querySelector(':scope>.section-title');if(!title)return;
+        card.classList.add('accordion-card');title.setAttribute('role','button');title.setAttribute('tabindex','0');
+        var content=document.createElement('div');content.className='accordion-content';content.id='detailsAccordion'+index;
+        while(title.nextSibling)content.appendChild(title.nextSibling);card.appendChild(content);
+        var arrow=document.createElement('span');arrow.className='accordion-arrow';arrow.setAttribute('aria-hidden','true');arrow.innerHTML='<i class="fas fa-chevron-down"></i>';title.appendChild(arrow);
+        var open=index===0;card.classList.toggle('is-open',open);content.hidden=!open;title.setAttribute('aria-expanded',open?'true':'false');title.setAttribute('aria-controls',content.id);
+        function toggle(){var next=content.hidden;content.hidden=!next;card.classList.toggle('is-open',next);title.setAttribute('aria-expanded',next?'true':'false');}
+        title.addEventListener('click',toggle);title.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});
+    });
+    document.querySelectorAll('.committee-list tbody tr').forEach(function(row){var cell=row.cells[0],id=(cell&&cell.textContent||'').trim();if(/^\d+$/.test(id)){var link=document.createElement('a');link.href='/ExportRequests/Committees/'+id;link.className='btn btn-sm btn-primary d-block mt-1';link.textContent='فتح عمل اللجنة';cell.appendChild(link);}});
+});
+</script>
+@section Scripts{
+<script>
+$(function(){
+    var $form=$('#committeeForm');
+    if(!$form.length)return;
+
+    function requestedStage(){return $('#committeeTypeId').val()==='2'?'genshi':'inspection';}
+    function activeStage(){
+        var stage=requestedStage();
+        return $('#employeeResultsTable .employee-result[data-stage="'+stage+'"]').length?stage:'outlet';
+    }
+    function refreshRows(){
+        var stage=activeStage(),outlet=String($('#selectedOutletId').val()||'');
+        var name=$.trim($('#employeeNameSearch').val()).toLowerCase();
+        var number=$.trim($('#employeeNumberSearch').val());
+        var visible=0;
+        $('#employeeResultsTable .employee-result').each(function(){
+            var $row=$(this),sameStage=$row.data('stage')===stage;
+            var sameOutlet=stage!=='outlet'||(outlet&&String($row.data('outlet'))===outlet);
+            var eligible=sameStage&&sameOutlet;
+            var sameName=!name||String($row.data('name')||'').toLowerCase().indexOf(name)>=0;
+            var sameNumber=!number||String($row.data('number')||'').indexOf(number)>=0;
+            var show=eligible&&sameName&&sameNumber;
+            $row.toggle(show);$row.find('.employee-select-check').prop('disabled',!eligible);
+            if(show)visible++;
+        });
+        $('#employeeSearchMessage').toggle(visible===0).text(stage==='outlet'&&!outlet?'اختر المنفذ أولًا لعرض موظفيه.':visible===0?'لا يوجد موظفون مطابقون لبيانات البحث.':'');
+    }
+    function resetSelection(){
+        $('.employee-select-check').prop('checked',false);
+        $('#selectedEmployeesTable tbody').empty();
+        $('#adminEmployeeId').val('');
+    }
+    function updateStage(){
+        var stage=activeStage(),fallback=stage==='outlet',genshi=requestedStage()==='genshi';
+        resetSelection();
+        $('.fallback-outlet-field').prop('hidden',!fallback);
+        $('#selectedOutletId').prop('required',fallback);
+        if(!fallback)$('#selectedOutletId').val('');
+        $('#engineersTitle').text((genshi?'موظفو مكان الجشني: @Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Text(Model.GenshiStationName)))':'موظفو مكان الفحص: @Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Text(Model.ExaminationStationName)))')+(fallback?' — لا يوجد تسكين حالي، اختر منفذًا بديلًا':''));
+        $('#employeeNameSearch,#employeeNumberSearch').val('');
+        refreshRows();
+    }
+    function addSelected($source){
+        var id=String($source.data('user')),name=String($source.data('name')||''),number=String($source.data('number')||'');
+        if($('#selectedEmployeesTable tbody tr[data-user="'+id+'"]').length)return;
+        $('#selectedEmployeesTable tbody').append('<tr data-user="'+id+'"><td></td><td></td><td><input type="radio" class="admin-radio" name="adminChoice" value="'+id+'" aria-label="تحديد كرئيس اللجنة" /></td><td><button type="button" class="remove-employee">حذف</button></td></tr>');
+        var $row=$('#selectedEmployeesTable tbody tr[data-user="'+id+'"]');
+        $row.children().eq(0).text(name);$row.children().eq(1).text(number||'—');
+        if(!$('#adminEmployeeId').val()){$row.find('.admin-radio').prop('checked',true);$('#adminEmployeeId').val(id);}
+    }
+
+    $('#committeeTypeId').on('change',updateStage);
+    $('#selectedOutletId').on('change',function(){resetSelection();refreshRows();});
+    $('#employeeSearchButton').on('click',refreshRows);
+    $('#employeeNameSearch,#employeeNumberSearch').on('input',refreshRows);
+    $(document).on('change','.employee-select-check',function(){
+        var $row=$(this).closest('.employee-result');
+        if(this.checked)addSelected($row);
+        else {
+            $('#selectedEmployeesTable tbody tr[data-user="'+$row.data('user')+'"]').remove();
+            if(String($('#adminEmployeeId').val())===String($row.data('user'))){$('#adminEmployeeId').val('');var $first=$('#selectedEmployeesTable .admin-radio').first();if($first.length){$first.prop('checked',true);$('#adminEmployeeId').val($first.val());}}
+        }
+    });
+    $(document).on('change','.admin-radio',function(){$('#adminEmployeeId').val(this.value);});
+    $(document).on('click','.remove-employee',function(){
+        var $row=$(this).closest('tr'),id=String($row.data('user'));
+        $('#employeeResultsTable .employee-result[data-user="'+id+'"] .employee-select-check').prop('checked',false);
+        $row.remove();
+        if(String($('#adminEmployeeId').val())===id){$('#adminEmployeeId').val('');var $first=$('#selectedEmployeesTable .admin-radio').first();if($first.length){$first.prop('checked',true);$('#adminEmployeeId').val($first.val());}}
+    });
+    $form.on('submit',function(e){
+        if(!$('#committeeTypeId').val()){e.preventDefault();alert('يجب اختيار نوع اللجنة.');return;}
+        if(activeStage()==='outlet'&&!$('#selectedOutletId').val()){e.preventDefault();alert('اختر المنفذ البديل.');return;}
+        if(!$('.employee-select-check:checked:not(:disabled)').length){e.preventDefault();alert('يجب اختيار موظف واحد على الأقل.');return;}
+        if(!$('#adminEmployeeId').val()){e.preventDefault();alert('حدد رئيس اللجنة.');return;}
+        if($('#startTime').val()>=$('#endTime').val()){e.preventDefault();alert('وقت البداية يجب أن يسبق وقت النهاية.');}
+    });
+    updateStage();
+});
+</script>
+}

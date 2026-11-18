@@ -1,6 +1,6 @@
 @model ViewModels.ExportInspectionRequestListVm
 @{
-    ViewData["Title"] = "طلبات الفحص الجديدة";
+    ViewData["Title"] = Model.IsSupervisorReadOnly ? "الإشراف العام على طلبات الصادر" : "طلبات الفحص الجديدة";
     int first = Model.TotalCount == 0 ? 0 : ((Model.Page - 1) * Model.PageSize) + 1;
     int last = Math.Min(Model.Page * Model.PageSize, Model.TotalCount);
 }
@@ -14,29 +14,29 @@
     @@media(max-width:700px){.ex-page{padding:16px 10px}.ex-head{align-items:flex-start;flex-direction:column}.filter-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-results{display:grid;gap:12px;padding:12px}.mobile-item{border:1px solid #e3ebed;border-radius:12px;padding:15px}.mobile-title{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}.mobile-item dl{display:grid;grid-template-columns:105px 1fr;margin:0;gap:8px}.mobile-item dt{color:#718289}.mobile-item dd{margin:0;font-weight:600}.mobile-item .details-link{display:block;text-align:center;margin-top:12px}}
 </style>
 <div class="ex-page">
-    <div class="ex-head"><div><h2>طلبات الفحص الجديدة</h2><p>متابعة طلبات فحص رسائل الصادر ونتائجها @if(Model.StationId.HasValue){<strong>— محطة: @Model.StationName</strong>}</p></div>@if(Model.StationId.HasValue){<a asp-action="Stations" class="btn btn-outline-secondary">العودة للمحطات</a>}</div>
+    <div class="ex-head"><div><h2>@(Model.IsSupervisorReadOnly?"الإشراف العام على طلبات الصادر":"طلبات الفحص الجديدة")</h2><p>@(Model.IsSupervisorReadOnly?"عرض فقط لجميع طلبات الصادر وأماكنها والموظفين الذين عملوا عليها":"متابعة طلبات فحص رسائل الصادر ونتائجها") @if(Model.StationId.HasValue){<strong>— محطة: @Model.StationName</strong>}</p></div>@if(Model.StationId.HasValue){<a asp-action="Stations" class="btn btn-outline-secondary">العودة للمحطات</a>}</div>
     @if(ViewBag.PageError is string error){<div class="alert alert-danger">@error</div>}
-    <form method="get" asp-action="Index" class="ex-filter"><input type="hidden" name="stationId" value="@Model.StationId" />
+    <form method="get" asp-action="@(Model.IsSupervisorReadOnly?"Supervisor":"Index")" class="ex-filter"><input type="hidden" name="stationId" value="@Model.StationId" />
         <div class="filter-grid">
             <div><label for="requestNumber">رقم طلب الفحص</label><input id="requestNumber" name="requestNumber" value="@Model.RequestNumber" class="form-control" placeholder="اكتب رقم الطلب أو جزءًا منه" /></div>
             <div><label for="fromDate">من تاريخ</label><input type="date" id="fromDate" name="fromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" class="form-control" /></div>
             <div><label for="toDate">إلى تاريخ</label><input type="date" id="toDate" name="toDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" class="form-control" /></div>
             <div><label for="status">حالة الطلب</label><select id="status" name="status" class="form-control"><option value="0" selected="@(Model.Status==0)">الكل</option><option value="1" selected="@(Model.Status==1)">جاري الفحص</option><option value="2" selected="@(Model.Status==2)">ظهرت النتيجة</option><option value="3" selected="@(Model.Status==3)">مغلق</option></select></div>
-            <div class="ex-actions"><button class="btn btn-primary" type="submit">بحث</button><a asp-action="Index" asp-route-stationId="@Model.StationId" class="btn btn-outline-secondary">مسح</a></div>
+            <div class="ex-actions"><button class="btn btn-primary" type="submit">بحث</button><a asp-action="@(Model.IsSupervisorReadOnly?"Supervisor":"Index")" asp-route-stationId="@Model.StationId" class="btn btn-outline-secondary">مسح</a></div>
         </div>
     </form>
     <div class="ex-card">
         <div class="card-head"><h3>قائمة الطلبات</h3><span class="count">عرض @first–@last من @Model.TotalCount</span></div>
         <div class="table-responsive desktop-table"><table class="table ex-table"><thead><tr><th>م</th><th>رقم الطلب</th><th>صاحب الرسالة</th><th>دولة التصدير</th><th>تاريخ الطلب</th><th>مكان الفحص</th><th>مكان الجنش</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>
         @if(Model.Results.Count==0){<tr><td colspan="9" class="empty">لا توجد طلبات مطابقة للبحث</td></tr>}
-        @foreach(var row in Model.Results){<tr><td>@row.RowNumber</td><td><a asp-action="Details" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a></td><td><small>@row.ImporterType</small><br />@row.ImporterName</td><td>@row.Country</td><td>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</td><td class="place">@(Text(row.ExaminationPlace))</td><td class="place">@(Text(row.GenshiPlace))</td><td>@Status(row)</td><td><a asp-action="Details" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></td></tr>}
+        @foreach(var row in Model.Results){<tr><td>@row.RowNumber</td><td><a asp-action="@(Model.IsSupervisorReadOnly?"SupervisorDetails":"Details")" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a></td><td><small>@row.ImporterType</small><br />@row.ImporterName</td><td>@row.Country</td><td>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</td><td class="place">@(Text(row.ExaminationPlace))</td><td class="place">@(Text(row.GenshiPlace))</td><td>@Status(row)</td><td><a asp-action="@(Model.IsSupervisorReadOnly?"SupervisorDetails":"Details")" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></td></tr>}
         </tbody></table></div>
-        <div class="mobile-results">@foreach(var row in Model.Results){<article class="mobile-item"><div class="mobile-title"><a asp-action="Details" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a>@Status(row)</div><dl><dt>صاحب الرسالة</dt><dd>@row.ImporterName</dd><dt>الدولة</dt><dd>@row.Country</dd><dt>تاريخ الطلب</dt><dd>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</dd><dt>مكان الفحص</dt><dd>@Text(row.ExaminationPlace)</dd></dl><a asp-action="Details" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></article>}</div>
+        <div class="mobile-results">@foreach(var row in Model.Results){<article class="mobile-item"><div class="mobile-title"><a asp-action="@(Model.IsSupervisorReadOnly?"SupervisorDetails":"Details")" asp-route-id="@row.Id" class="request-link">@row.RequestNumber</a>@Status(row)</div><dl><dt>صاحب الرسالة</dt><dd>@row.ImporterName</dd><dt>الدولة</dt><dd>@row.Country</dd><dt>تاريخ الطلب</dt><dd>@(row.CreationDate?.ToString("dd/MM/yyyy")??"—")</dd><dt>مكان الفحص</dt><dd>@Text(row.ExaminationPlace)</dd><dt>مكان الجشني</dt><dd>@Text(row.GenshiPlace)</dd></dl><a asp-action="@(Model.IsSupervisorReadOnly?"SupervisorDetails":"Details")" asp-route-id="@row.Id" class="details-link">عرض التفاصيل</a></article>}</div>
         @if(Model.TotalPages>1){int start=Math.Max(1,Model.Page-2),end=Math.Min(Model.TotalPages,Model.Page+2);<nav class="pager-wrap"><ul class="pagination"><li class="page-item @(Model.Page==1?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page-1)">السابق</a></li>@for(int p=start;p<=end;p++){<li class="page-item @(p==Model.Page?"active":"")"><a class="page-link" href="@PageUrl(p)">@p</a></li>}<li class="page-item @(Model.Page>=Model.TotalPages?"disabled":"")"><a class="page-link" href="@PageUrl(Model.Page+1)">التالي</a></li></ul></nav>}
     </div>
 </div>
 @functions{
     string Text(string value)=>string.IsNullOrWhiteSpace(value)?"—":value;
     Microsoft.AspNetCore.Html.IHtmlContent Status(ViewModels.ExportInspectionRequestRowVm row){var (css,text)=row.ClosedRequest==1?("closed","مغلق"):row.FinalResultId>0?("finished",string.IsNullOrWhiteSpace(row.FinalResultName)?"ظهرت النتيجة":row.FinalResultName):("pending","جاري الفحص");return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge-state {css}\">{System.Net.WebUtility.HtmlEncode(text)}</span>");}
-    string PageUrl(int page)=>Url.Action("Index",new{page,requestNumber=Model.RequestNumber,fromDate=Model.FromDate?.ToString("yyyy-MM-dd"),toDate=Model.ToDate?.ToString("yyyy-MM-dd"),status=Model.Status,stationId=Model.StationId})??"#";
+    string PageUrl(int page)=>Url.Action(Model.IsSupervisorReadOnly?"Supervisor":"Index",new{page,requestNumber=Model.RequestNumber,fromDate=Model.FromDate?.ToString("yyyy-MM-dd"),toDate=Model.ToDate?.ToString("yyyy-MM-dd"),status=Model.Status,stationId=Model.StationId})??"#";
 }
