@@ -93,11 +93,11 @@
                 <div class="message-card committee-step-pane" data-pane="message" hidden>
                     <h4 class="committee-info-title">اختيار اللوطات وبدلات المهندسين</h4>
                     <div id="committeeWorkOptions">
-                        <div class="sample-option-card" id="sampleLabsCard" hidden>
+                        <div class="sample-option-card">
                             <h5 class="employee-table-title">اختيار اللوطات</h5>
                             <div class="table-responsive"><table class="table table-bordered table-striped sample-table"><thead><tr><th>الصنف</th><th>رقم اللوط</th><th>الوزن</th><th>اختيار</th></tr></thead><tbody>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<tr><td>@Text(item.ShortName)</td><td>@Text(lot.LotNumber)</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td><input type="checkbox" class="sample-lot-check" name="selectedLotIds" value="@lot.Id" /></td></tr>}}</tbody></table></div>
                         </div>
-                        <div class="sample-option-card">
+                        <div class="sample-option-card" id="sampleLabsCard" hidden>
                             <h5 class="employee-table-title">اختيار التحاليل والمعامل</h5>
                             <input id="labSearch" type="search" class="form-control" placeholder="ابحث باسم التحليل أو المعمل" autocomplete="off" />
                             <div class="table-responsive lab-table-wrap"><table class="table table-bordered table-striped sample-table" id="analysisLabsTable"><thead><tr><th>التحليل</th><th>المعمل</th><th>اختيار</th></tr></thead><tbody>@foreach(var lab in Model.AnalysisLabs){<tr><td>@lab.AnalysisName</td><td>@lab.LabName</td><td><input type="checkbox" class="sample-lab-check" name="selectedAnalysisLabTypeIds" value="@lab.Id" /></td></tr>}</tbody></table></div>
@@ -108,9 +108,8 @@
                             <div class="table-responsive"><table id="shiftTable" class="table table-bordered table-striped sample-table"><thead><tr><th>النوبتجية</th><th>القيمة</th><th>عدد الأيام</th><th>حذف</th></tr></thead><tbody><tr class="shift-empty"><td colspan="4">لم تتم إضافة بيانات نوبتجية.</td></tr></tbody></table></div>
                         </div>
                     </div>
-                    <div class="committee-actions"><button type="button" class="btn btn-default committee-prev" data-prev="employees">السابق</button></div>
+                    <div class="committee-actions between"><button type="button" class="btn btn-default committee-prev" data-prev="employees">السابق</button><button type="submit" class="btn btn-primary">حفظ وتشكيل اللجنة</button></div>
                 </div>
-                <div class="committee-submit"><button type="submit" class="btn btn-primary">حفظ وتشكيل اللجنة</button></div>
             </form>
         }
         @if(Model.Committees.Count>0)
