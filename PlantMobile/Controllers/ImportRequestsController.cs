@@ -245,6 +245,7 @@ public class ImportRequestsController : Controller
         GROUP BY c.ID,c.ExCheckRequest_ID,r.CheckRequest_Number,l.ImporterName,r.ExportCompany,c.CommitteeType_ID,ct.Name_Ar,ce.ISAdmin,c.IsFinishedAll,c.Status,c.Is_Cancel
         ORDER BY c.ID DESC;
         """;
+
         try
         {
             await using var connection=new SqlConnection(_configuration.GetConnectionString("DBConnection"));await connection.OpenAsync();
