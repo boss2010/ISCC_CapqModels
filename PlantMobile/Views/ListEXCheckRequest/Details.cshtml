@@ -14,6 +14,13 @@
     .committee-page-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 25px;color:#fff;background:linear-gradient(135deg,#176f74,#245962)}.committee-page-header h3{margin:0 0 6px;color:#fff;font-size:22px;font-weight:800}.committee-page-header p{margin:0;color:#d9eeee}.committee-outlet{min-width:250px;padding:12px 16px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:9px}.committee-outlet span{display:block;font-size:12px;color:#cfe5e5}.committee-outlet strong{display:block;margin-top:4px}.import-committee-form{padding:24px;background:#f4f7f7}.committee-info-card,.employee-card,.message-card{padding:24px;margin-bottom:20px;background:#fff;border:1px solid #e2ecec;border-radius:12px;box-shadow:0 5px 16px rgba(30,124,128,.08)}.committee-info-title{margin:0 0 20px;padding-bottom:12px;color:#167479;font-size:18px;font-weight:800;border-bottom:2px solid #e4f0f0}.committee-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}.committee-field label,.employee-search-grid label{display:block;margin-bottom:7px;color:#34495e;font-weight:700}.committee-field .form-control,.employee-search-grid .form-control{height:42px;border:1px solid #cfdddd;border-radius:7px;box-shadow:none}.employee-help{color:#607779}.employee-search-grid{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:16px;margin:18px 0 20px}.employee-search-button{min-width:145px;height:42px;color:#fff;background:#1e7c80;border-color:#176b6f}.employee-table-title{margin:20px 0 10px;color:#167479;font-size:16px;font-weight:800}.employee-empty-message{display:none;padding:14px;margin:10px 0;text-align:center;color:#536b6d;background:#f4f8f8;border-radius:7px}.employee-card table th,.employee-card table td{text-align:center;vertical-align:middle}.employee-card table thead{color:#fff;background:#252632}.employee-select-check{width:18px;height:18px;cursor:pointer}.admin-radio{width:18px;height:18px}.remove-employee{padding:5px 12px;color:#a94442;background:#fbe9e8;border:1px solid #efc3c0;border-radius:6px}.committee-submit{padding:18px 24px;text-align:left;background:#fff}.committee-submit .btn{min-width:200px;padding:11px 26px}.fallback-outlet-field{max-width:620px}.committee-list table th,.committee-list table td{text-align:center;vertical-align:middle}
     @@media(max-width:767px){.committee-page-header{align-items:stretch;flex-direction:column}.committee-outlet{min-width:0}.committee-fields,.employee-search-grid{grid-template-columns:1fr}.employee-search-button{width:100%}}
 </style>
+<style>
+    .committee-steps{display:flex;gap:0;padding:0;margin:0 0 22px;list-style:none;border-bottom:2px solid #dce9e9}.committee-steps li{flex:1;padding:13px 16px;text-align:center;color:#657a7c;background:#edf3f3;border-left:1px solid #dce9e9;font-weight:800;transition:.2s}.committee-steps li.active{color:#fff;background:#1e7c80}.committee-steps li.done{color:#176f74;background:#dff0ed}.committee-step-pane[hidden]{display:none!important}.committee-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid #e6eeee}.committee-actions.between{justify-content:space-between}.committee-actions .btn{min-width:150px;padding:9px 24px}.committee-prev{color:#40595b;background:#eef3f3;border-color:#d4e1e1}
+    @@media(max-width:600px){.committee-steps{flex-direction:column}.committee-steps li{border-bottom:1px solid #dce9e9}}
+    .sample-option-card{padding:18px;margin:15px 0;background:#fff;border:1px solid #dfeaea;border-radius:9px}.sample-table th,.sample-table td{text-align:center;vertical-align:middle}.sample-table thead{color:#fff;background:#252632}.sample-lot-check,.sample-lab-check{width:18px;height:18px}.lab-table-wrap{max-height:330px;overflow:auto;margin-top:12px}.shift-entry-grid{display:grid;grid-template-columns:2fr 1fr 1fr auto;align-items:end;gap:14px;margin-bottom:16px}.shift-entry-grid #addShift{height:42px;min-width:110px}.shift-empty{text-align:center;color:#718184}.remove-shift{padding:5px 12px;color:#a94442;background:#fbe9e8;border:1px solid #efc3c0;border-radius:6px}
+    @@media(max-width:767px){.shift-entry-grid{grid-template-columns:1fr}}
+    .employee-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin:12px 0 20px}.employee-pagination .btn{min-width:90px;color:#176f74;background:#eef5f5;border:1px solid #cddede}.employee-pagination .btn:disabled{opacity:.45}.employee-pagination .page-info{color:#536b6d;font-weight:700}
+</style>
 <div class="details-page">
     <div class="details-head"><div><h2>@(Model.IsSupervisorReadOnly?"متابعة طلب صادر — عرض فقط":"تفاصيل طلب الفحص")</h2><p>رقم الطلب: <strong>@Model.RequestNumber</strong></p></div><a asp-action="@(Model.IsSupervisorReadOnly?"Supervisor":"Index")" class="back-link">العودة للقائمة</a></div>
     <div class="details-body">
@@ -37,18 +44,22 @@
         {
             <form asp-action="CreateCommittee" asp-route-id="@Model.Id" method="post" class="committee-form import-committee-form" id="committeeForm">
                 @Html.AntiForgeryToken()
-                <div class="committee-info-card">
+                <ul class="committee-steps" aria-label="خطوات تشكيل اللجنة">
+                    <li class="active" data-step="info">معلومات اللجنة</li>
+                    <li data-step="employees">اسم الموظف</li>
+                    <li data-step="message">اللوطات وبدلات المهندسين</li>
+                </ul>
+                <div class="committee-info-card committee-step-pane" data-pane="info">
                     <h4 class="committee-info-title">معلومات اللجنة</h4>
                     <div class="committee-fields">
                         <div class="committee-field"><label for="committeeTypeId">نوع اللجنة</label><select id="committeeTypeId" name="committeeTypeId" class="form-control" required><option value="">--- اختر ---</option><option value="1">لجنة فحص</option><option value="2">لجنة الجشني</option><option value="3">لجنة سحب</option><option value="6">لجنة معالجة</option></select></div>
                         <div class="committee-field"><label>رقم طلب الفحص</label><input type="text" class="form-control" value="@Model.RequestNumber" readonly /></div>
                         <div class="committee-field"><label>تاريخ تسجيل الطلب</label><input type="text" class="form-control" value="@(Model.CreationDate?.ToString("yyyy-MM-dd")??"—")" readonly /></div>
                         <div class="committee-field"><label for="delegationDate">تاريخ اللجنة</label><input id="delegationDate" name="delegationDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control" required /></div>
-                        <div class="committee-field"><label for="startTime">من الساعة</label><input id="startTime" name="startTime" type="time" value="09:00" class="form-control" required /></div>
-                        <div class="committee-field"><label for="endTime">إلى الساعة</label><input id="endTime" name="endTime" type="time" value="14:00" class="form-control" required /></div>
                     </div>
+                    <div class="committee-actions"><button type="button" class="btn btn-primary committee-next" data-next="employees">التالي</button></div>
                 </div>
-                <div class="employee-card">
+                <div class="employee-card committee-step-pane" data-pane="employees" hidden>
                     <h4 class="committee-info-title">اختيار أعضاء اللجنة</h4>
                     <p class="employee-help" id="engineersTitle"></p>
                     <div class="fallback-outlet-field" hidden><label for="selectedOutletId">المنفذ البديل</label><select id="selectedOutletId" name="selectedOutletId" class="form-control"><option value="">--- اختر المنفذ ---</option>@foreach(var outlet in Model.CommitteeOutlets){<option value="@outlet.Id">@outlet.Name</option>}</select><small>لا يوجد موظفون مسكنون على المحطة؛ اختر منفذًا لعرض موظفيه.</small></div>
@@ -63,21 +74,39 @@
                         <table id="employeeResultsTable" class="table table-bordered table-striped">
                             <thead><tr><th>رقم الموظف</th><th>اسم الموظف</th><th>المنفذ</th><th>تسجيل</th></tr></thead>
                             <tbody>
-                            @foreach(var engineer in Model.StationEngineers){<tr class="employee-result" data-stage="inspection" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.ExaminationStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
-                            @foreach(var engineer in Model.GenshiEngineers){<tr class="employee-result" data-stage="genshi" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.GenshiStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
+                            @foreach(var engineer in Model.StationEngineers){<tr class="employee-result" data-stage="inspection" data-from="@(engineer.AssignmentFrom?.ToString("yyyy-MM-dd"))" data-to="@(engineer.AssignmentTo?.ToString("yyyy-MM-dd"))" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.ExaminationStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
+                            @foreach(var engineer in Model.GenshiEngineers){<tr class="employee-result" data-stage="genshi" data-from="@(engineer.AssignmentFrom?.ToString("yyyy-MM-dd"))" data-to="@(engineer.AssignmentTo?.ToString("yyyy-MM-dd"))" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@Text(Model.GenshiStationName)</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
                             @foreach(var engineer in Model.OutletEngineers){<tr class="employee-result" data-stage="outlet" data-outlet="@engineer.OutletId" data-user="@engineer.UserId" data-number="@engineer.EmployeeId" data-name="@engineer.Name"><td>@engineer.EmployeeId</td><td>@engineer.Name</td><td>@engineer.OutletName</td><td><input class="employee-select-check" type="checkbox" name="employeeIds" value="@engineer.UserId" disabled /></td></tr>}
                             </tbody>
                         </table>
                     </div>
+                    <div class="employee-pagination" id="employeePagination"><button type="button" class="btn page-prev">السابق</button><span class="page-info"></span><button type="button" class="btn page-next">التالي</button></div>
                     <h5 class="employee-table-title">أعضاء اللجنة المختارون</h5>
                     <div class="table-responsive">
                         <table id="selectedEmployeesTable" class="table table-bordered table-striped"><thead><tr><th>اسم المهندس</th><th>كود المهندس</th><th>أدمن</th><th>حذف</th></tr></thead><tbody></tbody></table>
                     </div>
                     <input type="hidden" id="adminEmployeeId" name="adminEmployeeId" />
+                    <div class="committee-actions between"><button type="button" class="btn btn-default committee-prev" data-prev="info">السابق</button><button type="button" class="btn btn-primary committee-next" data-next="message">التالي</button></div>
                 </div>
-                <div class="message-card">
-                    <h4 class="committee-info-title">بيانات الرسالة</h4>
-                    <div class="all-lots"><strong>نطاق اللجنة: كلي</strong><p>سيتم اختيار كل لوطات الطلب تلقائيًا:</p>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<span><i class="fa fa-check"></i> @Text(item.ShortName) — لوط @Text(lot.LotNumber)</span>}}</div>
+                <div class="message-card committee-step-pane" data-pane="message" hidden>
+                    <h4 class="committee-info-title">اختيار اللوطات وبدلات المهندسين</h4>
+                    <div id="committeeWorkOptions">
+                        <div class="sample-option-card" id="sampleLabsCard" hidden>
+                            <h5 class="employee-table-title">اختيار اللوطات</h5>
+                            <div class="table-responsive"><table class="table table-bordered table-striped sample-table"><thead><tr><th>الصنف</th><th>رقم اللوط</th><th>الوزن</th><th>اختيار</th></tr></thead><tbody>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<tr><td>@Text(item.ShortName)</td><td>@Text(lot.LotNumber)</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td><input type="checkbox" class="sample-lot-check" name="selectedLotIds" value="@lot.Id" /></td></tr>}}</tbody></table></div>
+                        </div>
+                        <div class="sample-option-card">
+                            <h5 class="employee-table-title">اختيار التحاليل والمعامل</h5>
+                            <input id="labSearch" type="search" class="form-control" placeholder="ابحث باسم التحليل أو المعمل" autocomplete="off" />
+                            <div class="table-responsive lab-table-wrap"><table class="table table-bordered table-striped sample-table" id="analysisLabsTable"><thead><tr><th>التحليل</th><th>المعمل</th><th>اختيار</th></tr></thead><tbody>@foreach(var lab in Model.AnalysisLabs){<tr><td>@lab.AnalysisName</td><td>@lab.LabName</td><td><input type="checkbox" class="sample-lab-check" name="selectedAnalysisLabTypeIds" value="@lab.Id" /></td></tr>}</tbody></table></div>
+                        </div>
+                        <div class="sample-option-card">
+                            <h5 class="employee-table-title">بدلات المهندسين (النوبتجيات)</h5>
+                            <div class="shift-entry-grid"><div><label for="shiftTimingSelect">النوبتجية</label><select id="shiftTimingSelect" class="form-control"><option value="">اختر النوبتجية</option>@foreach(var shift in Model.ShiftTimings){<option value="@shift.Id" data-amount="@shift.Amount">@shift.Name</option>}</select></div><div><label for="shiftMoney">القيمة</label><input id="shiftMoney" class="form-control" readonly /></div><div><label for="shiftCount">عدد الأيام</label><input id="shiftCount" type="number" min="1" value="1" class="form-control" /></div><div><button id="addShift" type="button" class="btn btn-primary">إضافة</button></div></div>
+                            <div class="table-responsive"><table id="shiftTable" class="table table-bordered table-striped sample-table"><thead><tr><th>النوبتجية</th><th>القيمة</th><th>عدد الأيام</th><th>حذف</th></tr></thead><tbody><tr class="shift-empty"><td colspan="4">لم تتم إضافة بيانات نوبتجية.</td></tr></tbody></table></div>
+                        </div>
+                    </div>
+                    <div class="committee-actions"><button type="button" class="btn btn-default committee-prev" data-prev="employees">السابق</button></div>
                 </div>
                 <div class="committee-submit"><button type="submit" class="btn btn-primary">حفظ وتشكيل اللجنة</button></div>
             </form>
@@ -114,27 +143,37 @@ document.addEventListener('DOMContentLoaded',function(){
 $(function(){
     var $form=$('#committeeForm');
     if(!$form.length)return;
+    var employeePage=1,employeePageSize=5;
 
     function requestedStage(){return $('#committeeTypeId').val()==='2'?'genshi':'inspection';}
+    function rowDateEligible($row){
+        var date=$('#delegationDate').val(),from=String($row.data('from')||''),to=String($row.data('to')||'');
+        return !date||((!from||from<=date)&&(!to||to>=date));
+    }
     function activeStage(){
         var stage=requestedStage();
-        return $('#employeeResultsTable .employee-result[data-stage="'+stage+'"]').length?stage:'outlet';
+        var found=false;$('#employeeResultsTable .employee-result[data-stage="'+stage+'"]').each(function(){if(rowDateEligible($(this)))found=true;});
+        return found?stage:'outlet';
     }
     function refreshRows(){
         var stage=activeStage(),outlet=String($('#selectedOutletId').val()||'');
-        var name=$.trim($('#employeeNameSearch').val()).toLowerCase();
+        var name=$.trim($('#employeeNameSearch').val()).toLowerCase(),matched=[];
         var number=$.trim($('#employeeNumberSearch').val());
         var visible=0;
         $('#employeeResultsTable .employee-result').each(function(){
             var $row=$(this),sameStage=$row.data('stage')===stage;
             var sameOutlet=stage!=='outlet'||(outlet&&String($row.data('outlet'))===outlet);
-            var eligible=sameStage&&sameOutlet;
+            var eligible=sameStage&&sameOutlet&&(stage==='outlet'||rowDateEligible($row));
             var sameName=!name||String($row.data('name')||'').toLowerCase().indexOf(name)>=0;
             var sameNumber=!number||String($row.data('number')||'').indexOf(number)>=0;
             var show=eligible&&sameName&&sameNumber;
-            $row.toggle(show);$row.find('.employee-select-check').prop('disabled',!eligible);
-            if(show)visible++;
+            $row.hide();$row.find('.employee-select-check').prop('disabled',!eligible);
+            if(show){matched.push(this);visible++;}
         });
+        var totalPages=Math.max(1,Math.ceil(matched.length/employeePageSize));employeePage=Math.min(Math.max(1,employeePage),totalPages);
+        $(matched.slice((employeePage-1)*employeePageSize,employeePage*employeePageSize)).show();
+        $('#employeePagination').toggle(matched.length>0);$('#employeePagination .page-info').text('صفحة '+employeePage+' من '+totalPages+' — عدد النتائج '+matched.length);
+        $('#employeePagination .page-prev').prop('disabled',employeePage<=1);$('#employeePagination .page-next').prop('disabled',employeePage>=totalPages);
         $('#employeeSearchMessage').toggle(visible===0).text(stage==='outlet'&&!outlet?'اختر المنفذ أولًا لعرض موظفيه.':visible===0?'لا يوجد موظفون مطابقون لبيانات البحث.':'');
     }
     function resetSelection(){
@@ -149,8 +188,13 @@ $(function(){
         $('#selectedOutletId').prop('required',fallback);
         if(!fallback)$('#selectedOutletId').val('');
         $('#engineersTitle').text((genshi?'موظفو مكان الجشني: @Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Text(Model.GenshiStationName)))':'موظفو مكان الفحص: @Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Text(Model.ExaminationStationName)))')+(fallback?' — لا يوجد تسكين حالي، اختر منفذًا بديلًا':''));
-        $('#employeeNameSearch,#employeeNumberSearch').val('');
+        employeePage=1;$('#employeeNameSearch,#employeeNumberSearch').val('');
         refreshRows();
+    }
+    function toggleCommitteeOptions(){
+        var sample=$('#committeeTypeId').val()==='3';
+        $('#sampleLabsCard').prop('hidden',!sample);
+        if(!sample)$('.sample-lab-check').prop('checked',false);
     }
     function addSelected($source){
         var id=String($source.data('user')),name=String($source.data('name')||''),number=String($source.data('number')||'');
@@ -161,10 +205,24 @@ $(function(){
         if(!$('#adminEmployeeId').val()){$row.find('.admin-radio').prop('checked',true);$('#adminEmployeeId').val(id);}
     }
 
-    $('#committeeTypeId').on('change',updateStage);
-    $('#selectedOutletId').on('change',function(){resetSelection();refreshRows();});
-    $('#employeeSearchButton').on('click',refreshRows);
-    $('#employeeNameSearch,#employeeNumberSearch').on('input',refreshRows);
+    $('#committeeTypeId').on('change',function(){updateStage();toggleCommitteeOptions();});
+    $('#delegationDate').on('change',updateStage);
+    $('#selectedOutletId').on('change',function(){employeePage=1;resetSelection();refreshRows();});
+    $('#employeeSearchButton').on('click',function(){employeePage=1;refreshRows();});
+    $('#employeeNameSearch,#employeeNumberSearch').on('input',function(){employeePage=1;refreshRows();});
+    $('#employeePagination .page-prev').on('click',function(){if(employeePage>1){employeePage--;refreshRows();}});
+    $('#employeePagination .page-next').on('click',function(){employeePage++;refreshRows();});
+    $('#labSearch').on('input',function(){var value=$.trim(this.value).toLowerCase();$('#analysisLabsTable tbody tr').each(function(){$(this).toggle(!value||$(this).text().toLowerCase().indexOf(value)>=0);});});
+    $('#shiftTimingSelect').on('change',function(){$('#shiftMoney').val($(this).find(':selected').data('amount')||'');});
+    $('#addShift').on('click',function(){
+        var $option=$('#shiftTimingSelect option:selected'),id=$option.val(),name=$option.text(),amount=Number($option.data('amount')||0),count=parseInt($('#shiftCount').val(),10);
+        if(!id||!count||count<1){alert('اختر النوبتجية وأدخل عدد أيام صحيح.');return;}
+        if($('#shiftTable tbody tr[data-shift="'+id+'"]').length){alert('تمت إضافة هذه النوبتجية من قبل.');return;}
+        $('#shiftTable .shift-empty').remove();
+        $('#shiftTable tbody').append('<tr data-shift="'+id+'"><td>'+name+'<input type="hidden" name="shiftTimingIds" value="'+id+'" /></td><td>'+(amount*count).toFixed(2)+'</td><td>'+count+'<input type="hidden" name="shiftCounts" value="'+count+'" /></td><td><button type="button" class="remove-shift">حذف</button></td></tr>');
+        $('#shiftTimingSelect').val('');$('#shiftMoney').val('');$('#shiftCount').val('1');
+    });
+    $(document).on('click','.remove-shift',function(){$(this).closest('tr').remove();if(!$('#shiftTable tbody tr').length)$('#shiftTable tbody').html('<tr class="shift-empty"><td colspan="4">لم تتم إضافة بيانات نوبتجية.</td></tr>');});
     $(document).on('change','.employee-select-check',function(){
         var $row=$(this).closest('.employee-result');
         if(this.checked)addSelected($row);
@@ -180,14 +238,33 @@ $(function(){
         $row.remove();
         if(String($('#adminEmployeeId').val())===id){$('#adminEmployeeId').val('');var $first=$('#selectedEmployeesTable .admin-radio').first();if($first.length){$first.prop('checked',true);$('#adminEmployeeId').val($first.val());}}
     });
+    function showStep(step){
+        $('.committee-step-pane').prop('hidden',true).filter('[data-pane="'+step+'"]').prop('hidden',false);
+        var order=['info','employees','message'],position=order.indexOf(step);
+        $('.committee-steps li').each(function(){var index=order.indexOf(String($(this).data('step')));$(this).toggleClass('active',index===position).toggleClass('done',index<position);});
+    }
+    function validateInfo(){
+        if(!$('#committeeTypeId').val()){alert('يجب اختيار نوع اللجنة.');return false;}
+        if(!$('#delegationDate').val()){alert('يجب اختيار تاريخ اللجنة.');return false;}
+        return true;
+    }
+    function validateEmployees(){
+        if(activeStage()==='outlet'&&!$('#selectedOutletId').val()){alert('اختر المنفذ البديل.');return false;}
+        if(!$('.employee-select-check:checked:not(:disabled)').length){alert('يجب اختيار موظف واحد على الأقل.');return false;}
+        if(!$('#adminEmployeeId').val()){alert('حدد رئيس اللجنة.');return false;}
+        return true;
+    }
+    $('.committee-next').on('click',function(){var next=String($(this).data('next'));if(next==='employees'&&!validateInfo())return;if(next==='message'&&!validateEmployees())return;showStep(next);});
+    $('.committee-prev').on('click',function(){showStep(String($(this).data('prev')));});
     $form.on('submit',function(e){
         if(!$('#committeeTypeId').val()){e.preventDefault();alert('يجب اختيار نوع اللجنة.');return;}
         if(activeStage()==='outlet'&&!$('#selectedOutletId').val()){e.preventDefault();alert('اختر المنفذ البديل.');return;}
         if(!$('.employee-select-check:checked:not(:disabled)').length){e.preventDefault();alert('يجب اختيار موظف واحد على الأقل.');return;}
         if(!$('#adminEmployeeId').val()){e.preventDefault();alert('حدد رئيس اللجنة.');return;}
-        if($('#startTime').val()>=$('#endTime').val()){e.preventDefault();alert('وقت البداية يجب أن يسبق وقت النهاية.');}
+        if(!$('.sample-lot-check:checked').length){e.preventDefault();showStep('message');alert('اختر لوطًا واحدًا على الأقل لعمل اللجنة.');return;}
+        if($('#committeeTypeId').val()==='3'&&!$('.sample-lab-check:checked').length){e.preventDefault();showStep('message');alert('اختر تحليلًا ومعملًا واحدًا على الأقل.');return;}
     });
-    updateStage();
+    updateStage();toggleCommitteeOptions();
 });
 </script>
 }

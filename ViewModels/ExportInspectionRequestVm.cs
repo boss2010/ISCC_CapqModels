@@ -115,6 +115,8 @@ public class ExportInspectionRequestDetailsVm
     public List<ExportStationEngineerVm> GenshiEngineers { get; set; } = [];
     public List<ExportStationEngineerVm> OutletEngineers { get; set; } = [];
     public List<ExportCommitteeOutletVm> CommitteeOutlets { get; set; } = [];
+    public List<ExportAnalysisLabVm> AnalysisLabs { get; set; } = [];
+    public List<ExportShiftTimingVm> ShiftTimings { get; set; } = [];
     public List<ExportRequestCommitteeVm> Committees { get; set; } = [];
 }
 
@@ -181,12 +183,28 @@ public class ExportStationEngineerVm
     public string Name { get; set; } = string.Empty;
     public long? OutletId { get; set; }
     public string OutletName { get; set; } = string.Empty;
+    public DateTime? AssignmentFrom { get; set; }
+    public DateTime? AssignmentTo { get; set; }
 }
 
 public class ExportCommitteeOutletVm
 {
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
+}
+
+public class ExportAnalysisLabVm
+{
+    public int Id { get; set; }
+    public string AnalysisName { get; set; } = string.Empty;
+    public string LabName { get; set; } = string.Empty;
+}
+
+public class ExportShiftTimingVm
+{
+    public byte Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
 }
 
 public class ExportRequestCommitteeVm
