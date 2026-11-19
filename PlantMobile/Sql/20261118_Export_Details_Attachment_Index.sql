@@ -55,3 +55,21 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Ex_Requ
     CREATE NONCLUSTERED INDEX IX_Ex_RequestCommittee_Request_Active
         ON dbo.Ex_RequestCommittee(ExCheckRequest_ID,User_Deletion_Id,CommitteeType_ID,ID DESC);
 GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Ex_CheckRequest_Fees') AND name=N'IX_Ex_CheckRequest_Fees_Request')
+    CREATE NONCLUSTERED INDEX IX_Ex_CheckRequest_Fees_Request
+        ON dbo.Ex_CheckRequest_Fees(Ex_CheckRequest_ID)
+        INCLUDE(Total_GrossWeight,Fee_Value,Total_Amount,is_Fee_Rounding,ID);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Fees_Transactions') AND name=N'IX_Fees_Transactions_Table_Active')
+    CREATE NONCLUSTERED INDEX IX_Fees_Transactions_Table_Active
+        ON dbo.Fees_Transactions(TableName_ID,Table_ID,User_Deletion_Id)
+        INCLUDE(OrderNumber,IsSuccess_Bank,Amount_Total,ID);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Fees_Transactions_Detiles') AND name=N'IX_Fees_Transaction_Details_Transaction_Active')
+    CREATE NONCLUSTERED INDEX IX_Fees_Transaction_Details_Transaction_Active
+        ON dbo.Fees_Transactions_Detiles(Fees_Transactions_ID,User_Deletion_Id)
+        INCLUDE(Fees_Action_ID,Amount);
+GO

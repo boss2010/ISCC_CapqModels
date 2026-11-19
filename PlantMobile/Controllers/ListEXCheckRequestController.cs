@@ -616,7 +616,9 @@ public class ListEXCheckRequestController : Controller
             command.Parameters.Add("@EmployeesJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(employeeIds);
             command.Parameters.Add("@LotsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(selectedLotIds);command.Parameters.Add("@LabsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(selectedAnalysisLabTypeIds);
             var shifts=shiftTimingIds.Select((shiftId,index)=>new{Id=shiftId,Count=index<shiftCounts.Count?Math.Max((byte)1,shiftCounts[index]):(byte)1}).ToList();command.Parameters.Add("@ShiftsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(shifts);
-            await command.ExecuteNonQueryAsync(ct);TempData["CommitteeSuccess"]="تمت الموافقة على الطلب وتشكيل اللجنة على اللوطات المختارة وحفظ بدلات المهندسين.";
+            await command.ExecuteNonQueryAsync(ct);
+            TempData["SaveSuccess"]="تمت الموافقة على الطلب وتشكيل اللجنة على اللوطات المختارة وحفظ بدلات المهندسين.";
+            return RedirectToAction("Committees","ImportRequests",new{checkRequestId=id,date=delegationDate.ToString("yyyy-MM-dd"),tab="export"});
         }
         catch(SqlException ex)when(ex.Number is >=50010 and <=50018){TempData["CommitteeError"]=ex.Message;}
         catch(Exception ex){_logger.LogError(ex,"Failed to create export committee for request {RequestId}; TraceId={TraceId}",id,HttpContext.TraceIdentifier);TempData["CommitteeError"]=$"تعذر تشكيل اللجنة. رقم التتبع: {HttpContext.TraceIdentifier}";}
