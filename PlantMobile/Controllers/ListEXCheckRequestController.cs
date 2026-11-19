@@ -170,7 +170,7 @@ public class ListEXCheckRequestController : Controller
             SELECT committee.ExCheckRequest_ID
             FROM dbo.CommitteeEmployee employee
             INNER JOIN dbo.Ex_RequestCommittee committee ON committee.ID=employee.Committee_ID AND committee.User_Deletion_Id IS NULL
-            WHERE employee.Employee_Id=@UserId AND employee.User_Deletion_Id IS NULL
+            WHERE employee.Employee_Id=@UserId AND employee.OperationType=73 AND employee.User_Deletion_Id IS NULL
           ) allowed
           GROUP BY allowed.Ex_CheckRequest_ID;
         END;
@@ -364,7 +364,7 @@ public class ListEXCheckRequestController : Controller
         OUTER APPLY(SELECT TOP(1) pi.Name_Ar,pi.PortTypeID FROM dbo.Ex_CheckRequest_Port ep LEFT JOIN dbo.Port_International pi ON pi.ID=ep.Port_ID WHERE ep.Ex_CheckRequest_Data_ID=d.ID AND ep.ReqPortType_ID=11 AND ep.User_Deletion_Id IS NULL ORDER BY ep.ID DESC) transitPort
         LEFT JOIN dbo.Port_Type transitType ON transitType.ID=transitPort.PortTypeID
         OUTER APPLY(SELECT TOP(1) x.Date,resultType.Ar_Name Final_Result_Name,COUNT(*) OVER() ResultCount FROM dbo.Ex_CheckRequest_Final_Result x LEFT JOIN dbo.Ex_Final_Result resultType ON resultType.ID=x.Ex_Final_Result_ID WHERE x.Ex_CheckRequest_ID=r.ID AND x.User_Deletion_Id IS NULL ORDER BY x.ID DESC) fr
-        WHERE r.ID=@Id;
+        WHERE r.ID=@Id OPTION(RECOMPILE);
 
         SELECT i.ID,COALESCE(sn.ShortName_Ar,sn.ShortName_En,N'') ShortName,
           COALESCE(ic.Name_Ar,ic.Name_En,N'') Category,COALESCE(ig.Name_Ar,ig.Name_En,N'') CategoryGroup,
@@ -377,7 +377,7 @@ public class ListEXCheckRequestController : Controller
         LEFT JOIN dbo.Package_Type pt ON pt.ID=i.Package_Type_ID
         LEFT JOIN dbo.Package_Material pm ON pm.ID=i.Package_Material_ID
         LEFT JOIN dbo.FarmsData fd ON fd.ID=i.FarmsData_ID
-        WHERE i.Ex_CheckRequest_ID=@Id AND i.User_Deletion_Id IS NULL ORDER BY i.ID;
+        WHERE i.Ex_CheckRequest_ID=@Id AND i.User_Deletion_Id IS NULL ORDER BY i.ID OPTION(RECOMPILE);
 
         SELECT lot.ID,lot.Ex_CheckRequest_Items_ID,lot.Lot_Number,lot.Package_Count,lot.GrossWeight,lot.Net_Weight,
           COALESCE(pt.Ar_Name,pt.En_Name,N'') PackageType,COALESCE(pm.Ar_Name,pm.En_Name,N'') PackageMaterial,
@@ -386,13 +386,13 @@ public class ListEXCheckRequestController : Controller
         INNER JOIN dbo.Ex_CheckRequest_Items i ON i.ID=lot.Ex_CheckRequest_Items_ID
         LEFT JOIN dbo.Package_Type pt ON pt.ID=lot.Package_Type_ID
         LEFT JOIN dbo.Package_Material pm ON pm.ID=lot.Package_Material_ID
-        WHERE i.Ex_CheckRequest_ID=@Id AND lot.User_Deletion_Id IS NULL ORDER BY lot.ID;
+        WHERE i.Ex_CheckRequest_ID=@Id AND lot.User_Deletion_Id IS NULL ORDER BY lot.ID OPTION(RECOMPILE);
 
         SELECT a.Id,COALESCE(NULLIF(a.Attachment_TypeName,N''),t.Ar_Name,N'مرفق') AttachmentName,
           a.Attachment_Number,a.AttachmentPath,a.StartDate,a.EndDate
         FROM dbo.A_AttachmentData_Ex_CheckRequest a
         LEFT JOIN dbo.A_AttachmentTableType t ON t.ID=a.A_AttachmentTableType_ID
-        WHERE a.Ex_CheckRequest_ID=@Id AND a.User_Deletion_Id IS NULL ORDER BY a.Id;
+        WHERE a.Ex_CheckRequest_ID=@Id AND a.User_Deletion_Id IS NULL ORDER BY a.Id OPTION(RECOMPILE);
 
         SELECT N'رسوم طلب الفحص الصادر' FeeType,N'الطلب' FeeSource,CAST(NULL AS nvarchar(100)) OrderNumber,
           r.IsPaid,fee.Total_GrossWeight,fee.Fee_Value,fee.Total_Amount,fee.is_Fee_Rounding,fee.ID SortId
@@ -412,7 +412,7 @@ public class ListEXCheckRequestController : Controller
         WHERE transactionData.User_Deletion_Id IS NULL
           AND ((transactionData.TableName_ID=8 AND transactionData.Table_ID=@Id)
             OR (transactionData.TableName_ID=9 AND committee.ExCheckRequest_ID=@Id))
-        ORDER BY SortId;
+        ORDER BY SortId OPTION(RECOMPILE);
 
         SELECT DISTINCT employees.Id,employees.EmpId,employees.FullName,employees.Date_From,employees.Date_To FROM(
           SELECT u.Id,u.EmpId,u.FullName,se.Date_From,se.Date_To
@@ -425,7 +425,7 @@ public class ListEXCheckRequestController : Controller
           FROM dbo.Ex_CheckRequest_Places p INNER JOIN dbo.Outlet o ON o.ID=p.Outlet_Exmainiation_ID
           INNER JOIN dbPrivilage.dbo.PR_User u ON u.Outlet_ID=o.ID_HR AND u.Active=1
           WHERE p.Ex_CheckRequest_ID=@Id AND p.Station_Examination_ID IS NULL AND p.Outlet_Exmainiation_ID IS NOT NULL
-        )employees ORDER BY employees.FullName;
+        )employees ORDER BY employees.FullName OPTION(RECOMPILE);
 
         SELECT DISTINCT employees.Id,employees.EmpId,employees.FullName,employees.Date_From,employees.Date_To FROM(
           SELECT u.Id,u.EmpId,u.FullName,se.Date_From,se.Date_To
@@ -438,7 +438,7 @@ public class ListEXCheckRequestController : Controller
           FROM dbo.Ex_CheckRequest_Places p INNER JOIN dbo.Outlet o ON o.ID=p.Outlet_Genshi_ID
           INNER JOIN dbPrivilage.dbo.PR_User u ON u.Outlet_ID=o.ID_HR AND u.Active=1
           WHERE p.Ex_CheckRequest_ID=@Id AND p.Station_Genshi_ID IS NULL AND p.Outlet_Genshi_ID IS NOT NULL
-        )employees ORDER BY employees.FullName;
+        )employees ORDER BY employees.FullName OPTION(RECOMPILE);
 
         SELECT DISTINCT o.ID,o.Ar_Name
         FROM dbo.Outlet o
@@ -473,7 +473,7 @@ public class ListEXCheckRequestController : Controller
         LEFT JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.OperationType=73 AND ce.User_Deletion_Id IS NULL
         LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id=ce.Employee_Id
         WHERE c.ExCheckRequest_ID=@Id AND c.CommitteeType_ID IN(1,2,3,6) AND c.User_Deletion_Id IS NULL
-        GROUP BY c.ID,c.CommitteeType_ID,ct.Name_Ar,c.Delegation_Date ORDER BY c.ID DESC;
+        GROUP BY c.ID,c.CommitteeType_ID,ct.Name_Ar,c.Delegation_Date ORDER BY c.ID DESC OPTION(RECOMPILE);
         """;
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(ct);
@@ -603,6 +603,10 @@ public class ListEXCheckRequestController : Controller
         IF @CommitteeTypeId=6
           INSERT dbo.Ex_Request_TreatmentData(ID,Ex_RequestCommittee_ID,Ex_Request_Item_Id,Ex_Request_LotData_ID,TreatmentMethod_ID,Station_ID,User_Creation_Id,User_Creation_Date,Item_ShortName_ID,IS_Total_Android,IS_From_Android,IS_Total)
           SELECT NEXT VALUE FOR dbo.Ex_Request_TreatmentData_SEQ,@CommitteeId,i.ID,l.ID,ch.TreatmentMethods_ID,@StationId,@UserId,GETDATE(),i.Item_ShortName_ID,1,1,1 FROM dbo.Ex_CheckRequest_Items i JOIN dbo.Ex_CheckRequest_Items_Lot_Category l ON l.Ex_CheckRequest_Items_ID=i.ID JOIN @SelectedLots selectedLot ON selectedLot.Id=l.ID JOIN dbo.EX_Choose_Treatment ch ON ch.Ex_CheckRequest_ID=@RequestId AND ch.Item_ShortName_id=i.Item_ShortName_ID AND ch.TreatmentMethods_ID IS NOT NULL WHERE i.Ex_CheckRequest_ID=@RequestId AND i.User_Deletion_Id IS NULL AND l.User_Deletion_Id IS NULL;
+        UPDATE dbo.Ex_CheckRequest
+          SET IsAccepted=1,IsActive=1,Notes_Reject=NULL,IsAccepted_Date=GETDATE(),User_Updation_Id=@UserId,User_Updation_Date=GETDATE()
+        WHERE ID=@RequestId AND User_Deletion_Id IS NULL;
+        IF @@ROWCOUNT=0 THROW 50018,N'طلب الفحص غير موجود أو تم حذفه.',1;
         COMMIT;
         """;
         try
@@ -612,9 +616,9 @@ public class ListEXCheckRequestController : Controller
             command.Parameters.Add("@EmployeesJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(employeeIds);
             command.Parameters.Add("@LotsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(selectedLotIds);command.Parameters.Add("@LabsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(selectedAnalysisLabTypeIds);
             var shifts=shiftTimingIds.Select((shiftId,index)=>new{Id=shiftId,Count=index<shiftCounts.Count?Math.Max((byte)1,shiftCounts[index]):(byte)1}).ToList();command.Parameters.Add("@ShiftsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(shifts);
-            await command.ExecuteNonQueryAsync(ct);TempData["CommitteeSuccess"]="تم تشكيل اللجنة على اللوطات المختارة وحفظ بدلات المهندسين.";
+            await command.ExecuteNonQueryAsync(ct);TempData["CommitteeSuccess"]="تمت الموافقة على الطلب وتشكيل اللجنة على اللوطات المختارة وحفظ بدلات المهندسين.";
         }
-        catch(SqlException ex)when(ex.Number is >=50010 and <=50017){TempData["CommitteeError"]=ex.Message;}
+        catch(SqlException ex)when(ex.Number is >=50010 and <=50018){TempData["CommitteeError"]=ex.Message;}
         catch(Exception ex){_logger.LogError(ex,"Failed to create export committee for request {RequestId}; TraceId={TraceId}",id,HttpContext.TraceIdentifier);TempData["CommitteeError"]=$"تعذر تشكيل اللجنة. رقم التتبع: {HttpContext.TraceIdentifier}";}
         return RedirectToAction(nameof(Details),new{id});
     }
@@ -627,7 +631,8 @@ public class ListEXCheckRequestController : Controller
         if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)||!await _menuAccess.CanModifyAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
         if(!await CanAccessRequestAsync(id,userId,ct))return Forbid();
         decision=(decision??string.Empty).Trim().ToLowerInvariant();notes=notes?.Trim();
-        if(decision is not("approve" or "reject" or "complete")){TempData["DecisionError"]="الحالة المختارة غير صحيحة.";return RedirectToAction(nameof(Details),new{id});}
+        if(decision=="approve"){TempData["DecisionError"]="تتم الموافقة عند حفظ بيانات تشكيل اللجنة.";return RedirectToAction(nameof(Details),new{id});}
+        if(decision is not("reject" or "complete")){TempData["DecisionError"]="الحالة المختارة غير صحيحة.";return RedirectToAction(nameof(Details),new{id});}
         if((decision is "reject" or "complete")&&string.IsNullOrWhiteSpace(notes)){TempData["DecisionError"]="اكتب سبب الرفض أو البيانات المطلوب استكمالها.";return RedirectToAction(nameof(Details),new{id});}
         const string sql="""
         UPDATE dbo.Ex_CheckRequest
@@ -671,7 +676,7 @@ public class ListEXCheckRequestController : Controller
             OR EXISTS(SELECT 1 FROM dbPrivilage.dbo.PR_User u INNER JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID
               AND o.ID IN(p.Outlet_Exmainiation_ID,p.Outlet_Genshi_ID) WHERE u.Id=@UserId AND u.Active=1)
             OR EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee c INNER JOIN dbo.CommitteeEmployee e ON e.Committee_ID=c.ID
-              AND e.Employee_Id=@UserId AND e.User_Deletion_Id IS NULL WHERE c.ExCheckRequest_ID=@RequestId AND c.User_Deletion_Id IS NULL)
+              AND e.Employee_Id=@UserId AND e.OperationType=73 AND e.User_Deletion_Id IS NULL WHERE c.ExCheckRequest_ID=@RequestId AND c.User_Deletion_Id IS NULL)
           )
         ) THEN 1 ELSE 0 END;
         """;

@@ -234,11 +234,11 @@ public class ImportRequestsController : Controller
             WHEN 3 THEN (SELECT COUNT(*) FROM dbo.Ex_CheckRequest_SampleData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.WithdrawDate IS NOT NULL AND x.SampleSize>0)
             WHEN 6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.User_Updation_Date IS NOT NULL) ELSE 0 END WorkCount
         FROM dbo.Ex_RequestCommittee c
-        JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.Employee_Id=@UserId AND ce.User_Deletion_Id IS NULL
+        JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.Employee_Id=@UserId AND ce.OperationType=73 AND ce.User_Deletion_Id IS NULL
         JOIN dbo.Ex_CheckRequest r ON r.ID=c.ExCheckRequest_ID
         LEFT JOIN dbo.Ex_List l ON l.Ex_CheckRequest_ID=r.ID
         JOIN dbo.CommitteeType ct ON ct.ID=c.CommitteeType_ID
-        LEFT JOIN dbo.CommitteeEmployee allMembers ON allMembers.Committee_ID=c.ID AND allMembers.User_Deletion_Id IS NULL
+        LEFT JOIN dbo.CommitteeEmployee allMembers ON allMembers.Committee_ID=c.ID AND allMembers.OperationType=73 AND allMembers.User_Deletion_Id IS NULL
         LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id=allMembers.Employee_Id
         WHERE c.User_Deletion_Id IS NULL AND c.CommitteeType_ID IN(1,2,3,6)
           AND c.Delegation_Date=@Date AND (@RequestId IS NULL OR c.ExCheckRequest_ID=@RequestId)

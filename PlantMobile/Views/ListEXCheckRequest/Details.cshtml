@@ -27,8 +27,8 @@
     <div class="details-body">
     @if(Model.IsSupervisorReadOnly){<style>.committee-form{display:none!important}</style><div class="alert alert-info">صلاحية المشرف العام للعرض فقط. يمكنك مشاهدة أماكن الطلب واللجان والموظفين الذين عملوا عليه دون تعديل.</div>}@if(TempData["CommitteeSuccess"] is string committeeSuccess){<div class="alert alert-success">@committeeSuccess</div>}@if(TempData["CommitteeError"] is string committeeError){<div class="alert alert-danger">@committeeError</div>}@if(TempData["DecisionSuccess"] is string decisionSuccess){<div class="alert alert-success">@decisionSuccess</div>}@if(TempData["DecisionError"] is string decisionError){<div class="alert alert-danger">@decisionError</div>}
     <div class="summary"><div class="summary-box"><span>تاريخ الطلب</span><strong>@(Model.CreationDate?.ToString("dd/MM/yyyy hh:mm tt")??"—")</strong></div><div class="summary-box"><span>حالة الطلب</span><strong class="state">@RequestState()</strong></div><div class="summary-box"><span>النتيجة النهائية</span><strong>@Text(Model.FinalResult)</strong></div><div class="summary-box"><span>إجمالي الرسوم</span><strong>@(Model.Fees.Sum(x=>x.TotalAmount)?.ToString("N2")??Model.Amount?.ToString("N2")??"—")</strong></div></div>
-    @if(!Model.IsSupervisorReadOnly){<section class="decision-card"><h3>موقف مراجعة الطلب</h3><span class="current-decision">الحالة الحالية: @RequestState()</span><form asp-action="SaveDecision" asp-route-id="@Model.Id" method="post" id="decisionForm">@Html.AntiForgeryToken()<label for="decisionNotes">ملاحظات الرفض أو البيانات المطلوب استكمالها</label><textarea id="decisionNotes" name="notes" class="form-control" placeholder="تُكتب الملاحظات عند الرفض أو طلب استكمال بيانات">@(Model.IsAccepted==true?string.Empty:Model.RejectNotes)</textarea><div class="decision-actions"><button type="submit" name="decision" value="approve" class="btn btn-success">موافق</button><button type="submit" name="decision" value="reject" class="btn btn-danger decision-needs-notes">مرفوض</button><button type="submit" name="decision" value="complete" class="btn btn-completion decision-needs-notes">استكمال بيانات</button></div></form></section>}
-    <section class="section-card"><h3 class="section-title">بيانات الجهة المصدرة والمندوب</h3><div class="info-grid"><div class="info"><span>نوع الجهة المصدرة</span><strong>@Text(Model.ImporterType)</strong></div><div class="info"><span>الشركة / الجهة المصدرة</span><strong>@Text(Model.ImporterName)</strong></div><div class="info"><span>صاحب الشركة / الشخص المسئول</span><strong>@Text(Model.OwnerName)</strong></div><div class="info"><span>عنوان الجهة</span><strong>@Text(Model.OwnerAddress)</strong></div><div class="info"><span>مندوب صاحب الرسالة</span><strong>@Text(Model.DelegateName)</strong></div><div class="info"><span>الرقم القومي للمندوب</span><strong>@Text(Model.DelegateNationalId)</strong></div>@if(Model.DelegateAttachmentId.HasValue){<div class="info full"><span>صورة المندوب المرفقة</span><a asp-action="DelegateAttachment" asp-route-id="@Model.DelegateAttachmentId" target="_blank"><img src="@Url.Action("DelegateAttachment",new{id=Model.DelegateAttachmentId})" alt="صورة المندوب" style="max-width:260px;max-height:190px;border:1px solid #dce6e9;border-radius:8px;padding:4px" /></a></div>}</div></section>
+    @if(!Model.IsSupervisorReadOnly){<section class="decision-card"><h3>موقف مراجعة الطلب</h3><span class="current-decision">الحالة الحالية: @RequestState()</span><form asp-action="SaveDecision" asp-route-id="@Model.Id" method="post" id="decisionForm">@Html.AntiForgeryToken()<label for="decisionNotes">ملاحظات الرفض أو البيانات المطلوب استكمالها</label><textarea id="decisionNotes" name="notes" class="form-control" placeholder="تُكتب الملاحظات عند الرفض أو طلب استكمال بيانات">@(Model.IsAccepted==true?string.Empty:Model.RejectNotes)</textarea><div class="decision-actions"><button type="button" id="approveWithCommittee" class="btn btn-success">@(Model.IsAccepted==true?"حفظ لجنة جديدة":"موافق وحفظ اللجنة")</button><button type="submit" name="decision" value="reject" class="btn btn-danger decision-needs-notes">مرفوض</button><button type="submit" name="decision" value="complete" class="btn btn-completion decision-needs-notes">استكمال بيانات</button></div></form></section>}
+    <section class="section-card"><h3 class="section-title">بيانات الجهة المصدرة والمندوب</h3><div class="info-grid"><div class="info"><span>نوع الجهة المصدرة</span><strong>@Text(Model.ImporterType)</strong></div><div class="info"><span>الشركة / الجهة المصدرة</span><strong>@Text(Model.ImporterName)</strong></div><div class="info"><span>صاحب الشركة / الشخص المسئول</span><strong>@Text(Model.OwnerName)</strong></div><div class="info"><span>عنوان الجهة</span><strong>@Text(Model.OwnerAddress)</strong></div><div class="info"><span>مندوب صاحب الرسالة</span><strong>@Text(Model.DelegateName)</strong></div><div class="info"><span>الرقم القومي للمندوب</span><strong>@Text(Model.DelegateNationalId)</strong></div>@if(Model.DelegateAttachmentId.HasValue){<div class="info full"><span>صورة المندوب المرفقة</span><button type="button" class="btn btn-primary load-delegate-image" data-url="@Url.Action("DelegateAttachment",new{id=Model.DelegateAttachmentId})">عرض صورة المندوب</button><div class="delegate-image-host" style="margin-top:10px"></div></div>}</div></section>
     <section class="section-card"><h3 class="section-title">مسار الرسالة</h3><div class="info-grid"><div class="info"><span>ميناء الشحن</span><strong>@Text(Model.ShippingPort)</strong></div><div class="info"><span>الدولة المستوردة</span><strong>@Text(Model.Country)</strong></div><div class="info"><span>نوع ميناء الوصول</span><strong>@Text(Model.ArrivalPortType)</strong></div><div class="info"><span>ميناء الوصول</span><strong>@Text(Model.ArrivalPort)</strong></div><div class="info"><span>دولة العبور</span><strong>@Text(Model.TransitCountry)</strong></div><div class="info"><span>نوع ميناء العبور</span><strong>@Text(Model.TransitPortType)</strong></div><div class="info"><span>ميناء العبور</span><strong>@Text(Model.TransitPort)</strong></div><div class="info"><span>اسم الباخرة</span><strong>@Text(Model.ShipName)</strong></div><div class="info"><span>وسيلة الشحن / النقل</span><strong>@Text(string.Join(" - ",new[]{Model.ShipmentMean,Model.TransportMean}.Where(x=>!string.IsNullOrWhiteSpace(x))))</strong></div><div class="info"><span>اسم الشركة المستوردة</span><strong>@Text(Model.ImportCompany)</strong></div><div class="info"><span>اسم المرسل إليه</span><strong>@Text(Model.ReceiverName)</strong></div><div class="info"><span>عنوان المرسل إليه</span><strong>@Text(Model.ImportCompanyAddress)</strong></div></div></section>
     <section class="section-card"><h3 class="section-title">مكان الفحص</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div><div class="info"><span>المحافظة</span><strong>@Text(Model.ExaminationGovernorate)</strong></div><div class="info"><span>المركز</span><strong>@Text(Model.ExaminationCenter)</strong></div><div class="info full"><span>عنوان مكان الفحص</span><strong>@Text(Model.ExaminationAddress)</strong></div></div></section>
     <section class="section-card"><h3 class="section-title">مكان الجشني</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الجشني</span><strong>@Text(Model.GenshiPlace)</strong></div><div class="info"><span>نوع المكان</span><strong>@(Model.GenshiStationId.HasValue?"محطة":Model.GenshiOutletId.HasValue?"منفذ":"—")</strong></div><div class="info"><span>تاريخ النتيجة</span><strong>@(Model.FinalResultDate?.ToString("dd/MM/yyyy")??"—")</strong></div></div></section>
@@ -97,8 +97,8 @@
                             <h5 class="employee-table-title">اختيار اللوطات</h5>
                             <div class="table-responsive"><table class="table table-bordered table-striped sample-table"><thead><tr><th>الصنف</th><th>رقم اللوط</th><th>الوزن</th><th>اختيار</th></tr></thead><tbody>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<tr><td>@Text(item.ShortName)</td><td>@Text(lot.LotNumber)</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td><input type="checkbox" class="sample-lot-check" name="selectedLotIds" value="@lot.Id" /></td></tr>}}</tbody></table></div>
                         </div>
-                        <div class="sample-option-card" id="sampleLabsCard" hidden>
-                            <h5 class="employee-table-title">اختيار التحاليل والمعامل</h5>
+                        <div class="sample-option-card" id="sampleLabsCard" style="display:none" aria-hidden="true">
+                            <h5 class="employee-table-title">اختيار التحاليل والمعامل <small>(@Model.AnalysisLabs.Count معمل/تحليل متاح)</small></h5>
                             <input id="labSearch" type="search" class="form-control" placeholder="ابحث باسم التحليل أو المعمل" autocomplete="off" />
                             <div class="table-responsive lab-table-wrap"><table class="table table-bordered table-striped sample-table" id="analysisLabsTable"><thead><tr><th>التحليل</th><th>المعمل</th><th>اختيار</th></tr></thead><tbody>@foreach(var lab in Model.AnalysisLabs){<tr><td>@lab.AnalysisName</td><td>@lab.LabName</td><td><input type="checkbox" class="sample-lab-check" name="selectedAnalysisLabTypeIds" value="@lab.Id" /></td></tr>}</tbody></table></div>
                         </div>
@@ -108,7 +108,7 @@
                             <div class="table-responsive"><table id="shiftTable" class="table table-bordered table-striped sample-table"><thead><tr><th>النوبتجية</th><th>القيمة</th><th>عدد الأيام</th><th>حذف</th></tr></thead><tbody><tr class="shift-empty"><td colspan="4">لم تتم إضافة بيانات نوبتجية.</td></tr></tbody></table></div>
                         </div>
                     </div>
-                    <div class="committee-actions between"><button type="button" class="btn btn-default committee-prev" data-prev="employees">السابق</button><button type="submit" class="btn btn-primary">حفظ وتشكيل اللجنة</button></div>
+                    <div class="committee-actions between"><button type="button" class="btn btn-default committee-prev" data-prev="employees">السابق</button><span class="text-success"><strong>@(Model.IsAccepted==true?"اضغط «حفظ لجنة جديدة» لإضافة اللجنة على الطلب الموافق عليه.":"سيتم حفظ اللجنة عند الضغط على «موافق وحفظ اللجنة».")</strong></span></div>
                 </div>
             </form>
         }
@@ -126,6 +126,18 @@
 @functions{string Text(string? value)=>string.IsNullOrWhiteSpace(value)?"—":value;string RequestState()=>Model.ClosedRequest==1?"مغلق":!string.IsNullOrWhiteSpace(Model.FinalResult)?"ظهرت النتيجة":Model.IsAccepted==true?"موافق":Model.IsAccepted==false?"مرفوض":!string.IsNullOrWhiteSpace(Model.RejectNotes)?"مطلوب استكمال بيانات":"قيد المراجعة";}
 <script>
 document.addEventListener('DOMContentLoaded',function(){
+    var detailsBody=document.querySelector('.details-body');
+    var committeeSection=detailsBody&&detailsBody.querySelector(':scope>.committee-section');
+    var decisionSection=detailsBody&&detailsBody.querySelector(':scope>.decision-card');
+    if(detailsBody&&committeeSection)detailsBody.appendChild(committeeSection);
+    if(detailsBody&&decisionSection)detailsBody.appendChild(decisionSection);
+    document.querySelectorAll('.load-delegate-image').forEach(function(button){button.addEventListener('click',function(){
+        var host=button.parentElement.querySelector('.delegate-image-host');
+        if(host.querySelector('img'))return;
+        var image=document.createElement('img');image.alt='صورة المندوب';image.style.cssText='max-width:260px;max-height:190px;border:1px solid #dce6e9;border-radius:8px;padding:4px';
+        image.onerror=function(){host.innerHTML='<span class="reject">تعذر تحميل الصورة من سيرفر المرفقات.</span>';button.disabled=false;};
+        button.disabled=true;button.textContent='جارٍ تحميل الصورة...';image.onload=function(){button.remove();};image.src=button.dataset.url;host.appendChild(image);
+    });});
     document.querySelectorAll('.details-body>.section-card').forEach(function(card,index){
         var title=card.querySelector(':scope>.section-title');if(!title)return;
         card.classList.add('accordion-card');title.setAttribute('role','button');title.setAttribute('tabindex','0');
@@ -145,7 +157,7 @@ $(function(){
     $('#decisionForm .decision-needs-notes').on('click',function(e){if(!$.trim($('#decisionNotes').val())){e.preventDefault();alert('اكتب سبب الرفض أو البيانات المطلوب استكمالها.');$('#decisionNotes').focus();}});
     var $form=$('#committeeForm');
     if(!$form.length)return;
-    var employeePage=1,employeePageSize=5;
+    var employeePage=1,employeePageSize=5,approvalRequested=false;
 
     function requestedStage(){return $('#committeeTypeId').val()==='2'?'genshi':'inspection';}
     function rowDateEligible($row){
@@ -195,7 +207,7 @@ $(function(){
     }
     function toggleCommitteeOptions(){
         var sample=$('#committeeTypeId').val()==='3';
-        $('#sampleLabsCard').prop('hidden',!sample);
+        $('#sampleLabsCard').toggle(sample).attr('aria-hidden',sample?'false':'true');
         if(!sample)$('.sample-lab-check').prop('checked',false);
     }
     function addSelected($source){
@@ -241,6 +253,7 @@ $(function(){
         if(String($('#adminEmployeeId').val())===id){$('#adminEmployeeId').val('');var $first=$('#selectedEmployeesTable .admin-radio').first();if($first.length){$first.prop('checked',true);$('#adminEmployeeId').val($first.val());}}
     });
     function showStep(step){
+        if(step==='message')toggleCommitteeOptions();
         $('.committee-step-pane').prop('hidden',true).filter('[data-pane="'+step+'"]').prop('hidden',false);
         var order=['info','employees','message'],position=order.indexOf(step);
         $('.committee-steps li').each(function(){var index=order.indexOf(String($(this).data('step')));$(this).toggleClass('active',index===position).toggleClass('done',index<position);});
@@ -258,7 +271,15 @@ $(function(){
     }
     $('.committee-next').on('click',function(){var next=String($(this).data('next'));if(next==='employees'&&!validateInfo())return;if(next==='message'&&!validateEmployees())return;showStep(next);});
     $('.committee-prev').on('click',function(){showStep(String($(this).data('prev')));});
+    $('#approveWithCommittee').on('click',function(){
+        if(!validateInfo()){showStep('info');$('#committeeTypeId').focus();return;}
+        if(!validateEmployees()){showStep('employees');return;}
+        if(!$('.sample-lot-check:checked').length){showStep('message');alert('اختر لوطًا واحدًا على الأقل لعمل اللجنة.');return;}
+        if($('#committeeTypeId').val()==='3'&&!$('.sample-lab-check:checked').length){showStep('message');alert('اختر تحليلًا ومعملًا واحدًا على الأقل.');return;}
+        approvalRequested=true;$form.trigger('submit');
+    });
     $form.on('submit',function(e){
+        if(!approvalRequested){e.preventDefault();return;}
         if(!$('#committeeTypeId').val()){e.preventDefault();alert('يجب اختيار نوع اللجنة.');return;}
         if(activeStage()==='outlet'&&!$('#selectedOutletId').val()){e.preventDefault();alert('اختر المنفذ البديل.');return;}
         if(!$('.employee-select-check:checked:not(:disabled)').length){e.preventDefault();alert('يجب اختيار موظف واحد على الأقل.');return;}
