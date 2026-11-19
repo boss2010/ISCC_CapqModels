@@ -308,6 +308,8 @@ public class ListEXCheckRequestController : Controller
     {
         const string sql = """
         SET NOCOUNT ON;
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SET LOCK_TIMEOUT 5000;
         SELECT TOP(1) r.ID,r.CheckRequest_Number,r.User_Creation_Date,r.ExportCompany,r.ExportCompanyAddress,
           r.NationalIDCompanyOwner,r.IsAccepted,r.IsPaid,r.Amount,r.Notes_Reject,
           country.Ar_Name ExportCountryName,systemCode.ValueName ImporterTypeName,
