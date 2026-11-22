@@ -1,0 +1,183 @@
+@model ViewModels.CommitteeInspectionResultPageVm
+@{
+    ViewData["Title"] = "نتيجة فحص اللجنة";
+    var isOutgoing = Model.Message == "صادر";
+    var isIncoming = Model.Message == "وارد";
+}
+
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i class="fa fa-file-text-o ml-2"></i>@Model.OutletName</h4>
+            <span class="text-muted">نتيجة فحص اللجنة</span>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4"><b>الرسالة:</b> @Model.Message</div>
+                <div class="col-md-4"><b>التاريخ:</b> @Model.DocumentDate.ToString("dd/MM/yyyy")</div>
+            </div>
+
+            <div id="resultMessage" class="alert d-none"></div>
+
+            <form id="inspectionForm" method="post">
+                @Html.AntiForgeryToken()
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="Serial">مسلسل:</label>
+                            <input id="Serial" name="Serial" type="number" min="0" value="0" class="form-control" />
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="RequestNumber">رقم طلب الفحص:</label>
+                            <input id="RequestNumber" name="RequestNumber" list="requestNumbers" value="@Model.RequestNumber" class="form-control" />
+                            <datalist id="requestNumbers">
+                                @foreach (var request in Model.Requests)
+                                {
+                                    <option value="@request.Name">@request.Name</option>
+                                }
+                            </datalist>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="Message">الرسالة:</label>
+                            <select id="Message" name="Message" class="form-control form-select">
+                                <option value="صادر" selected="@isOutgoing">صادر</option>
+                                <option value="وارد" selected="@isIncoming">وارد</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="CountryTypeId">نوع الدولة:</label>
+                            <select id="CountryTypeId" name="CountryTypeId" class="form-control form-select">
+                                @foreach (var option in Model.CountryTypes)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="Source">المصدر:</label>
+                            <input id="Source" name="Source" value="150" class="form-control" />
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="ProcedureId">الإجراء:</label>
+                            <select id="ProcedureId" name="ProcedureId" class="form-control form-select">
+                                <option value="">-- اختر --</option>
+                                @foreach (var option in Model.Procedures)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="TransportMeanId">النوع:</label>
+                            <select id="TransportMeanId" name="TransportMeanId" class="form-control form-select">
+                                @foreach (var option in Model.TransportMeans)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="ItemId">الصنف:</label>
+                            <select id="ItemId" name="ItemId" class="form-control form-select">
+                                @foreach (var option in Model.Items)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="OriginCountryId">المنشأ:</label>
+                            <select id="OriginCountryId" name="OriginCountryId" class="form-control form-select">
+                                @foreach (var option in Model.Countries)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="QuantityTon">الكمية بالطن:</label>
+                            <input id="QuantityTon" name="QuantityTon" type="number" step="0.001" min="0" value="50" class="form-control" />
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="InspectionResultId">نتيجة الفحص:</label>
+                            <select id="InspectionResultId" name="InspectionResultId" class="form-control form-select">
+                                @foreach (var option in Model.InspectionResults)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="InfectionTypeId">نوع الإصابة:</label>
+                            <select id="InfectionTypeId" name="InfectionTypeId" class="form-control form-select">
+                                <option value="">-- بدون --</option>
+                                @foreach (var option in Model.InfectionTypes)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="AidTypeId">نوع الإعانة:</label>
+                            <select id="AidTypeId" name="AidTypeId" class="form-control form-select">
+                                @foreach (var option in Model.AidTypes)
+                                {
+                                    <option value="@option.Id">@option.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="Notes">ملاحظات:</label>
+                    <textarea id="Notes" name="Notes" class="form-control" rows="4"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <button type="button" id="saveBtn" class="btn btn-warning">حفظ</button>
+            <button type="button" id="backBtn" class="btn btn-secondary">رجوع</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var $message = $('#resultMessage');
+            var saveUrl = '@Url.Action("Save", "ImCommittee_InspectionResult")';
+
+            function showResult(ok, text) {
+                $message.removeClass('alert-success alert-danger d-none')
+                        .addClass(ok ? 'alert-success' : 'alert-danger')
+                        .text(text);
+            }
+
+            $('#saveBtn').on('click', function () {
+                var $button = $(this).prop('disabled', true).text('جارٍ الحفظ...');
+                var form = document.getElementById('inspectionForm');
+                $.ajax({
+                    url: saveUrl,
+                    type: 'POST',
+                    data: new FormData(form),
+                    processData: false,
+                    contentType: false,
+                    headers: { RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }
+                }).done(function (result) {
+                    showResult(result.ok === true, result.message || (result.ok ? 'تم الحفظ' : 'تعذر الحفظ'));
+                }).fail(function (xhr) {
+                    var response = xhr.responseJSON;
+                    showResult(false, (response && response.message) || 'تعذر الحفظ');
+                }).always(function () {
+                    $button.text('حفظ').prop('disabled', false);
+                });
+            });
+
+            $('#backBtn').on('click', function () { history.back(); });
+        });
+    </script>
+}
