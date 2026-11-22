@@ -88,6 +88,39 @@ public class EmployeeStationAssignmentController : Controller
         return Json(history);
     }
 
+    [HttpGet("StationHistory")]
+    public async Task<IActionResult> StationHistory(long stationId,CancellationToken ct)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
+        await using var connection=new SqlConnection(_db);await connection.OpenAsync(ct);
+        await using var command=new SqlCommand("""
+            SELECT a.Id,u.EmpId EmployeeId,u.FullName EmployeeName,
+              COALESCE(NULLIF(o.Ar_Name,N''),o.En_Name,N'—') OutletName,
+              a.Date_From FromDate,a.Date_To ToDate,
+              CONVERT(bit,CASE WHEN a.IsActive=1 AND a.User_Deletion_Id IS NULL
+                AND (a.Date_From IS NULL OR a.Date_From<=CAST(GETDATE() AS date))
+                AND (a.Date_To IS NULL OR a.Date_To>=CAST(GETDATE() AS date)) THEN 1 ELSE 0 END) IsCurrent
+            FROM dbo.Station_Emp a
+            INNER JOIN dbPrivilage.dbo.PR_User u ON u.Id=a.Emp_Id
+            LEFT JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID
+            WHERE a.Station_Id=@StationId
+            ORDER BY IsCurrent DESC,a.Date_To DESC,a.Date_From DESC,a.Id DESC;
+            """,connection);
+        command.Parameters.Add("@StationId",SqlDbType.BigInt).Value=stationId;
+        var result=new List<object>();await using var reader=await command.ExecuteReaderAsync(ct);
+        while(await reader.ReadAsync(ct))result.Add(new
+        {
+            id=Convert.ToInt64(reader["Id"]),
+            employeeId=reader["EmployeeId"] is DBNull?null:(long?)Convert.ToInt64(reader["EmployeeId"]),
+            employeeName=Convert.ToString(reader["EmployeeName"])??string.Empty,
+            outletName=Convert.ToString(reader["OutletName"])??"—",
+            fromDate=reader["FromDate"] is DBNull?null:Convert.ToDateTime(reader["FromDate"]).ToString("yyyy-MM-dd"),
+            toDate=reader["ToDate"] is DBNull?null:Convert.ToDateTime(reader["ToDate"]).ToString("yyyy-MM-dd"),
+            isCurrent=Convert.ToBoolean(reader["IsCurrent"])
+        });
+        return Json(result);
+    }
+
     [HttpPost("Save")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Save(long outletId,long stationId,short employeeUserId,DateTime fromDate,DateTime toDate,CancellationToken ct)

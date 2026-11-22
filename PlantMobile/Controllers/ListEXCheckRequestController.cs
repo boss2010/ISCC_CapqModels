@@ -405,15 +405,23 @@ public class ListEXCheckRequestController : Controller
           COALESCE(NULLIF(committeeType.Name_Ar COLLATE DATABASE_DEFAULT,N''),N'لجنة صادر'),transactionData.OrderNumber COLLATE DATABASE_DEFAULT,
           transactionData.IsSuccess_Bank,CAST(NULL AS decimal(18,6)),CAST(NULL AS money),
           COALESCE(detail.Amount,transactionData.Amount_Total),CAST(NULL AS bit),transactionData.ID
-        FROM dbo.Fees_Transactions transactionData
+        FROM
+        (
+          SELECT directFee.ID,directFee.OrderNumber,directFee.IsSuccess_Bank,directFee.Amount_Total,directFee.Table_ID,directFee.TableName_ID
+          FROM dbo.Fees_Transactions directFee
+          WHERE directFee.TableName_ID=8 AND directFee.Table_ID=@Id AND directFee.User_Deletion_Id IS NULL
+          UNION ALL
+          SELECT committeeFee.ID,committeeFee.OrderNumber,committeeFee.IsSuccess_Bank,committeeFee.Amount_Total,committeeFee.Table_ID,committeeFee.TableName_ID
+          FROM dbo.Fees_Transactions committeeFee
+          INNER JOIN dbo.Ex_RequestCommittee requestCommittee ON requestCommittee.ID=committeeFee.Table_ID
+            AND requestCommittee.ExCheckRequest_ID=@Id AND requestCommittee.User_Deletion_Id IS NULL
+          WHERE committeeFee.TableName_ID=9 AND committeeFee.User_Deletion_Id IS NULL
+        ) transactionData
         LEFT JOIN dbo.Fees_Transactions_Detiles detail ON detail.Fees_Transactions_ID=transactionData.ID AND detail.User_Deletion_Id IS NULL
         LEFT JOIN dbo.Fees_Action action ON action.ID=detail.Fees_Action_ID
         LEFT JOIN dbo.FeesType feeType ON feeType.ID=action.FeesType_Id
         LEFT JOIN dbo.Ex_RequestCommittee committee ON committee.ID=transactionData.Table_ID AND transactionData.TableName_ID=9
         LEFT JOIN dbo.CommitteeType committeeType ON committeeType.ID=committee.CommitteeType_ID
-        WHERE transactionData.User_Deletion_Id IS NULL
-          AND ((transactionData.TableName_ID=8 AND transactionData.Table_ID=@Id)
-            OR (transactionData.TableName_ID=9 AND committee.ExCheckRequest_ID=@Id))
         ORDER BY SortId OPTION(RECOMPILE);
 
         SELECT DISTINCT employees.Id,employees.EmpId,employees.FullName,employees.Date_From,employees.Date_To FROM(
