@@ -1,0 +1,526 @@
+@model ViewModels.CommitteeInspectionResultListPageVm
+@{
+    ViewData["Title"] = "نتيجة فحص اللجنة - عرض الكل";
+    var f = Model.Filter;
+    var listUrl = Url.Action("List");
+    var current = f.Page;
+    var pageCount = Model.PageCount;
+    var start = Math.Max(1, current - 2);
+    var end = Math.Min(pageCount, current + 2);
+
+    var activeFilterCount = new object?[]
+    {
+        f.RequestNumber, f.DateFrom, f.DateTo, f.Message, f.OutletId, f.CountryTypeId,
+        f.ProcedureId, f.InspectionResultId, f.ItemId, f.OriginCountryId,
+        f.InfectionTypeId, f.AidTypeId, f.QuantityFrom, f.QuantityTo, f.Search
+    }.Count(v => v is not null && !string.IsNullOrWhiteSpace(v.ToString()));
+}
+
+@functions {
+    private string BuildQuery(int page)
+    {
+        var filter = Model.Filter;
+        var parts = new List<string>();
+        void Add(string key, object? value)
+        {
+            var text = value?.ToString();
+            if (!string.IsNullOrWhiteSpace(text))
+                parts.Add($"{key}={Uri.EscapeDataString(text)}");
+        }
+
+        Add("requestNumber", filter.RequestNumber);
+        Add("dateFrom", filter.DateFrom?.ToString("yyyy-MM-dd"));
+        Add("dateTo", filter.DateTo?.ToString("yyyy-MM-dd"));
+        Add("outletId", filter.OutletId);
+        Add("countryTypeId", filter.CountryTypeId);
+        Add("procedureId", filter.ProcedureId);
+        Add("inspectionResultId", filter.InspectionResultId);
+        Add("itemId", filter.ItemId);
+        Add("originCountryId", filter.OriginCountryId);
+        Add("infectionTypeId", filter.InfectionTypeId);
+        Add("aidTypeId", filter.AidTypeId);
+        Add("message", filter.Message);
+        Add("quantityFrom", filter.QuantityFrom);
+        Add("quantityTo", filter.QuantityTo);
+        Add("search", filter.Search);
+        parts.Add($"page={page}");
+        parts.Add($"pageSize={filter.PageSize}");
+        return string.Join("&", parts);
+    }
+}
+
+<style>
+    .pq-filter-card {
+        border: 1px solid #e3e8ef;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 2px 12px rgba(15, 23, 42, .05);
+        overflow: hidden;
+    }
+
+    .pq-filter-head {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        padding: .8rem 1rem;
+        background: linear-gradient(90deg, #f1f5fb 0%, #ffffff 75%);
+        border-bottom: 1px solid #edf1f6;
+        font-weight: 700;
+        color: #334155;
+        cursor: pointer;
+        user-select: none;
+    }
+
+        .pq-filter-head:hover { background: linear-gradient(90deg, #e9eff8 0%, #ffffff 75%); }
+
+        .pq-filter-head .pq-chevron {
+            margin-inline-start: auto;
+            color: #94a3b8;
+            transition: transform .2s ease;
+        }
+
+        .pq-filter-head[aria-expanded="false"] .pq-chevron { transform: rotate(180deg); }
+
+    .pq-filter-body { padding: 1rem 1rem 1.1rem; background: #fbfcfe; }
+
+    .pq-field label {
+        display: block;
+        font-size: .74rem;
+        font-weight: 700;
+        letter-spacing: .2px;
+        color: #64748b;
+        margin-bottom: .3rem;
+    }
+
+    .pq-field .form-control-sm,
+    .pq-field .form-select-sm {
+        border: 1px solid #dbe3ec;
+        border-radius: 9px;
+        background-color: #fff;
+        min-height: 34px;
+    }
+
+        .pq-field .form-control-sm:focus,
+        .pq-field .form-select-sm:focus {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 .18rem rgba(13, 110, 253, .12);
+        }
+
+    .pq-filter-actions {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+        padding-top: .9rem;
+        border-top: 1px dashed #e2e8f0;
+    }
+
+    .pq-results-bar {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+
+    .pq-table-wrap {
+        max-height: 64vh;
+        overflow: auto;
+        border: 1px solid #e3e8ef;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+        .pq-table-wrap table { margin-bottom: 0; }
+
+        .pq-table-wrap thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #1f2937 !important;
+            color: #fff;
+            font-size: .76rem;
+            font-weight: 700;
+            white-space: nowrap;
+            border-color: #334155 !important;
+        }
+
+        .pq-table-wrap tbody td { font-size: .82rem; vertical-align: middle; }
+
+    .pq-empty { padding: 3rem 1rem; text-align: center; color: #94a3b8; }
+        .pq-empty i { font-size: 2.1rem; display: block; margin-bottom: .6rem; color: #cbd5e1; }
+
+    .pq-pagination .page-link { border-radius: 8px; margin: 0 2px; border-color: #e2e8f0; color: #475569; }
+    .pq-pagination .page-item.active .page-link { background: #1f2937; border-color: #1f2937; }
+</style>
+
+<div class="container-fluid" dir="rtl">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2 py-3">
+            <h5 class="mb-0 text-slate-700">
+                <i class="fa fa-table text-primary ml-2"></i>نتيجة فحص اللجنة — عرض الكل
+            </h5>
+            <div class="d-flex gap-2">
+                <a asp-action="Index" class="btn btn-light btn-sm border">
+                    <i class="fa fa-pencil ml-1"></i>شاشة الإدخال
+                </a>
+                <button type="button" class="btn btn-success btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#printModal"
+                        data-toggle="modal" data-target="#printModal">
+                    <i class="fa fa-file-excel-o ml-1"></i>طباعة / CSV
+                </button>
+            </div>
+        </div>
+
+        <div class="card-body pt-3">
+            <div class="pq-filter-card mb-3">
+                <div class="pq-filter-head"
+                     data-bs-toggle="collapse" data-bs-target="#filterBody"
+                     data-toggle="collapse" data-target="#filterBody"
+                     role="button" aria-expanded="true" aria-controls="filterBody">
+                    <i class="fa fa-filter text-primary"></i>
+                    <span>الفلاتر</span>
+                    @if (activeFilterCount > 0)
+                    {
+                        <span class="badge rounded-pill bg-primary">@activeFilterCount مفعّل</span>
+                    }
+                    else
+                    {
+                        <span class="badge rounded-pill bg-light text-secondary border">بدون فلتر</span>
+                    }
+                    <i class="fa fa-chevron-up pq-chevron"></i>
+                </div>
+
+                <div class="collapse show" id="filterBody">
+                    <div class="pq-filter-body">
+                        <form id="filterForm" method="get" asp-action="List">
+                            <div class="row g-3">
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="requestNumber">رقم طلب الفحص</label>
+                                    <input id="requestNumber" name="requestNumber" value="@f.RequestNumber"
+                                           placeholder="مثال: 3620231019..." class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="dateFrom">التاريخ من</label>
+                                    <input id="dateFrom" name="dateFrom" type="date" value="@f.DateFrom?.ToString("yyyy-MM-dd")"
+                                           class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="dateTo">التاريخ إلى</label>
+                                    <input id="dateTo" name="dateTo" type="date" value="@f.DateTo?.ToString("yyyy-MM-dd")"
+                                           class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="message">الرسالة</label>
+                                    <select id="message" name="message" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        <option value="صادر" selected="@(f.Message == "صادر")">صادر</option>
+                                        <option value="وارد" selected="@(f.Message == "وارد")">وارد</option>
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="outletId">المنفذ</label>
+                                    <select id="outletId" name="outletId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.Outlets)
+                                        {
+                                            <option value="@option.Id" selected="@(f.OutletId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="countryTypeId">نوع الدولة</label>
+                                    <select id="countryTypeId" name="countryTypeId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.CountryTypes)
+                                        {
+                                            <option value="@option.Id" selected="@(f.CountryTypeId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="procedureId">الإجراء</label>
+                                    <select id="procedureId" name="procedureId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.Procedures)
+                                        {
+                                            <option value="@option.Id" selected="@(f.ProcedureId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="inspectionResultId">نتيجة الفحص</label>
+                                    <select id="inspectionResultId" name="inspectionResultId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.InspectionResults)
+                                        {
+                                            <option value="@option.Id" selected="@(f.InspectionResultId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="itemId">الصنف</label>
+                                    <select id="itemId" name="itemId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.Items)
+                                        {
+                                            <option value="@option.Id" selected="@(f.ItemId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="originCountryId">المنشأ</label>
+                                    <select id="originCountryId" name="originCountryId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.Countries)
+                                        {
+                                            <option value="@option.Id" selected="@(f.OriginCountryId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="infectionTypeId">نوع الإصابة</label>
+                                    <select id="infectionTypeId" name="infectionTypeId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.InfectionTypes)
+                                        {
+                                            <option value="@option.Id" selected="@(f.InfectionTypeId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="aidTypeId">نوع الإعانة</label>
+                                    <select id="aidTypeId" name="aidTypeId" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @foreach (var option in Model.AidTypes)
+                                        {
+                                            <option value="@option.Id" selected="@(f.AidTypeId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="quantityFrom">الكمية من (طن)</label>
+                                    <input id="quantityFrom" name="quantityFrom" type="number" step="0.001" min="0"
+                                           value="@f.QuantityFrom" placeholder="0" class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="quantityTo">الكمية إلى (طن)</label>
+                                    <input id="quantityTo" name="quantityTo" type="number" step="0.001" min="0"
+                                           value="@f.QuantityTo" placeholder="1000" class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-xxl-4 col-xl-6 col-lg-8 col-md-12 pq-field">
+                                    <label for="search">بحث عام</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white border-end-0"><i class="fa fa-search text-muted"></i></span>
+                                        <input id="search" name="search" value="@f.Search"
+                                               placeholder="رقم الطلب / المصدر / ملاحظات"
+                                               class="form-control form-control-sm border-start-0" />
+                                    </div>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="pageSize">حجم الصفحة</label>
+                                    <select id="pageSize" name="pageSize" class="form-select form-select-sm">
+                                        @foreach (var size in new[] { 25, 50, 100, 200 })
+                                        {
+                                            <option value="@size" selected="@(f.PageSize == size)">@size صف</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="pq-filter-actions">
+                                <button type="submit" class="btn btn-primary btn-sm px-4">
+                                    <i class="fa fa-search ml-1"></i>بحث
+                                </button>
+                                <a asp-action="List" class="btn btn-light btn-sm border">
+                                    <i class="fa fa-eraser ml-1"></i>مسح الفلاتر
+                                </a>
+                                <span class="text-muted small me-auto">
+                                    <i class="fa fa-info-circle ml-1"></i>الفلاتر تعمل مع بعضها (AND)
+                                </span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <div class="pq-results-bar">
+                    <span class="text-muted small">إجمالي النتائج</span>
+                    <span class="badge bg-dark px-3 py-2">@Model.Total</span>
+                    <span class="text-muted small">صفحة @current من @pageCount</span>
+                </div>
+                <div class="text-muted small">
+                    <i class="fa fa-file-excel-o ml-1"></i>الطباعة تُصدّر نتيجة الفلاتر الحالية إلى Excel
+                </div>
+            </div>
+
+            <div class="pq-table-wrap">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>مسلسل</th>
+                            <th>رقم طلب الفحص</th>
+                            <th>الرسالة</th>
+                            <th>نوع الدولة</th>
+                            <th>المصدر</th>
+                            <th>الإجراء</th>
+                            <th>النوع</th>
+                            <th>الصنف</th>
+                            <th>المنشأ</th>
+                            <th>الكمية بالطن</th>
+                            <th>نتيجة الفحص</th>
+                            <th>نوع الإصابة</th>
+                            <th>نوع الإعانة</th>
+                            <th>ملاحظات</th>
+                            <th>المنفذ</th>
+                            <th>التاريخ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Rows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="16">
+                                    <div class="pq-empty">
+                                        <i class="fa fa-inbox"></i>
+                                        لا توجد بيانات مطابقة للبحث
+                                        <div class="small mt-2">جرّب مسح الفلاتر أو تغيير نطاق التاريخ</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var row in Model.Rows)
+                            {
+                                <tr>
+                                    <td class="text-center">@row.Serial</td>
+                                    <td class="text-center">@row.CheckRequestNumber</td>
+                                    <td class="text-center">
+                                        <span class="badge @(row.Message == "وارد" ? "bg-info text-dark" : "bg-secondary")">@row.Message</span>
+                                    </td>
+                                    <td>@row.CountryTypeName</td>
+                                    <td class="text-center">@row.Source</td>
+                                    <td>@row.ProcedureName</td>
+                                    <td class="text-center">@row.TransportMeanName</td>
+                                    <td>@row.ItemName</td>
+                                    <td>@row.OriginCountryName</td>
+                                    <td class="text-center">@row.QuantityTon?.ToString("0.###")</td>
+                                    <td class="text-center">@row.InspectionResultName</td>
+                                    <td>@row.InfectionTypeName</td>
+                                    <td class="text-center">@row.AidTypeName</td>
+                                    <td style="max-width: 240px; white-space: normal;">@row.Notes</td>
+                                    <td>@row.OutletName</td>
+                                    <td class="text-center" style="white-space: nowrap;">@row.DocumentDate?.ToString("dd/MM/yyyy")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                <div class="text-muted small">
+                    عرض @Model.Rows.Count من @Model.Total صف
+                </div>
+                <nav aria-label="ترقيم الصفحات">
+                    <ul class="pagination pagination-sm mb-0 pq-pagination">
+                        <li class="page-item @(current <= 1 ? "disabled" : "")">
+                            <a class="page-link" href="@(listUrl)?@BuildQuery(1)" aria-label="الأولى">&laquo;</a>
+                        </li>
+                        <li class="page-item @(current <= 1 ? "disabled" : "")">
+                            <a class="page-link" href="@(listUrl)?@BuildQuery(current - 1)">السابق</a>
+                        </li>
+                        @for (var p = start; p <= end; p++)
+                        {
+                            <li class="page-item @(p == current ? "active" : "")">
+                                <a class="page-link" href="@(listUrl)?@BuildQuery(p)">@p</a>
+                            </li>
+                        }
+                        <li class="page-item @(current >= pageCount ? "disabled" : "")">
+                            <a class="page-link" href="@(listUrl)?@BuildQuery(current + 1)">التالي</a>
+                        </li>
+                        <li class="page-item @(current >= pageCount ? "disabled" : "")">
+                            <a class="page-link" href="@(listUrl)?@BuildQuery(pageCount)" aria-label="الأخيرة">&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="printModal" tabindex="-1" aria-labelledby="printModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="printModalLabel">اختر الأعمدة المطلوبة في ملف CSV</h5>
+                <button type="button" class="close btn-close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="إغلاق">&times;</button>
+            </div>
+            <div class="modal-body" dir="rtl">
+                <p class="text-muted small mb-2">
+                    الأعمدة غير المحددة لن تظهر في الملف. التصدير يطبق نفس الفلاتر الحالية.
+                </p>
+                <div class="mb-2 d-flex gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="selectAllCols">تحديد الكل</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="clearAllCols">إلغاء الكل</button>
+                </div>
+                <div class="row g-2">
+                    @foreach (var (key, header) in ViewModels.CommitteeInspectionResultExportColumns.All)
+                    {
+                        <div class="col-md-4 col-6">
+                            <div class="form-check">
+                                <input class="form-check-input print-col" type="checkbox" value="@key" id="col_@key" checked />
+                                <label class="form-check-label" for="col_@key">@header</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="exportStatus" class="text-muted small ml-auto"></span>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-success" id="exportBtn">
+                    <i class="fa fa-file-excel-o ml-1"></i>تصدير CSV
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            $('#selectAllCols').on('click', function () {
+                $('.print-col').prop('checked', true);
+            });
+
+            $('#clearAllCols').on('click', function () {
+                $('.print-col').prop('checked', false);
+            });
+
+            $('#exportBtn').on('click', function () {
+                var columns = $('.print-col:checked').map(function () { return this.value; }).get();
+                if (columns.length === 0) {
+                    alert('اختر عمود واحد على الأقل.');
+                    return;
+                }
+
+                // لا نستخدم URLSearchParams عشان يشتغل على المتصفحات القديمة والـ WebView
+                var parts = [];
+                var fields = $('#filterForm').serializeArray();
+                for (var i = 0; i < fields.length; i++) {
+                    if (fields[i].name === 'page' || fields[i].name === 'pageSize') continue;
+                    parts.push(encodeURIComponent(fields[i].name) + '=' + encodeURIComponent(fields[i].value || ''));
+                }
+                parts.push('columns=' + encodeURIComponent(columns.join(',')));
+
+                $('#exportStatus').text('جاري تجهيز الملف...');
+                window.location.href = '@Url.Action("ExportCsv")' + '?' + parts.join('&');
+            });
+        });
+    </script>
+}

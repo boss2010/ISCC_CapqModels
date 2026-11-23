@@ -7,9 +7,14 @@
 
 <div class="container-fluid">
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h4 class="mb-0"><i class="fa fa-file-text-o ml-2"></i>@Model.OutletName</h4>
-            <span class="text-muted">نتيجة فحص اللجنة</span>
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted">نتيجة فحص اللجنة</span>
+                <a asp-action="List" class="btn btn-outline-primary btn-sm">
+                    <i class="fa fa-table ml-1"></i>شاهد الكل
+                </a>
+            </div>
         </div>
         <div class="card-body">
             <div class="row mb-3">
