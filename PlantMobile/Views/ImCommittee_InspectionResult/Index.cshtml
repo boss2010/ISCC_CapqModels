@@ -36,6 +36,16 @@
                             <input id="RequestNumber" name="RequestNumber" type="text" value="@Model.RequestNumber" class="form-control" />
                         </div>
                         <div class="form-group mb-3">
+                            <label for="Company">الشركة:</label>
+                            <select id="Company" name="Company" class="form-control form-select">
+                                <option value="">-- اختر --</option>
+                                @foreach (var company in Model.Companies)
+                                {
+                                    <option value="@company.Value">@company.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
                             <label for="Message">الرسالة:</label>
                             <select id="Message" name="Message" class="form-control form-select">
                                 @if (!hasCurrentMessage && !string.IsNullOrWhiteSpace(Model.Message))

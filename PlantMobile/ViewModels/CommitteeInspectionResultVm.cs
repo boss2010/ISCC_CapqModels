@@ -17,6 +17,7 @@ public sealed class CommitteeInspectionResultPageVm
     public List<CommitteeInspectionResultOptionVm> InspectionResults { get; set; } = new();
     public List<CommitteeInspectionResultOptionVm> InfectionTypes { get; set; } = new();
     public List<CommitteeInspectionResultOptionVm> OperationTypes { get; set; } = new();
+    public List<CommitteeInspectionResultCompanyVm> Companies { get; set; } = new();
     public List<CommitteeInspectionResultOptionVm> Requests { get; set; } = new();
 }
 
@@ -31,6 +32,8 @@ public sealed class CommitteeInspectionResultSaveVm
     public long Serial { get; set; }
     public string RequestNumber { get; set; } = string.Empty;
     public string Message { get; set; } = "وارد";
+    /// <summary>Combined importer key: "ImporterType_Id:Importer_ID" (e.g. "6:2646").</summary>
+    public string? Company { get; set; }
     public long? CountryTypeId { get; set; }
     public string Source { get; set; } = string.Empty;
     public long? ProcedureId { get; set; }

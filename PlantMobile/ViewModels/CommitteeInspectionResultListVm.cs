@@ -63,6 +63,7 @@ public sealed class CommitteeInspectionResultRowVm
     public long Id { get; set; }
     public long? Serial { get; set; }
     public string CheckRequestNumber { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string CountryTypeName { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
@@ -88,6 +89,7 @@ public static class CommitteeInspectionResultExportColumns
     {
         ("serial", "مسلسل"),
         ("requestNumber", "رقم طلب الفحص"),
+        ("company", "الشركة"),
         ("message", "الرسالة"),
         ("countryType", "نوع الدولة"),
         ("source", "المصدر"),

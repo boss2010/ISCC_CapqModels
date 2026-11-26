@@ -118,6 +118,9 @@ public sealed class ImCommittee_InspectionResultController : Controller
                 Array.Empty<string>(), cancellationToken).ConfigureAwait(false)
         };
 
+        var userOutletId = await ReadUserOutletIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        model.Companies = await ReadEntryCompanyOptionsAsync(userOutletId, cancellationToken).ConfigureAwait(false);
+
         return View(model);
     }
 
@@ -284,12 +287,14 @@ public sealed class ImCommittee_InspectionResultController : Controller
             const string saveSql = """
                 DECLARE @Id bigint = NEXT VALUE FOR dbo.Im_Committee_Inspection_Result_SEQ;
                 INSERT dbo.Im_Committee_Inspection_Result
-                 (ID, Serial, Im_CheckRequest_ID, CheckRequest_Number, Message, CountryType_ID, Source,
+                 (ID, Serial, Im_CheckRequest_ID, CheckRequest_Number, Message, ImporterType_Id, Importer_ID,
+                  CountryType_ID, Source,
                   Procedure_ID, Transport_Mean_ID, Item_ID, Origin_Country_ID, Quantity_Ton,
                   Inspection_Result_ID, Infection_Type_Item_ID, AidType_ID, Notes, Outlet_ID,
                   Document_Date, User_Creation_Id, User_Creation_Date)
                 VALUES
-                 (@Id, @Serial, @RequestId, @RequestNumber, @Message, @CountryTypeId, @Source,
+                 (@Id, @Serial, @RequestId, @RequestNumber, @Message, @ImporterTypeId, @ImporterId,
+                  @CountryTypeId, @Source,
                   @ProcedureId, @TransportMeanId, @ItemId, @OriginCountryId, @QuantityTon,
                   @InspectionResultId, @InfectionTypeId, @AidTypeId, @Notes, @OutletId,
                   @Now, @UserId, @Now);
@@ -302,6 +307,9 @@ public sealed class ImCommittee_InspectionResultController : Controller
                 Add(command, "@RequestId", requestId);
                 Add(command, "@RequestNumber", requestNumber);
                 Add(command, "@Message", string.IsNullOrWhiteSpace(input.Message) ? "وارد" : input.Message);
+                var (importerType, importerId) = ParseCompanyKey(input.Company);
+                Add(command, "@ImporterTypeId", importerType);
+                Add(command, "@ImporterId", importerId);
                 Add(command, "@CountryTypeId", input.CountryTypeId);
                 Add(command, "@Source", input.Source ?? string.Empty);
                 Add(command, "@ProcedureId", input.ProcedureId);
@@ -358,6 +366,7 @@ public sealed class ImCommittee_InspectionResultController : Controller
         {
             ["serial"] = (9, r => XlsxCell.OfNumber(r.Serial)),
             ["requestNumber"] = (18, r => XlsxCell.OfText(r.CheckRequestNumber)),
+            ["company"] = (30, r => XlsxCell.OfText(r.CompanyName)),
             ["message"] = (9, r => XlsxCell.OfText(r.Message)),
             ["countryType"] = (18, r => XlsxCell.OfText(r.CountryTypeName)),
             ["source"] = (12, r => XlsxCell.OfText(r.Source)),
@@ -380,22 +389,9 @@ public sealed class ImCommittee_InspectionResultController : Controller
         filter.Message = string.IsNullOrWhiteSpace(filter.Message) ? null : filter.Message.Trim();
         filter.Search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim();
 
-        filter.CompanyImporterType = null;
-        filter.CompanyImporterId = null;
-        if (!string.IsNullOrWhiteSpace(filter.Company))
-        {
-            var company = filter.Company.Trim();
-            var separator = company.IndexOf(':');
-            if (separator > 0
-                && int.TryParse(company[..separator], NumberStyles.Integer, CultureInfo.InvariantCulture, out var importerType)
-                && long.TryParse(company[(separator + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var importerId)
-                && importerType is 6 or 7 or 8
-                && importerId > 0)
-            {
-                filter.CompanyImporterType = importerType;
-                filter.CompanyImporterId = importerId;
-            }
-        }
+        var (companyType, companyId) = ParseCompanyKey(filter.Company);
+        filter.CompanyImporterType = companyType;
+        filter.CompanyImporterId = companyId;
         if (filter.Page < 1)
             filter.Page = 1;
         if (filter.PageSize is not (25 or 50 or 100 or 200))
@@ -471,7 +467,7 @@ public sealed class ImCommittee_InspectionResultController : Controller
             model.Companies = await ReadCompanyOptionsAsync(0, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<CommitteeInspectionResultCompanyVm>> ReadCompanyOptionsAsync(
+    private Task<List<CommitteeInspectionResultCompanyVm>> ReadCompanyOptionsAsync(
         long outletId, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -493,6 +489,38 @@ public sealed class ImCommittee_InspectionResultController : Controller
             ORDER BY Name;
             """;
 
+        return ReadCompanyOptionsAsync(sql, outletId, cancellationToken);
+    }
+
+    /// <summary>Companies of the requests on the user's outlet (used by the entry screen).</summary>
+    private Task<List<CommitteeInspectionResultCompanyVm>> ReadEntryCompanyOptionsAsync(
+        long outletId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT
+                d.ImporterType_Id,
+                d.Importer_ID,
+                COALESCE(CASE d.ImporterType_Id
+                    WHEN 6 THEN cn.Name_Ar
+                    WHEN 7 THEN po.Name_Ar
+                    WHEN 8 THEN p.Name
+                END, N'') AS Name
+            FROM dbo.Im_CheckRequest_Data d
+            JOIN dbo.Im_CheckRequest req ON req.ID = d.Im_CheckRequest_ID
+            LEFT JOIN dbo.Company_National cn ON cn.ID = d.Importer_ID AND d.ImporterType_Id = 6
+            LEFT JOIN dbo.Public_Organization po ON po.ID = d.Importer_ID AND d.ImporterType_Id = 7
+            LEFT JOIN dbo.Person p ON p.ID = d.Importer_ID AND d.ImporterType_Id = 8
+            WHERE d.ImporterType_Id IN (6, 7, 8)
+              AND (@OutletId IS NULL OR req.Outlet_ID = @OutletId)
+            ORDER BY Name;
+            """;
+
+        return ReadCompanyOptionsAsync(sql, outletId, cancellationToken);
+    }
+
+    private async Task<List<CommitteeInspectionResultCompanyVm>> ReadCompanyOptionsAsync(
+        string sql, long outletId, CancellationToken cancellationToken)
+    {
         var options = new List<CommitteeInspectionResultCompanyVm>();
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -563,7 +591,12 @@ public sealed class ImCommittee_InspectionResultController : Controller
             SELECT r.ID, r.Serial, r.CheckRequest_Number, r.Message, r.CountryType_ID, r.Source,
                    r.Quantity_Ton, r.Notes, r.Document_Date, r.User_Creation_Date,
                    p.Name_AR, t.Ar_Name, i.Name_Ar, c.Ar_Name, cr.Name_Ar, inf.Name_Ar,
-                   o.Ar_Name, u.FullName, r.AidType_ID
+                   o.Ar_Name, u.FullName, r.AidType_ID,
+                   COALESCE(CASE r.ImporterType_Id
+                       WHEN 6 THEN cn.Name_Ar
+                       WHEN 7 THEN po.Name_Ar
+                       WHEN 8 THEN person.Name
+                   END, N'') AS CompanyName
             FROM dbo.Im_Committee_Inspection_Result r
             LEFT JOIN dbo.Im_CheckRequest_Lot_Result_Status p ON p.ID = r.Procedure_ID
             LEFT JOIN dbo.Transport_Mean t ON t.ID = r.Transport_Mean_ID
@@ -573,6 +606,9 @@ public sealed class ImCommittee_InspectionResultController : Controller
             LEFT JOIN dbo.Item inf ON inf.ID = r.Infection_Type_Item_ID
             LEFT JOIN dbo.Outlet o ON o.ID = r.Outlet_ID
             LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id = r.User_Creation_Id
+            LEFT JOIN dbo.Company_National cn ON cn.ID = r.Importer_ID AND r.ImporterType_Id = 6
+            LEFT JOIN dbo.Public_Organization po ON po.ID = r.Importer_ID AND r.ImporterType_Id = 7
+            LEFT JOIN dbo.Person person ON person.ID = r.Importer_ID AND r.ImporterType_Id = 8
             """);
         sql.Append(whereSql);
         sql.Append(" ORDER BY r.Document_Date DESC, r.ID DESC");
@@ -622,7 +658,8 @@ public sealed class ImCommittee_InspectionResultController : Controller
                 OutletName = Str(reader, 16),
                 CreatedBy = Str(reader, 17),
                 AidTypeName = CommitteeInspectionResultDefaults.AidTypes
-                    .FirstOrDefault(x => x.Id == aidTypeId)?.Name ?? string.Empty
+                    .FirstOrDefault(x => x.Id == aidTypeId)?.Name ?? string.Empty,
+                CompanyName = Str(reader, 19)
             });
         }
 
@@ -838,4 +875,26 @@ public sealed class ImCommittee_InspectionResultController : Controller
 
     private static void Add(SqlCommand command, string name, object? value) =>
         command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+
+    /// <summary>Parses "ImporterType_Id:Importer_ID" (e.g. "6:2646").</summary>
+    private static (int? Type, long? Id) ParseCompanyKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return (null, null);
+
+        var text = key.Trim();
+        var separator = text.IndexOf(':');
+        if (separator <= 0)
+            return (null, null);
+
+        if (!int.TryParse(text[..separator], NumberStyles.Integer, CultureInfo.InvariantCulture, out var type)
+            || !long.TryParse(text[(separator + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+            || type is not (6 or 7 or 8)
+            || id <= 0)
+        {
+            return (null, null);
+        }
+
+        return (type, id);
+    }
 }

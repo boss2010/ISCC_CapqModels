@@ -388,6 +388,7 @@
                         <tr>
                             <th>مسلسل</th>
                             <th>رقم طلب الفحص</th>
+                            <th>الشركة</th>
                             <th>الرسالة</th>
                             <th>نوع الدولة</th>
                             <th>المصدر</th>
@@ -408,7 +409,7 @@
                         @if (Model.Rows.Count == 0)
                         {
                             <tr>
-                                <td colspan="16">
+                                <td colspan="17">
                                     <div class="pq-empty">
                                         <i class="fa fa-inbox"></i>
                                         لا توجد بيانات مطابقة للبحث
@@ -424,6 +425,7 @@
                                 <tr>
                                     <td class="text-center">@row.Serial</td>
                                     <td class="text-center">@row.CheckRequestNumber</td>
+                                    <td>@row.CompanyName</td>
                                     <td class="text-center">
                                         <span class="badge @(row.Message == "وارد" ? "bg-info text-dark" : "bg-secondary")">@row.Message</span>
                                     </td>
