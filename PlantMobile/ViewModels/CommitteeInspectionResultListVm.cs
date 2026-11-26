@@ -15,6 +15,10 @@ public sealed class CommitteeInspectionResultFilterVm
     public long? InfectionTypeId { get; set; }
     public long? AidTypeId { get; set; }
     public string? Message { get; set; }
+    /// <summary>Combined importer key: "ImporterType_Id:Importer_ID" (e.g. "6:2646").</summary>
+    public string? Company { get; set; }
+    public int? CompanyImporterType { get; set; }
+    public long? CompanyImporterId { get; set; }
     public decimal? QuantityFrom { get; set; }
     public decimal? QuantityTo { get; set; }
     public string? Search { get; set; }
@@ -42,6 +46,15 @@ public sealed class CommitteeInspectionResultListPageVm
     public List<CommitteeInspectionResultOptionVm> Items { get; set; } = new();
     public List<CommitteeInspectionResultOptionVm> Countries { get; set; } = new();
     public List<CommitteeInspectionResultOptionVm> InfectionTypes { get; set; } = new();
+    public List<CommitteeInspectionResultOptionVm> OperationTypes { get; set; } = new();
+    public List<CommitteeInspectionResultCompanyVm> Companies { get; set; } = new();
+}
+
+/// <summary>One selectable importer/company in the filter (value is "type:id").</summary>
+public sealed class CommitteeInspectionResultCompanyVm
+{
+    public string Value { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
 }
 
 /// <summary>One row of the committee inspection result grid.</summary>

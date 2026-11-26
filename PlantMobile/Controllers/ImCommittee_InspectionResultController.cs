@@ -99,6 +99,15 @@ public sealed class ImCommittee_InspectionResultController : Controller
                 ORDER BY Name_Ar;
                 """,
                 Array.Empty<string>(), cancellationToken).ConfigureAwait(false),
+            OperationTypes = await ReadOptionsAsync(
+                """
+                SELECT CAST(ID AS bigint) AS Id, COALESCE(Name_Ar, N'') AS Name
+                FROM dbo.Im_OpertaionType
+                WHERE Name_Ar IS NOT NULL AND LTRIM(RTRIM(Name_Ar)) <> N''
+                  AND ISNULL(withPermission, 0) = 1
+                ORDER BY ID;
+                """,
+                Array.Empty<string>(), cancellationToken).ConfigureAwait(false),
             Requests = await ReadOptionsAsync(
                 """
                 SELECT TOP (200) CAST(ID AS bigint) AS Id, COALESCE(CheckRequest_Number, N'') AS Name
@@ -115,12 +124,12 @@ public sealed class ImCommittee_InspectionResultController : Controller
     [HttpGet("List")]
     public async Task<IActionResult> List([FromQuery] CommitteeInspectionResultFilterVm filter, CancellationToken cancellationToken)
     {
-        if (!TryReadUser(out _))
+        if (!TryReadUser(out var userId))
             return RedirectToAction("Index", "Login");
 
         NormalizeFilter(filter);
         var model = new CommitteeInspectionResultListPageVm { Filter = filter };
-        await LoadListOptionsAsync(model, cancellationToken).ConfigureAwait(false);
+        await LoadListOptionsAsync(model, userId, cancellationToken).ConfigureAwait(false);
 
         var result = await QueryRowsAsync(filter, cancellationToken, takeAll: false).ConfigureAwait(false);
         model.Rows = result.Rows;
@@ -292,7 +301,7 @@ public sealed class ImCommittee_InspectionResultController : Controller
                 Add(command, "@Serial", input.Serial);
                 Add(command, "@RequestId", requestId);
                 Add(command, "@RequestNumber", requestNumber);
-                Add(command, "@Message", string.IsNullOrWhiteSpace(input.Message) ? "صادر" : input.Message);
+                Add(command, "@Message", string.IsNullOrWhiteSpace(input.Message) ? "وارد" : input.Message);
                 Add(command, "@CountryTypeId", input.CountryTypeId);
                 Add(command, "@Source", input.Source ?? string.Empty);
                 Add(command, "@ProcedureId", input.ProcedureId);
@@ -370,13 +379,31 @@ public sealed class ImCommittee_InspectionResultController : Controller
         filter.RequestNumber = string.IsNullOrWhiteSpace(filter.RequestNumber) ? null : filter.RequestNumber.Trim();
         filter.Message = string.IsNullOrWhiteSpace(filter.Message) ? null : filter.Message.Trim();
         filter.Search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim();
+
+        filter.CompanyImporterType = null;
+        filter.CompanyImporterId = null;
+        if (!string.IsNullOrWhiteSpace(filter.Company))
+        {
+            var company = filter.Company.Trim();
+            var separator = company.IndexOf(':');
+            if (separator > 0
+                && int.TryParse(company[..separator], NumberStyles.Integer, CultureInfo.InvariantCulture, out var importerType)
+                && long.TryParse(company[(separator + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var importerId)
+                && importerType is 6 or 7 or 8
+                && importerId > 0)
+            {
+                filter.CompanyImporterType = importerType;
+                filter.CompanyImporterId = importerId;
+            }
+        }
         if (filter.Page < 1)
             filter.Page = 1;
         if (filter.PageSize is not (25 or 50 or 100 or 200))
             filter.PageSize = 50;
     }
 
-    private async Task LoadListOptionsAsync(CommitteeInspectionResultListPageVm model, CancellationToken cancellationToken)
+    private async Task LoadListOptionsAsync(
+        CommitteeInspectionResultListPageVm model, short userId, CancellationToken cancellationToken)
     {
         model.CountryTypes = CommitteeInspectionResultDefaults.CountryTypes;
         model.AidTypes = CommitteeInspectionResultDefaults.AidTypes;
@@ -426,6 +453,84 @@ public sealed class ImCommittee_InspectionResultController : Controller
             ORDER BY Name_Ar;
             """,
             Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+        model.OperationTypes = await ReadOptionsAsync(
+            """
+            SELECT CAST(ID AS bigint) AS Id, COALESCE(Name_Ar, N'') AS Name
+            FROM dbo.Im_OpertaionType
+            WHERE Name_Ar IS NOT NULL AND LTRIM(RTRIM(Name_Ar)) <> N''
+              AND ISNULL(withPermission, 0) = 1
+            ORDER BY ID;
+            """,
+            Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+
+        var effectiveOutletId = model.Filter.OutletId
+            ?? await ReadUserOutletIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        model.Companies = await ReadCompanyOptionsAsync(effectiveOutletId, cancellationToken).ConfigureAwait(false);
+        // لو أوتليت المستخدم لسه مالوش نتائج، نعرض شركات كل النتائج بدل قائمة فاضية.
+        if (model.Companies.Count == 0 && model.Filter.OutletId is null)
+            model.Companies = await ReadCompanyOptionsAsync(0, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<CommitteeInspectionResultCompanyVm>> ReadCompanyOptionsAsync(
+        long outletId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT DISTINCT
+                d.ImporterType_Id,
+                d.Importer_ID,
+                COALESCE(CASE d.ImporterType_Id
+                    WHEN 6 THEN cn.Name_Ar
+                    WHEN 7 THEN po.Name_Ar
+                    WHEN 8 THEN p.Name
+                END, N'') AS Name
+            FROM dbo.Im_Committee_Inspection_Result r
+            JOIN dbo.Im_CheckRequest_Data d ON d.Im_CheckRequest_ID = r.Im_CheckRequest_ID
+            LEFT JOIN dbo.Company_National cn ON cn.ID = d.Importer_ID AND d.ImporterType_Id = 6
+            LEFT JOIN dbo.Public_Organization po ON po.ID = d.Importer_ID AND d.ImporterType_Id = 7
+            LEFT JOIN dbo.Person p ON p.ID = d.Importer_ID AND d.ImporterType_Id = 8
+            WHERE d.ImporterType_Id IN (6, 7, 8)
+              AND (@OutletId IS NULL OR r.Outlet_ID = @OutletId)
+            ORDER BY Name;
+            """;
+
+        var options = new List<CommitteeInspectionResultCompanyVm>();
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+        command.Parameters.Add("@OutletId", System.Data.SqlDbType.BigInt).Value =
+            outletId > 0 ? outletId : (object)DBNull.Value;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var type = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+            var id = reader.IsDBNull(1) ? 0 : reader.GetInt64(1);
+            var name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2).Trim();
+            if (type == 0 || id == 0 || string.IsNullOrWhiteSpace(name))
+                continue;
+
+            options.Add(new CommitteeInspectionResultCompanyVm
+            {
+                Value = $"{type}:{id}",
+                Name = name
+            });
+        }
+
+        return options;
+    }
+
+    [HttpGet("Companies")]
+    public async Task<IActionResult> Companies([FromQuery] long? outletId, CancellationToken cancellationToken)
+    {
+        if (!TryReadUser(out var userId))
+            return Unauthorized();
+
+        var effectiveOutletId = outletId
+            ?? await ReadUserOutletIdAsync(userId, cancellationToken).ConfigureAwait(false);
+        var options = await ReadCompanyOptionsAsync(effectiveOutletId, cancellationToken).ConfigureAwait(false);
+        if (options.Count == 0 && !outletId.HasValue)
+            options = await ReadCompanyOptionsAsync(0, cancellationToken).ConfigureAwait(false);
+        return Json(options.Select(x => new { value = x.Value, text = x.Name }));
     }
 
     private async Task<(List<CommitteeInspectionResultRowVm> Rows, int Total)> QueryRowsAsync(
@@ -590,6 +695,18 @@ public sealed class ImCommittee_InspectionResultController : Controller
             sql.Append(" AND r.Message = @Message");
             parameters.Add(("@Message", filter.Message));
         }
+        if (filter.CompanyImporterType.HasValue && filter.CompanyImporterId.HasValue)
+        {
+            sql.Append("""
+                 AND EXISTS (
+                     SELECT 1 FROM dbo.Im_CheckRequest_Data d
+                     WHERE d.Im_CheckRequest_ID = r.Im_CheckRequest_ID
+                       AND d.ImporterType_Id = @CompanyImporterType
+                       AND d.Importer_ID = @CompanyImporterId)
+                """);
+            parameters.Add(("@CompanyImporterType", filter.CompanyImporterType.Value));
+            parameters.Add(("@CompanyImporterId", filter.CompanyImporterId.Value));
+        }
         if (filter.QuantityFrom.HasValue)
         {
             sql.Append(" AND r.Quantity_Ton >= @QuantityFrom");
@@ -689,12 +806,21 @@ public sealed class ImCommittee_InspectionResultController : Controller
         }
     }
 
-    private static async Task<long> ReadUserOutletIdAsync(
-        short userId, SqlConnection connection, SqlTransaction transaction, CancellationToken cancellationToken)
+    private async Task<long> ReadUserOutletIdAsync(short userId, CancellationToken cancellationToken)
     {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await ReadUserOutletIdAsync(userId, connection, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<long> ReadUserOutletIdAsync(
+        short userId, SqlConnection connection, SqlTransaction? transaction, CancellationToken cancellationToken)
+    {
+        // PR_User.Outlet_ID stores dbo.Outlet.ID_HR; the result tables use dbo.Outlet.ID.
         const string sql = """
-            SELECT TOP (1) COALESCE([user].Outlet_ID, 0)
+            SELECT TOP (1) COALESCE(outlet.ID, 0)
             FROM dbPrivilage.dbo.PR_User [user]
+            LEFT JOIN dbo.Outlet outlet ON outlet.ID_HR = [user].Outlet_ID
             WHERE [user].Id = @UserId;
             """;
         await using var command = new SqlCommand(sql, connection, transaction);

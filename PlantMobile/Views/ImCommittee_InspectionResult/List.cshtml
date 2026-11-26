@@ -7,10 +7,14 @@
     var pageCount = Model.PageCount;
     var start = Math.Max(1, current - 2);
     var end = Math.Min(pageCount, current + 2);
+    var hasCurrentMessage = !string.IsNullOrWhiteSpace(f.Message)
+        && !Model.OperationTypes.Any(x => x.Name == f.Message);
+    var hasCurrentCompany = !string.IsNullOrWhiteSpace(f.Company)
+        && !Model.Companies.Any(x => x.Value == f.Company);
 
     var activeFilterCount = new object?[]
     {
-        f.RequestNumber, f.DateFrom, f.DateTo, f.Message, f.OutletId, f.CountryTypeId,
+        f.RequestNumber, f.DateFrom, f.DateTo, f.Message, f.Company, f.OutletId, f.CountryTypeId,
         f.ProcedureId, f.InspectionResultId, f.ItemId, f.OriginCountryId,
         f.InfectionTypeId, f.AidTypeId, f.QuantityFrom, f.QuantityTo, f.Search
     }.Count(v => v is not null && !string.IsNullOrWhiteSpace(v.ToString()));
@@ -40,6 +44,7 @@
         Add("infectionTypeId", filter.InfectionTypeId);
         Add("aidTypeId", filter.AidTypeId);
         Add("message", filter.Message);
+        Add("company", filter.Company);
         Add("quantityFrom", filter.QuantityFrom);
         Add("quantityTo", filter.QuantityTo);
         Add("search", filter.Search);
@@ -211,11 +216,17 @@
                                            class="form-control form-control-sm" />
                                 </div>
                                 <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
-                                    <label for="message">الرسالة</label>
+                                    <label for="message" id="messageLabel">الرسالة</label>
                                     <select id="message" name="message" class="form-select form-select-sm">
                                         <option value="">الكل</option>
-                                        <option value="صادر" selected="@(f.Message == "صادر")">صادر</option>
-                                        <option value="وارد" selected="@(f.Message == "وارد")">وارد</option>
+                                        @if (hasCurrentMessage)
+                                        {
+                                            <option value="@f.Message" selected>@f.Message</option>
+                                        }
+                                        @foreach (var option in Model.OperationTypes)
+                                        {
+                                            <option value="@option.Name" selected="@(f.Message == option.Name)">@option.Name</option>
+                                        }
                                     </select>
                                 </div>
                                 <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
@@ -225,6 +236,20 @@
                                         @foreach (var option in Model.Outlets)
                                         {
                                             <option value="@option.Id" selected="@(f.OutletId == option.Id)">@option.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6 pq-field">
+                                    <label for="company">الشركة</label>
+                                    <select id="company" name="company" class="form-select form-select-sm">
+                                        <option value="">الكل</option>
+                                        @if (hasCurrentCompany)
+                                        {
+                                            <option value="@f.Company" selected>شركة #@f.Company</option>
+                                        }
+                                        @foreach (var company in Model.Companies)
+                                        {
+                                            <option value="@company.Value" selected="@(f.Company == company.Value)">@company.Name</option>
                                         }
                                     </select>
                                 </div>
@@ -494,6 +519,31 @@
 @section Scripts {
     <script>
         $(function () {
+            function syncMessageLabel() {
+                var value = $('#message').val();
+                $('#messageLabel').text(value ? 'الرسالة: ' + value : 'الرسالة');
+            }
+            $('#message').on('change', syncMessageLabel);
+            syncMessageLabel();
+
+            $('#outletId').on('change', function () {
+                var outletId = $(this).val();
+                var previous = $('#company').val();
+                $.getJSON('@Url.Action("Companies")', { outletId: outletId || null })
+                    .done(function (items) {
+                        var $company = $('#company').empty();
+                        $company.append($('<option>').val('').text('الكل'));
+                        $.each(items || [], function (_, item) {
+                            $company.append($('<option>').val(item.value).text(item.text));
+                        });
+                        if (previous) {
+                            $company.val(previous);
+                            if ($company.val() !== previous)
+                                $company.val('');
+                        }
+                    });
+            });
+
             $('#selectAllCols').on('click', function () {
                 $('.print-col').prop('checked', true);
             });

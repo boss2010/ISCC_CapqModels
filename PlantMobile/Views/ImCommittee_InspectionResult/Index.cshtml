@@ -1,8 +1,7 @@
 @model ViewModels.CommitteeInspectionResultPageVm
 @{
     ViewData["Title"] = "نتيجة فحص اللجنة";
-    var isOutgoing = Model.Message == "صادر";
-    var isIncoming = Model.Message == "وارد";
+    var hasCurrentMessage = Model.OperationTypes.Any(x => x.Name == Model.Message);
 }
 
 <div class="container-fluid">
@@ -18,7 +17,7 @@
         </div>
         <div class="card-body">
             <div class="row mb-3">
-                <div class="col-md-4"><b>الرسالة:</b> @Model.Message</div>
+                <div class="col-md-4"><b>الرسالة:</b> <span id="messageSummary">@Model.Message</span></div>
                 <div class="col-md-4"><b>التاريخ:</b> @Model.DocumentDate.ToString("dd/MM/yyyy")</div>
             </div>
 
@@ -34,19 +33,19 @@
                         </div>
                         <div class="form-group mb-3">
                             <label for="RequestNumber">رقم طلب الفحص:</label>
-                            <input id="RequestNumber" name="RequestNumber" list="requestNumbers" value="@Model.RequestNumber" class="form-control" />
-                            <datalist id="requestNumbers">
-                                @foreach (var request in Model.Requests)
-                                {
-                                    <option value="@request.Name">@request.Name</option>
-                                }
-                            </datalist>
+                            <input id="RequestNumber" name="RequestNumber" type="text" value="@Model.RequestNumber" class="form-control" />
                         </div>
                         <div class="form-group mb-3">
                             <label for="Message">الرسالة:</label>
                             <select id="Message" name="Message" class="form-control form-select">
-                                <option value="صادر" selected="@isOutgoing">صادر</option>
-                                <option value="وارد" selected="@isIncoming">وارد</option>
+                                @if (!hasCurrentMessage && !string.IsNullOrWhiteSpace(Model.Message))
+                                {
+                                    <option value="@Model.Message" selected>@Model.Message</option>
+                                }
+                                @foreach (var option in Model.OperationTypes)
+                                {
+                                    <option value="@option.Name" selected="@(Model.Message == option.Name)">@option.Name</option>
+                                }
                             </select>
                         </div>
                         <div class="form-group mb-3">
@@ -155,6 +154,10 @@
         $(function () {
             var $message = $('#resultMessage');
             var saveUrl = '@Url.Action("Save", "ImCommittee_InspectionResult")';
+
+            $('#Message').on('change', function () {
+                $('#messageSummary').text($(this).val());
+            });
 
             function showResult(ok, text) {
                 $message.removeClass('alert-success alert-danger d-none')
