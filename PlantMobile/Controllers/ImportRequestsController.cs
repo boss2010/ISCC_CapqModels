@@ -232,7 +232,12 @@ public class ImportRequestsController : Controller
           CASE c.CommitteeType_ID WHEN 1 THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult x WHERE x.Committee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.CommitteeResultType_ID IS NOT NULL)
             WHEN 2 THEN (SELECT COUNT(*) FROM dbo.Ex_CommitteeResult x WHERE x.Committee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.CommitteeResultType_ID IS NOT NULL)
             WHEN 3 THEN (SELECT COUNT(*) FROM dbo.Ex_CheckRequest_SampleData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.WithdrawDate IS NOT NULL AND x.SampleSize>0)
-            WHEN 6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.User_Updation_Date IS NOT NULL) ELSE 0 END WorkCount
+            WHEN 6 THEN (SELECT COUNT(*) FROM dbo.Ex_Request_TreatmentData x WHERE x.Ex_RequestCommittee_ID=c.ID AND x.User_Deletion_Id IS NULL AND x.User_Updation_Date IS NOT NULL) ELSE 0 END WorkCount,
+          (SELECT STRING_AGG(CONVERT(nvarchar(max),CONCAT(COALESCE(NULLIF(lot.Lot_Number,N''),CONVERT(nvarchar(30),lot.ID)),N': ',CASE WHEN transfer.Lot_ID IS NOT NULL THEN N'محول إلى الجشني' ELSE N'في مرحلة الفحص' END)),N'|')
+             FROM dbo.Ex_CheckRequest_Items_Lot_Category lot
+             JOIN dbo.Ex_CheckRequest_Items item ON item.ID=lot.Ex_CheckRequest_Items_ID AND item.Ex_CheckRequest_ID=c.ExCheckRequest_ID
+             LEFT JOIN dbo.Ex_CheckRequest_Genshi_Transfer transfer ON transfer.Ex_CheckRequest_ID=c.ExCheckRequest_ID AND transfer.Lot_ID=lot.ID AND transfer.IsActive=1
+            WHERE lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL) ExportLotStatuses
         FROM dbo.Ex_RequestCommittee c
         JOIN dbo.CommitteeEmployee ce ON ce.Committee_ID=c.ID AND ce.Employee_Id=@UserId AND ce.OperationType=73 AND ce.User_Deletion_Id IS NULL
         JOIN dbo.Ex_CheckRequest r ON r.ID=c.ExCheckRequest_ID
@@ -253,7 +258,30 @@ public class ImportRequestsController : Controller
             await using var reader=await command.ExecuteReaderAsync();var row=0;while(await reader.ReadAsync())
             {
                 bool finished=reader.GetBoolean(7)||reader.GetBoolean(8),canceled=!reader.IsDBNull(9),started=reader.GetInt32(11)>0;string key=canceled?"canceled":finished?"completed":started?"working":"new";
-                result.Add(new(){Row_Num=++row,IsExport=1,Committee_ID=reader.GetInt64(0),checkRequest_Id=reader.GetInt64(1),CheckRequest_Number=Convert.ToString(reader[2])??"",CompanyName=Convert.ToString(reader[3])??"غير محدد",Committee_Type_Id=Convert.ToByte(reader[4]),Committee_Type_Name=Convert.ToString(reader[5])??"",IsAdmin=reader.GetBoolean(6),IsReadOnly=finished||canceled,WorkStatusKey=key,WorkStatusName=key switch{"completed"=>"تم الانتهاء","working"=>"جاري العمل","canceled"=>"ملغي",_=>"جديد"},RequestCommittee_Status=key,RequiresCommitteeCompletion=!finished&&!canceled,CommitteeMembers=Convert.ToString(reader[10])??""});
+                result.Add(new(){Row_Num=++row,IsExport=1,Committee_ID=reader.GetInt64(0),checkRequest_Id=reader.GetInt64(1),CheckRequest_Number=Convert.ToString(reader[2])??"",CompanyName=Convert.ToString(reader[3])??"غير محدد",Committee_Type_Id=Convert.ToByte(reader[4]),Committee_Type_Name=Convert.ToString(reader[5])??"",IsAdmin=reader.GetBoolean(6),IsReadOnly=finished||canceled,WorkStatusKey=key,WorkStatusName=key switch{"completed"=>"تم الانتهاء","working"=>"جاري العمل","canceled"=>"ملغي",_=>"جديد"},RequestCommittee_Status=key,RequiresCommitteeCompletion=!finished&&!canceled,CommitteeMembers=Convert.ToString(reader[10])??"",ExportLotStatuses=reader.IsDBNull(12)?"":reader.GetString(12)});
+            }
+            await reader.CloseAsync();
+            if(checkRequestId.HasValue)
+            {
+                const string lotsSql="""
+                SELECT lot.ID,COALESCE(NULLIF(lot.Lot_Number,N''),CONVERT(nvarchar(30),lot.ID)) LotNumber,
+                  COALESCE(NULLIF(shortName.ShortName_Ar,N''),shortName.ShortName_En,N'—') ItemName,
+                  resultType.Name_Ar ResultName,
+                  CONVERT(bit,CASE WHEN latest.CommitteeResultType_ID=1 AND ISNULL(latest.IsFinishedAll,0)=1 AND transfer.Lot_ID IS NULL THEN 1 ELSE 0 END) CanTransfer,
+                  CONVERT(bit,CASE WHEN transfer.Lot_ID IS NULL THEN 0 ELSE 1 END) IsTransferred
+                FROM dbo.Ex_CheckRequest_Items_Lot_Category lot
+                JOIN dbo.Ex_CheckRequest_Items item ON item.ID=lot.Ex_CheckRequest_Items_ID AND item.Ex_CheckRequest_ID=@RequestId
+                LEFT JOIN dbo.Item_ShortName shortName ON shortName.ID=item.Item_ShortName_ID
+                OUTER APPLY(SELECT TOP(1) result.CommitteeResultType_ID,committee.IsFinishedAll
+                  FROM dbo.Ex_CommitteeResult result JOIN dbo.Ex_RequestCommittee committee ON committee.ID=result.Committee_ID
+                  WHERE result.LotData_ID=lot.ID AND committee.ExCheckRequest_ID=@RequestId AND committee.CommitteeType_ID=1
+                    AND result.User_Deletion_Id IS NULL AND committee.User_Deletion_Id IS NULL AND ISNULL(committee.Is_Cancel,0)=0
+                  ORDER BY result.ID DESC) latest
+                LEFT JOIN dbo.CommitteeResultType resultType ON resultType.ID=latest.CommitteeResultType_ID
+                LEFT JOIN dbo.Ex_CheckRequest_Genshi_Transfer transfer ON transfer.Ex_CheckRequest_ID=@RequestId AND transfer.Lot_ID=lot.ID AND transfer.IsActive=1
+                WHERE lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL ORDER BY lot.ID;
+                """;
+                var lots=new List<ExportGenshiTransferLotVm>();await using var lotsCommand=new SqlCommand(lotsSql,connection);lotsCommand.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=checkRequestId.Value;await using var lotsReader=await lotsCommand.ExecuteReaderAsync();while(await lotsReader.ReadAsync())lots.Add(new(){Id=lotsReader.GetInt64(0),LotNumber=Convert.ToString(lotsReader[1])??"",ItemName=Convert.ToString(lotsReader[2])??"",ResultName=lotsReader.IsDBNull(3)?"لم تظهر نتيجة الفحص":lotsReader.GetString(3),CanTransfer=lotsReader.GetBoolean(4),IsTransferred=lotsReader.GetBoolean(5)});ViewBag.ExportGenshiLots=lots;
             }
             ViewBag.SelectedDate=selectedDate.ToString("yyyy-MM-dd");ViewBag.UserId=userId;ViewBag.EmployeeId=employeeId;ViewBag.UserName=HttpContext.Session.GetString("UserName");ViewBag.CheckRequestId=checkRequestId;ViewBag.IsExportTab=true;
         }
@@ -430,6 +458,16 @@ public class ImportRequestsController : Controller
         return View("Index", requests);
     }
 
+}
+
+public sealed class ExportGenshiTransferLotVm
+{
+    public long Id { get; set; }
+    public string LotNumber { get; set; }=string.Empty;
+    public string ItemName { get; set; }=string.Empty;
+    public string ResultName { get; set; }=string.Empty;
+    public bool CanTransfer { get; set; }
+    public bool IsTransferred { get; set; }
 }
 
 public class RequestQuarantineVm { public long CheckRequestId {get;set;} public string RequestNumber {get;set;}=string.Empty; public List<RequestQuarantineLotVm> Lots {get;set;}=new(); public List<RequestQuarantineStatusVm> Statuses {get;set;}=new(); }

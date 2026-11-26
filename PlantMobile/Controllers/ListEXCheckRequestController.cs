@@ -66,15 +66,20 @@ public class ListEXCheckRequestController : Controller
     [HttpGet("")]
     [HttpGet("Index")]
     public async Task<IActionResult> Index(string? requestNumber, DateTime? fromDate, DateTime? toDate,
-        int status = 0, int page = 1, long? stationId = null, CancellationToken cancellationToken = default)
+        int status = 0, int page = 1, long? stationId = null,string? tab=null,CancellationToken cancellationToken = default)
     {
         if (HttpContext.Session.GetString("UserSession") != "Authenticated")
             return RedirectToAction("Index", "Login");
         if (!await HasOperationalAccessAsync(cancellationToken))
             return Forbid();
 
+        short currentUserId=short.TryParse(HttpContext.Session.GetString("UserId"),out var listUserId)?listUserId:(short)0;
+        var canViewUnstaffed=await IsExporterServiceUserAsync(currentUserId,cancellationToken);
+        var unstaffedOnly=canViewUnstaffed&&string.Equals(tab,"unstaffed",StringComparison.OrdinalIgnoreCase);
         var model = new ExportInspectionRequestListVm
         {
+            CanViewUnstaffedStations=canViewUnstaffed,
+            UnstaffedStationsOnly=unstaffedOnly,
             RequestNumber = requestNumber?.Trim() ?? string.Empty,
             FromDate = fromDate?.Date,
             ToDate = toDate?.Date,
@@ -85,8 +90,7 @@ public class ListEXCheckRequestController : Controller
         if (model.FromDate.HasValue && model.ToDate.HasValue && model.FromDate > model.ToDate)
             (model.FromDate, model.ToDate) = (model.ToDate, model.FromDate);
 
-        short currentUserId=short.TryParse(HttpContext.Session.GetString("UserId"),out var listUserId)?listUserId:(short)0;
-        try { await LoadListAsync(model, currentUserId, true, cancellationToken); }
+        try { await LoadListAsync(model,currentUserId,!unstaffedOnly,cancellationToken); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load export inspection requests; TraceId={TraceId}", HttpContext.TraceIdentifier);
@@ -111,6 +115,7 @@ public class ListEXCheckRequestController : Controller
         try
         {
             var model = await LoadDetailsAsync(id, cancellationToken);
+            if(model is not null)await ApplyStageAccessAsync(model,currentUserId,cancellationToken);
             return model is null ? NotFound() : View(model);
         }
         catch (Exception ex)
@@ -186,7 +191,24 @@ public class ListEXCheckRequestController : Controller
           examinationStation.Ar_Name Station_Examination_Name,
           COALESCE(genshiOutlet.Ar_Name,genshiPortOutlet.Ar_Name) Outlet_Genshi_Name,
           genshiStation.Ar_Name Station_Genshi_Name,
-          place.Station_Examination_ID,request.IsAccepted,request.IsPaid,
+          place.Station_Examination_ID,place.Station_Genshi_ID,
+          CONVERT(bit,CASE WHEN place.Station_Examination_ID IS NOT NULL AND NOT EXISTS
+          (
+            SELECT 1 FROM dbo.Station_Emp inspectionEmployee
+            WHERE inspectionEmployee.Station_Id=place.Station_Examination_ID AND inspectionEmployee.IsActive=1
+              AND inspectionEmployee.User_Deletion_Id IS NULL
+              AND (inspectionEmployee.Date_From IS NULL OR inspectionEmployee.Date_From<=CAST(GETDATE() AS date))
+              AND (inspectionEmployee.Date_To IS NULL OR inspectionEmployee.Date_To>=CAST(GETDATE() AS date))
+          ) THEN 1 ELSE 0 END) ExaminationStationHasNoEmployees,
+          CONVERT(bit,CASE WHEN place.Station_Genshi_ID IS NOT NULL AND NOT EXISTS
+          (
+            SELECT 1 FROM dbo.Station_Emp genshiEmployee
+            WHERE genshiEmployee.Station_Id=place.Station_Genshi_ID AND genshiEmployee.IsActive=1
+              AND genshiEmployee.User_Deletion_Id IS NULL
+              AND (genshiEmployee.Date_From IS NULL OR genshiEmployee.Date_From<=CAST(GETDATE() AS date))
+              AND (genshiEmployee.Date_To IS NULL OR genshiEmployee.Date_To>=CAST(GETDATE() AS date))
+          ) THEN 1 ELSE 0 END) GenshiStationHasNoEmployees,
+          request.IsAccepted,request.IsPaid,
           ISNULL(finalResult.ResultCount,0) Closed_Request,ISNULL(finalResult.Ex_Final_Result_ID,0) Final_Result_ID,
           ISNULL(finalResult.Final_Result_Name,N'') Final_Result_Name
         INTO #Results
@@ -219,12 +241,16 @@ public class ListEXCheckRequestController : Controller
           AND (@FromDate IS NULL OR request.User_Creation_Date>=@FromDate)
           AND (@ToDate IS NULL OR request.User_Creation_Date<DATEADD(day,1,@ToDate))
           AND (@StationId IS NULL OR place.Station_Examination_ID=@StationId)
+          AND (@UnstaffedOnly=0 OR
+            (place.Station_Examination_ID IS NOT NULL AND NOT EXISTS(SELECT 1 FROM dbo.Station_Emp se WHERE se.Station_Id=place.Station_Examination_ID AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date))))
+            OR (place.Station_Genshi_ID IS NOT NULL AND NOT EXISTS(SELECT 1 FROM dbo.Station_Emp sg WHERE sg.Station_Id=place.Station_Genshi_ID AND sg.IsActive=1 AND sg.User_Deletion_Id IS NULL AND (sg.Date_From IS NULL OR sg.Date_From<=CAST(GETDATE() AS date)) AND (sg.Date_To IS NULL OR sg.Date_To>=CAST(GETDATE() AS date)))))
           AND (@Status=0 OR (@Status=1 AND ISNULL(finalResult.Ex_Final_Result_ID,0)=0 AND ISNULL(finalResult.ResultCount,0)=0)
              OR (@Status=2 AND ISNULL(finalResult.Ex_Final_Result_ID,0)>0) OR (@Status=3 AND ISNULL(finalResult.ResultCount,0)>0));
         SELECT COUNT(*) FROM #Results;
         SELECT RowNumber,Ex_CheckRequest_ID,ImCheckRequest_Number,Creation_Date,ExportCountryName,
           ImporterTypeName,ImporterName,Outlet_Examination_Name,Station_Examination_Name,
-          Outlet_Genshi_Name,Station_Genshi_Name,IsAccepted,IsPaid,ISNULL(Closed_Request,0) Closed_Request,
+          Outlet_Genshi_Name,Station_Genshi_Name,Station_Examination_ID,Station_Genshi_ID,
+          ExaminationStationHasNoEmployees,GenshiStationHasNoEmployees,IsAccepted,IsPaid,ISNULL(Closed_Request,0) Closed_Request,
           ISNULL(Final_Result_ID,0) Final_Result_ID,Final_Result_Name
         FROM #Results WHERE RowNumber BETWEEN ((@Page-1)*@PageSize)+1 AND @Page*@PageSize
         ORDER BY RowNumber OPTION(RECOMPILE);
@@ -237,6 +263,7 @@ public class ListEXCheckRequestController : Controller
         command.Parameters.Add("@ToDate", SqlDbType.Date).Value = model.ToDate ?? (object)DBNull.Value;
         command.Parameters.Add("@Status", SqlDbType.Int).Value = model.Status;
         command.Parameters.Add("@StationId",SqlDbType.BigInt).Value=model.StationId??(object)DBNull.Value;
+        command.Parameters.Add("@UnstaffedOnly",SqlDbType.Bit).Value=model.UnstaffedStationsOnly;
         command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
         command.Parameters.Add("@RestrictToUser",SqlDbType.Bit).Value=restrictToUser;
         command.Parameters.Add("@Page", SqlDbType.Int).Value = model.Page;
@@ -255,6 +282,10 @@ public class ListEXCheckRequestController : Controller
                 ImporterName = Text(reader, "ImporterName"), IsAccepted = Bool(reader, "IsAccepted"), IsPaid = Bool(reader, "IsPaid"),
                 ExaminationPlace = JoinPlace(Text(reader, "Outlet_Examination_Name"), Text(reader, "Station_Examination_Name")),
                 GenshiPlace = JoinPlace(Text(reader, "Outlet_Genshi_Name"), Text(reader, "Station_Genshi_Name")),
+                ExaminationStationId=reader["Station_Examination_ID"] is DBNull?null:Convert.ToInt64(reader["Station_Examination_ID"]),
+                GenshiStationId=reader["Station_Genshi_ID"] is DBNull?null:Convert.ToInt64(reader["Station_Genshi_ID"]),
+                ExaminationStationHasNoEmployees=Convert.ToBoolean(reader["ExaminationStationHasNoEmployees"]),
+                GenshiStationHasNoEmployees=Convert.ToBoolean(reader["GenshiStationHasNoEmployees"]),
                 ClosedRequest = Convert.ToInt32(reader["Closed_Request"]), FinalResultId = Convert.ToInt32(reader["Final_Result_ID"]),
                 FinalResultName = Text(reader, "Final_Result_Name")
             });
@@ -484,6 +515,9 @@ public class ListEXCheckRequestController : Controller
         LEFT JOIN dbPrivilage.dbo.PR_User u ON u.Id=ce.Employee_Id
         WHERE c.ExCheckRequest_ID=@Id AND c.CommitteeType_ID IN(1,2,3,6) AND c.User_Deletion_Id IS NULL
         GROUP BY c.ID,c.CommitteeType_ID,ct.Name_Ar,c.Delegation_Date ORDER BY c.ID DESC OPTION(RECOMPILE);
+
+        SELECT Lot_ID FROM dbo.Ex_CheckRequest_Genshi_Transfer
+        WHERE Ex_CheckRequest_ID=@Id AND IsActive=1 AND Lot_ID IS NOT NULL;
         """;
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(ct);
@@ -547,6 +581,8 @@ public class ListEXCheckRequestController : Controller
         while(await reader.ReadAsync(ct)) model.ShiftTimings.Add(new ExportShiftTimingVm { Id=Convert.ToByte(reader["ID"]),Name=Text(reader,"Name_Ar"),Amount=Convert.ToDecimal(reader["Amount"]) });
         await reader.NextResultAsync(ct);
         while(await reader.ReadAsync(ct)) model.Committees.Add(new ExportRequestCommitteeVm { Id=Convert.ToInt64(reader["ID"]),CommitteeTypeId=Convert.ToByte(reader["CommitteeType_ID"]),CommitteeType=Text(reader,"Name_Ar"),DelegationDate=Date(reader,"Delegation_Date"),Employees=Text(reader,"Employees"),LotCount=Convert.ToInt32(reader["LotCount"]) });
+        await reader.NextResultAsync(ct);
+        while(await reader.ReadAsync(ct)){var lot=model.Items.SelectMany(x=>x.Lots).FirstOrDefault(x=>x.Id==Convert.ToInt64(reader["Lot_ID"]));if(lot is not null)lot.IsTransferredToGenshi=true;}
         return model;
     }
 
@@ -556,6 +592,8 @@ public class ListEXCheckRequestController : Controller
     {
         if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
         if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var accessUser)||!await _menuAccess.CanModifyAsync(accessUser,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
+        var stageAccess=await ReadStageAccessAsync(id,accessUser,ct);
+        if((committeeTypeId==2&&(!stageAccess.CanManageGenshi||!stageAccess.GenshiActive))||(committeeTypeId!=2&&!stageAccess.CanManageInspection))return Forbid();
         if(committeeTypeId is not(1 or 2 or 3 or 6)){TempData["CommitteeError"]="نوع اللجنة غير صحيح.";return RedirectToAction(nameof(Details),new{id});}
         employeeIds=(employeeIds??[]).Where(x=>x>0).Distinct().ToList();if(adminEmployeeId>0&&!employeeIds.Contains(adminEmployeeId))employeeIds.Add(adminEmployeeId);
         selectedLotIds=(selectedLotIds??[]).Distinct().ToList();selectedAnalysisLabTypeIds=(selectedAnalysisLabTypeIds??[]).Distinct().ToList();shiftTimingIds??=[];shiftCounts??=[];
@@ -569,6 +607,10 @@ public class ListEXCheckRequestController : Controller
         DECLARE @SelectedLabs TABLE(Id int PRIMARY KEY);
         INSERT @SelectedLots(Id) SELECT DISTINCT TRY_CONVERT(bigint,[value]) FROM OPENJSON(@LotsJson) WHERE TRY_CONVERT(bigint,[value]) IS NOT NULL;
         INSERT @SelectedLabs(Id) SELECT DISTINCT TRY_CONVERT(int,[value]) FROM OPENJSON(@LabsJson) WHERE TRY_CONVERT(int,[value]) IS NOT NULL;
+        IF @CommitteeTypeId=2 AND EXISTS(SELECT 1 FROM @SelectedLots lot WHERE NOT EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Genshi_Transfer transfer WHERE transfer.Ex_CheckRequest_ID=@RequestId AND transfer.Lot_ID=lot.Id AND transfer.IsActive=1))
+          THROW 50019,N'لجنة الجشني متاحة فقط للوّطات المحولة إلى الجشني.',1;
+        IF @CommitteeTypeId IN(1,3,6) AND EXISTS(SELECT 1 FROM @SelectedLots lot WHERE EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Genshi_Transfer transfer WHERE transfer.Ex_CheckRequest_ID=@RequestId AND transfer.Lot_ID=lot.Id AND transfer.IsActive=1))
+          THROW 50020,N'أحد اللوطات المختارة تم تحويله إلى الجشني ولم يعد متاحًا للمرحلة الأولى.',1;
         DECLARE @StationId bigint,@OutletId bigint,@OutletHrId bigint,@HasStationEmployees bit=0;
         SELECT TOP(1)
           @StationId=CASE WHEN @CommitteeTypeId=2 THEN Station_Genshi_ID ELSE Station_Examination_ID END,
@@ -630,7 +672,7 @@ public class ListEXCheckRequestController : Controller
             TempData["SaveSuccess"]="تمت الموافقة على الطلب وتشكيل اللجنة على اللوطات المختارة وحفظ بدلات المهندسين.";
             return RedirectToAction("Committees","ImportRequests",new{checkRequestId=id,date=delegationDate.ToString("yyyy-MM-dd"),tab="export"});
         }
-        catch(SqlException ex)when(ex.Number is >=50010 and <=50018){TempData["CommitteeError"]=ex.Message;}
+        catch(SqlException ex)when(ex.Number is >=50010 and <=50020){TempData["CommitteeError"]=ex.Message;}
         catch(Exception ex){_logger.LogError(ex,"Failed to create export committee for request {RequestId}; TraceId={TraceId}",id,HttpContext.TraceIdentifier);TempData["CommitteeError"]=$"تعذر تشكيل اللجنة. رقم التتبع: {HttpContext.TraceIdentifier}";}
         return RedirectToAction(nameof(Details),new{id});
     }
@@ -642,6 +684,8 @@ public class ListEXCheckRequestController : Controller
         if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
         if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)||!await _menuAccess.CanModifyAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
         if(!await CanAccessRequestAsync(id,userId,ct))return Forbid();
+        var stageAccess=await ReadStageAccessAsync(id,userId,ct);
+        if(!stageAccess.CanManageInspection||stageAccess.GenshiActive)return Forbid();
         decision=(decision??string.Empty).Trim().ToLowerInvariant();notes=notes?.Trim();
         if(decision=="approve"){TempData["DecisionError"]="تتم الموافقة عند حفظ بيانات تشكيل اللجنة.";return RedirectToAction(nameof(Details),new{id});}
         if(decision is not("reject" or "complete")){TempData["DecisionError"]="الحالة المختارة غير صحيحة.";return RedirectToAction(nameof(Details),new{id});}
@@ -666,6 +710,87 @@ public class ListEXCheckRequestController : Controller
         return RedirectToAction(nameof(Details),new{id});
     }
 
+    [HttpPost("Details/{id:long}/TransferToGenshi")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TransferToGenshi(long id,List<long> selectedLotIds,string? notes,string? returnUrl,CancellationToken ct)
+    {
+        if(HttpContext.Session.GetString("UserSession")!="Authenticated")return Unauthorized();
+        if(!short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)||!await _menuAccess.CanModifyAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct))return Forbid();
+        var access=await ReadStageAccessAsync(id,userId,ct);
+        if(!access.CanManageInspection)return Forbid();
+        selectedLotIds=(selectedLotIds??[]).Where(x=>x>0).Distinct().ToList();
+        IActionResult Back()=>!string.IsNullOrWhiteSpace(returnUrl)&&Url.IsLocalUrl(returnUrl)?LocalRedirect(returnUrl):RedirectToAction(nameof(Details),new{id});
+        if(selectedLotIds.Count==0){TempData["DecisionError"]="اختر لوطًا واحدًا على الأقل للتحويل إلى الجشني.";return Back();}
+        const string sql="""
+        IF NOT EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Places WHERE Ex_CheckRequest_ID=@Id AND (Station_Genshi_ID IS NOT NULL OR Outlet_Genshi_ID IS NOT NULL))
+          THROW 50021,N'لم يتم تحديد مكان الجشني على الطلب.',1;
+        DECLARE @Lots TABLE(Id bigint PRIMARY KEY);
+        INSERT @Lots SELECT DISTINCT TRY_CONVERT(bigint,[value]) FROM OPENJSON(@LotsJson) WHERE TRY_CONVERT(bigint,[value]) IS NOT NULL;
+        IF EXISTS(SELECT 1 FROM @Lots chosen WHERE NOT EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Items_Lot_Category lot JOIN dbo.Ex_CheckRequest_Items item ON item.ID=lot.Ex_CheckRequest_Items_ID WHERE lot.ID=chosen.Id AND item.Ex_CheckRequest_ID=@Id AND lot.User_Deletion_Id IS NULL AND item.User_Deletion_Id IS NULL))
+          THROW 50022,N'يوجد لوط مختار لا يتبع الطلب.',1;
+        IF EXISTS(SELECT 1 FROM @Lots chosen WHERE NOT EXISTS
+        (
+          SELECT 1 FROM dbo.Ex_CommitteeResult result
+          JOIN dbo.Ex_RequestCommittee committee ON committee.ID=result.Committee_ID
+          WHERE committee.ExCheckRequest_ID=@Id AND committee.CommitteeType_ID=1 AND committee.User_Deletion_Id IS NULL
+            AND ISNULL(committee.Is_Cancel,0)=0 AND ISNULL(committee.IsFinishedAll,0)=1
+            AND result.LotData_ID=chosen.Id AND result.User_Deletion_Id IS NULL AND result.CommitteeResultType_ID=1
+            AND NOT EXISTS(SELECT 1 FROM dbo.Ex_CommitteeResult newer JOIN dbo.Ex_RequestCommittee newerCommittee ON newerCommittee.ID=newer.Committee_ID
+              WHERE newerCommittee.ExCheckRequest_ID=@Id AND newerCommittee.CommitteeType_ID=1 AND newer.LotData_ID=chosen.Id
+                AND newer.User_Deletion_Id IS NULL AND newerCommittee.User_Deletion_Id IS NULL AND newer.ID>result.ID)
+        )) THROW 50024,N'التحويل إلى الجشني متاح فقط للوط الذي انتهى فحصه وكانت نتيجته النهائية مقبول.',1;
+        IF EXISTS(SELECT 1 FROM @Lots chosen WHERE EXISTS
+        (
+          SELECT 1 FROM dbo.Ex_RequestCommittee c
+          WHERE c.ExCheckRequest_ID=@Id AND c.CommitteeType_ID IN(1,3,6) AND c.User_Deletion_Id IS NULL AND ISNULL(c.Is_Cancel,0)=0 AND ISNULL(c.IsFinishedAll,0)=0
+            AND (EXISTS(SELECT 1 FROM dbo.Ex_CommitteeResult r WHERE r.Committee_ID=c.ID AND r.LotData_ID=chosen.Id AND r.User_Deletion_Id IS NULL)
+              OR EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_SampleData s WHERE s.Ex_RequestCommittee_ID=c.ID AND s.LotData_ID=chosen.Id AND s.User_Deletion_Id IS NULL)
+              OR EXISTS(SELECT 1 FROM dbo.Ex_Request_TreatmentData t WHERE t.Ex_RequestCommittee_ID=c.ID AND t.Ex_Request_LotData_ID=chosen.Id AND t.User_Deletion_Id IS NULL))
+        )) THROW 50023,N'لا يمكن تحويل لوط ما زالت عليه لجنة فحص أو سحب أو معالجة غير منتهية.',1;
+        INSERT dbo.Ex_CheckRequest_Genshi_Transfer(Ex_CheckRequest_ID,Lot_ID,User_Creation_Id,Notes)
+        SELECT @Id,chosen.Id,@UserId,@Notes FROM @Lots chosen
+        WHERE NOT EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Genshi_Transfer old WHERE old.Ex_CheckRequest_ID=@Id AND old.Lot_ID=chosen.Id AND old.IsActive=1);
+        """;
+        try
+        {
+            await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);
+            await using var command=new SqlCommand(sql,connection);command.Parameters.Add("@Id",SqlDbType.BigInt).Value=id;command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;command.Parameters.Add("@Notes",SqlDbType.NVarChar,500).Value=(object?)notes?.Trim()??DBNull.Value;command.Parameters.Add("@LotsJson",SqlDbType.NVarChar,-1).Value=System.Text.Json.JsonSerializer.Serialize(selectedLotIds);
+            await command.ExecuteNonQueryAsync(ct);TempData["DecisionSuccess"]=$"تم تحويل {selectedLotIds.Count} لوط إلى مرحلة الجشني.";
+        }
+        catch(SqlException ex)when(ex.Number is >=50021 and <=50024){TempData["DecisionError"]=ex.Message;}
+        return Back();
+    }
+
+    private sealed record ExportStageAccess(bool CanManageInspection,bool CanManageGenshi,bool GenshiActive,bool InspectionCompleted);
+    private async Task<ExportStageAccess> ReadStageAccessAsync(long requestId,short userId,CancellationToken ct)
+    {
+        const string sql="""
+        SELECT
+          CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Places p WHERE p.Ex_CheckRequest_ID=@RequestId AND
+            (EXISTS(SELECT 1 FROM dbo.Station_Emp se WHERE se.Emp_Id=@UserId AND se.Station_Id=p.Station_Examination_ID AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date)))
+             OR EXISTS(SELECT 1 FROM dbPrivilage.dbo.PR_User u JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID WHERE u.Id=@UserId AND u.Active=1 AND o.ID=p.Outlet_Exmainiation_ID))) THEN 1 ELSE 0 END),
+          CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Places p WHERE p.Ex_CheckRequest_ID=@RequestId AND
+            (EXISTS(SELECT 1 FROM dbo.Station_Emp se WHERE se.Emp_Id=@UserId AND se.Station_Id=p.Station_Genshi_ID AND se.IsActive=1 AND se.User_Deletion_Id IS NULL AND (se.Date_From IS NULL OR se.Date_From<=CAST(GETDATE() AS date)) AND (se.Date_To IS NULL OR se.Date_To>=CAST(GETDATE() AS date)))
+             OR EXISTS(SELECT 1 FROM dbPrivilage.dbo.PR_User u JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID WHERE u.Id=@UserId AND u.Active=1 AND o.ID=p.Outlet_Genshi_ID))) THEN 1 ELSE 0 END),
+          CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.Ex_CheckRequest_Genshi_Transfer WHERE Ex_CheckRequest_ID=@RequestId AND IsActive=1)
+             OR (EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee WHERE ExCheckRequest_ID=@RequestId AND CommitteeType_ID IN(1,3,6) AND User_Deletion_Id IS NULL AND ISNULL(Is_Cancel,0)=0)
+                 AND NOT EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee WHERE ExCheckRequest_ID=@RequestId AND CommitteeType_ID IN(1,3,6) AND User_Deletion_Id IS NULL AND ISNULL(Is_Cancel,0)=0 AND ISNULL(IsFinishedAll,0)=0)) THEN 1 ELSE 0 END),
+          CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee WHERE ExCheckRequest_ID=@RequestId AND CommitteeType_ID IN(1,3,6) AND User_Deletion_Id IS NULL AND ISNULL(Is_Cancel,0)=0)
+                 AND NOT EXISTS(SELECT 1 FROM dbo.Ex_RequestCommittee WHERE ExCheckRequest_ID=@RequestId AND CommitteeType_ID IN(1,3,6) AND User_Deletion_Id IS NULL AND ISNULL(Is_Cancel,0)=0 AND ISNULL(IsFinishedAll,0)=0) THEN 1 ELSE 0 END);
+        """;
+        await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);await using var command=new SqlCommand(sql,connection);command.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=requestId;command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
+        await using var reader=await command.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return new(false,false,false,false);
+        return new(reader.GetBoolean(0),reader.GetBoolean(1),reader.GetBoolean(2),reader.GetBoolean(3));
+    }
+    private async Task ApplyStageAccessAsync(ExportInspectionRequestDetailsVm model,short userId,CancellationToken ct)
+    {
+        var access=await ReadStageAccessAsync(model.Id,userId,ct);model.CanManageInspectionStage=access.CanManageInspection;model.CanManageGenshiStage=access.CanManageGenshi;model.IsGenshiStageActive=access.GenshiActive;
+        model.CanTransferToGenshi=access.CanManageInspection&&model.Items.SelectMany(x=>x.Lots).Any(x=>!x.IsTransferredToGenshi)&&(model.GenshiStationId.HasValue||model.GenshiOutletId.HasValue);
+        model.StageAccessMessage=access.GenshiActive
+          ? access.CanManageGenshi?"الطلب في مرحلة الجشني؛ المتاح تشكيل لجنة الجشني فقط.":"الطلب في مرحلة الجشني، والتفاصيل متاحة للعرض فقط لأنك غير مسكن على مكان الجشني."
+          : access.CanManageInspection?"الطلب في مرحلة الفحص؛ المتاح لجان الفحص والسحب والمعالجة فقط.":"مرحلة الفحص لم تنتهِ بعد؛ بيانات الجشني والتفاصيل متاحة للعرض فقط.";
+    }
+
     private static string Text(SqlDataReader r,string name)=>r[name] is DBNull?string.Empty:Convert.ToString(r[name])??string.Empty;
     private static DateTime? Date(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToDateTime(r[name]);
     private static bool? Bool(SqlDataReader r,string name)=>r[name] is DBNull?null:Convert.ToBoolean(r[name]);
@@ -674,6 +799,21 @@ public class ListEXCheckRequestController : Controller
     private static string JoinPlace(string outlet,string station)=>string.Join(" - ",new[]{outlet,station}.Where(x=>!string.IsNullOrWhiteSpace(x)));
     private async Task<bool> HasSupervisorAccessAsync(CancellationToken ct)=>short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)&&await _menuAccess.CanViewAsync(userId,MenuAccessReader.ExportSupervisorMenuUrl,ct);
     private async Task<bool> HasOperationalAccessAsync(CancellationToken ct)=>short.TryParse(HttpContext.Session.GetString("UserId"),out var userId)&&await _menuAccess.CanViewAsync(userId,MenuAccessReader.ExportRequestMenuUrl,ct);
+    private async Task<bool> IsExporterServiceUserAsync(short userId,CancellationToken ct)
+    {
+        const string sql="""
+        SELECT CASE WHEN EXISTS
+        (
+          SELECT 1 FROM dbPrivilage.dbo.PR_User u
+          INNER JOIN dbo.Outlet o ON o.ID_HR=u.Outlet_ID
+          WHERE u.Id=@UserId AND u.Active=1 AND o.IsActive=1 AND o.User_Deletion_Id IS NULL
+            AND (o.Ar_Name=N'ادارة خدمة المصدرين' OR o.En_Name=N'Exporters'' Service Department')
+        ) THEN 1 ELSE 0 END;
+        """;
+        await using var connection=new SqlConnection(_connectionString);await connection.OpenAsync(ct);
+        await using var command=new SqlCommand(sql,connection);command.Parameters.Add("@UserId",SqlDbType.SmallInt).Value=userId;
+        return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
+    }
     private async Task<bool> CanAccessRequestAsync(long requestId,short userId,CancellationToken ct)
     {
         const string sql="""

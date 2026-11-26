@@ -183,6 +183,16 @@
                         <div><h4 class="mb-1 text-primary">اختر اللجنة</h4><div class="text-muted" id="selectedRequestText">طلب رقم @Model.First().CheckRequest_Number — @Model.First().CompanyName</div></div>
                         @if(!isExportTab){<button type="button" class="btn btn-warning fw-bold" id="openQuarantine">موقف الحجر للطلب</button>}
                     </div>
+                    @if(isExportTab&&ViewBag.ExportGenshiLots is List<PlantMobile.Controllers.ExportGenshiTransferLotVm> exportLots)
+                    {
+                        var transferable=exportLots.Where(x=>x.CanTransfer).ToList();
+                        <section class="card border-primary mb-3"><div class="card-header fw-bold text-primary">الموقف النهائي وتحويل اللوطات إلى الجشني</div><div class="card-body">
+                            <form asp-controller="ListEXCheckRequest" asp-action="TransferToGenshi" asp-route-id="@ViewBag.CheckRequestId" method="post" onsubmit="return confirm('تحويل اللوطات المقبولة المختارة إلى الجشني؟');">@Html.AntiForgeryToken()<input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                            <div class="table-responsive"><table class="table table-bordered align-middle"><thead><tr><th>الصنف</th><th>اللوط</th><th>نتيجة الفحص النهائية</th><th>الموقف</th><th>اختيار</th></tr></thead><tbody>@foreach(var lot in exportLots){<tr><td>@lot.ItemName</td><td>@lot.LotNumber</td><td>@lot.ResultName</td><td>@(lot.IsTransferred?"تم التحويل إلى الجشني":lot.CanTransfer?"مقبول وجاهز للتحويل":"غير متاح للتحويل")</td><td>@if(lot.CanTransfer){<input type="checkbox" class="export-genshi-lot" name="selectedLotIds" value="@lot.Id" />}else{<span>—</span>}</td></tr>}</tbody></table></div>
+                            @if(transferable.Count>0){<div class="d-flex flex-wrap gap-3 align-items-center"><label><input type="checkbox" id="selectAllExportGenshi" /> اختيار كل اللوطات المقبولة</label><input type="text" name="notes" class="form-control" style="max-width:420px" placeholder="ملاحظات التحويل (اختياري)" /><button type="submit" class="btn btn-primary">تحويل المختار إلى الجشني</button></div>}else{<div class="alert alert-info mb-0">لا توجد لوطات مقبولة جاهزة للتحويل حاليًا.</div>}
+                            </form>
+                        </div></section>
+                    }
                     <div class="committee-empty d-none" id="committeeEmpty"><div class="fs-1 mb-2">☝️</div><strong>اختر طلبًا من القائمة أولًا</strong></div>
                     <div class="committee-list" id="committeeList">
                     @foreach (var item in Model)
@@ -191,6 +201,7 @@
                         <article class="committee-card" data-request="@item.checkRequest_Id" data-status="@item.WorkStatusKey">
                             <div>
                                 <div class="committee-title">@item.Committee_Type_Name</div><div class="committee-stage">@stage</div>
+                                @if(isExportTab&&!string.IsNullOrWhiteSpace(item.ExportLotStatuses)){<div class="mt-2"><strong>الموقف النهائي للوّطات</strong>@foreach(var lotStatus in item.ExportLotStatuses.Split('|',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries)){<div class="small mt-1">@lotStatus</div>}</div>}
                                 @if (!string.IsNullOrWhiteSpace(item.SampleBarcodes))
                                 {
                                     <div class="sample-barcodes">
@@ -252,6 +263,8 @@
         const committeeEmpty = document.getElementById('committeeEmpty');
 
         const quarantineButton = document.getElementById('openQuarantine');
+        const selectAllExportGenshi = document.getElementById('selectAllExportGenshi');
+        if(selectAllExportGenshi)selectAllExportGenshi.addEventListener('change',()=>document.querySelectorAll('.export-genshi-lot').forEach(x=>x.checked=selectAllExportGenshi.checked));
         const quarantineBody = document.getElementById('quarantineModalBody');
         const quarantineElement = document.getElementById('quarantineModal');
         let statusFilter = 'all';

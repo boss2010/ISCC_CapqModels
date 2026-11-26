@@ -3,6 +3,8 @@ namespace ViewModels;
 public class ExportInspectionRequestListVm
 {
     public bool IsSupervisorReadOnly { get; set; }
+    public bool CanViewUnstaffedStations { get; set; }
+    public bool UnstaffedStationsOnly { get; set; }
     public string RequestNumber { get; set; } = string.Empty;
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
@@ -52,6 +54,10 @@ public class ExportInspectionRequestRowVm
     public string ImporterName { get; set; } = string.Empty;
     public string ExaminationPlace { get; set; } = string.Empty;
     public string GenshiPlace { get; set; } = string.Empty;
+    public long? ExaminationStationId { get; set; }
+    public long? GenshiStationId { get; set; }
+    public bool ExaminationStationHasNoEmployees { get; set; }
+    public bool GenshiStationHasNoEmployees { get; set; }
     public bool? IsAccepted { get; set; }
     public bool? IsPaid { get; set; }
     public int ClosedRequest { get; set; }
@@ -102,6 +108,12 @@ public class ExportInspectionRequestDetailsVm
     public string ExaminationPlace { get; set; } = string.Empty;
     public string GenshiPlace { get; set; } = string.Empty;
     public bool? IsAccepted { get; set; }
+    public bool CanManageInspectionStage { get; set; }
+    public bool CanManageGenshiStage { get; set; }
+    public bool IsGenshiStageActive { get; set; }
+    public bool CanManageCurrentStage => CanManageInspectionStage || (IsGenshiStageActive && CanManageGenshiStage);
+    public bool CanTransferToGenshi { get; set; }
+    public string StageAccessMessage { get; set; } = string.Empty;
     public bool? IsPaid { get; set; }
     public int ClosedRequest { get; set; }
     public string FinalResult { get; set; } = string.Empty;
@@ -152,6 +164,7 @@ public class ExportInspectionLotVm
     public string Waybill { get; set; } = string.Empty;
     public bool? IsAccepted { get; set; }
     public string RejectReason { get; set; } = string.Empty;
+    public bool IsTransferredToGenshi { get; set; }
 }
 
 public class ExportInspectionAttachmentVm

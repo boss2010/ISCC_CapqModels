@@ -43,5 +43,6 @@ public sealed class ExportCommitteeWorkRowVm
     public int? ExposureDay { get; set; }
     public decimal? Temperature { get; set; }
     public string Procedures { get; set; }=string.Empty;
+    public bool IsTransferredToGenshi { get; set; }
 }
 

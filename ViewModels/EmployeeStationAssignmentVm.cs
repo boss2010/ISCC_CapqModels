@@ -3,6 +3,8 @@ namespace ViewModels;
 public class EmployeeStationAssignmentPageVm
 {
     public long? OutletId { get; set; }
+    public long? StationId { get; set; }
+    public bool LockStation { get; set; }
     public DateTime FromDate { get; set; } = DateTime.Today;
     public DateTime ToDate { get; set; } = DateTime.Today;
     public List<EmployeeStationLookupVm> Outlets { get; set; } = [];

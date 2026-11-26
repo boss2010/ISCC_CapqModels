@@ -88,6 +88,7 @@ public sealed class ExportCommitteeWorkController(IConfiguration configuration,I
         await using(var cmd=new SqlCommand(head,c)){cmd.Parameters.Add("@Id",SqlDbType.BigInt).Value=committeeId;await using var rd=await cmd.ExecuteReaderAsync(ct);if(!await rd.ReadAsync(ct))return null;model.RequestId=rd.GetInt64(0);model.RequestNumber=Convert.ToString(rd[1])??"";model.CommitteeTypeId=Convert.ToByte(rd[2]);model.CommitteeType=Convert.ToString(rd[3])??"";await rd.NextResultAsync(ct);while(await rd.ReadAsync(ct))model.ResultTypes.Add(new(){Id=Convert.ToByte(rd[0]),Name=Convert.ToString(rd[1])??""});}
         string rows=model.CommitteeTypeId is 1 or 2?InspectionSql:model.CommitteeTypeId==3?SampleSql:TreatmentSql;
         await using(var cmd=new SqlCommand(rows,c)){cmd.Parameters.Add("@Id",SqlDbType.BigInt).Value=committeeId;await using var rd=await cmd.ExecuteReaderAsync(ct);while(await rd.ReadAsync(ct))model.Rows.Add(ReadRow(rd,model.CommitteeTypeId));}
+        await using(var cmd=new SqlCommand("SELECT Lot_ID FROM dbo.Ex_CheckRequest_Genshi_Transfer WHERE Ex_CheckRequest_ID=@RequestId AND IsActive=1 AND Lot_ID IS NOT NULL",c)){cmd.Parameters.Add("@RequestId",SqlDbType.BigInt).Value=model.RequestId;await using var rd=await cmd.ExecuteReaderAsync(ct);var transferred=new HashSet<long>();while(await rd.ReadAsync(ct))transferred.Add(rd.GetInt64(0));foreach(var row in model.Rows)row.IsTransferredToGenshi=transferred.Contains(row.LotId);}
         return model;
     }
 

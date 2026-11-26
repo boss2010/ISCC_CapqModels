@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <Reference Include="Select.HtmlToPdf">
-      <HintPath>$(NuGetPackageRoot)Select.HtmlToPdf\20.2.0\lib\net40\Select.HtmlToPdf.dll</HintPath>
+      <HintPath>..\..\PlantQuarantineNew\packages\Select.HtmlToPdf.20.2.0\lib\net40\Select.HtmlToPdf.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

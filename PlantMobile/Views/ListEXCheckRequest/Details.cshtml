@@ -27,7 +27,8 @@
     <div class="details-body">
     @if(Model.IsSupervisorReadOnly){<style>.committee-form{display:none!important}</style><div class="alert alert-info">صلاحية المشرف العام للعرض فقط. يمكنك مشاهدة أماكن الطلب واللجان والموظفين الذين عملوا عليه دون تعديل.</div>}@if(TempData["CommitteeSuccess"] is string committeeSuccess){<div class="alert alert-success">@committeeSuccess</div>}@if(TempData["CommitteeError"] is string committeeError){<div class="alert alert-danger">@committeeError</div>}@if(TempData["DecisionSuccess"] is string decisionSuccess){<div class="alert alert-success">@decisionSuccess</div>}@if(TempData["DecisionError"] is string decisionError){<div class="alert alert-danger">@decisionError</div>}
     <div class="summary"><div class="summary-box"><span>تاريخ الطلب</span><strong>@(Model.CreationDate?.ToString("dd/MM/yyyy hh:mm tt")??"—")</strong></div><div class="summary-box"><span>حالة الطلب</span><strong class="state">@RequestState()</strong></div><div class="summary-box"><span>النتيجة النهائية</span><strong>@Text(Model.FinalResult)</strong></div><div class="summary-box"><span>إجمالي الرسوم</span><strong>@(Model.Fees.Sum(x=>x.TotalAmount)?.ToString("N2")??Model.Amount?.ToString("N2")??"—")</strong></div></div>
-    @if(!Model.IsSupervisorReadOnly){<section class="decision-card"><h3>موقف مراجعة الطلب</h3><span class="current-decision">الحالة الحالية: @RequestState()</span><form asp-action="SaveDecision" asp-route-id="@Model.Id" method="post" id="decisionForm">@Html.AntiForgeryToken()<label for="decisionNotes">ملاحظات الرفض أو البيانات المطلوب استكمالها</label><textarea id="decisionNotes" name="notes" class="form-control" placeholder="تُكتب الملاحظات عند الرفض أو طلب استكمال بيانات">@(Model.IsAccepted==true?string.Empty:Model.RejectNotes)</textarea><div class="decision-actions"><button type="button" id="approveWithCommittee" class="btn btn-success">@(Model.IsAccepted==true?"حفظ لجنة جديدة":"موافق وحفظ اللجنة")</button><button type="submit" name="decision" value="reject" class="btn btn-danger decision-needs-notes">مرفوض</button><button type="submit" name="decision" value="complete" class="btn btn-completion decision-needs-notes">استكمال بيانات</button></div></form></section>}
+    @if(!Model.IsSupervisorReadOnly){<div class="alert @(Model.CanManageCurrentStage?"alert-success":"alert-info")"><strong>المرحلة الحالية: @(Model.IsGenshiStageActive?"الجشني":"الفحص")</strong><br />@Model.StageAccessMessage</div>}
+    @if(!Model.IsSupervisorReadOnly&&Model.CanManageInspectionStage&&!Model.IsGenshiStageActive){<section class="decision-card"><h3>موقف مراجعة الطلب</h3><span class="current-decision">الحالة الحالية: @RequestState()</span><form asp-action="SaveDecision" asp-route-id="@Model.Id" method="post" id="decisionForm">@Html.AntiForgeryToken()<label for="decisionNotes">ملاحظات الرفض أو البيانات المطلوب استكمالها</label><textarea id="decisionNotes" name="notes" class="form-control" placeholder="تُكتب الملاحظات عند الرفض أو طلب استكمال بيانات">@(Model.IsAccepted==true?string.Empty:Model.RejectNotes)</textarea><div class="decision-actions"><button type="button" id="approveWithCommittee" class="btn btn-success">@(Model.IsAccepted==true?"حفظ لجنة جديدة":"موافق وحفظ اللجنة")</button><button type="submit" name="decision" value="reject" class="btn btn-danger decision-needs-notes">مرفوض</button><button type="submit" name="decision" value="complete" class="btn btn-completion decision-needs-notes">استكمال بيانات</button></div></form></section>}
     <section class="section-card"><h3 class="section-title">بيانات الجهة المصدرة والمندوب</h3><div class="info-grid"><div class="info"><span>نوع الجهة المصدرة</span><strong>@Text(Model.ImporterType)</strong></div><div class="info"><span>الشركة / الجهة المصدرة</span><strong>@Text(Model.ImporterName)</strong></div><div class="info"><span>صاحب الشركة / الشخص المسئول</span><strong>@Text(Model.OwnerName)</strong></div><div class="info"><span>عنوان الجهة</span><strong>@Text(Model.OwnerAddress)</strong></div><div class="info"><span>مندوب صاحب الرسالة</span><strong>@Text(Model.DelegateName)</strong></div><div class="info"><span>الرقم القومي للمندوب</span><strong>@Text(Model.DelegateNationalId)</strong></div>@if(Model.DelegateAttachmentId.HasValue){<div class="info full"><span>صورة المندوب المرفقة</span><button type="button" class="btn btn-primary load-delegate-image" data-url="@Url.Action("DelegateAttachment",new{id=Model.DelegateAttachmentId})">عرض صورة المندوب</button><div class="delegate-image-host" style="margin-top:10px"></div></div>}</div></section>
     <section class="section-card"><h3 class="section-title">مسار الرسالة</h3><div class="info-grid"><div class="info"><span>ميناء الشحن</span><strong>@Text(Model.ShippingPort)</strong></div><div class="info"><span>الدولة المستوردة</span><strong>@Text(Model.Country)</strong></div><div class="info"><span>نوع ميناء الوصول</span><strong>@Text(Model.ArrivalPortType)</strong></div><div class="info"><span>ميناء الوصول</span><strong>@Text(Model.ArrivalPort)</strong></div><div class="info"><span>دولة العبور</span><strong>@Text(Model.TransitCountry)</strong></div><div class="info"><span>نوع ميناء العبور</span><strong>@Text(Model.TransitPortType)</strong></div><div class="info"><span>ميناء العبور</span><strong>@Text(Model.TransitPort)</strong></div><div class="info"><span>اسم الباخرة</span><strong>@Text(Model.ShipName)</strong></div><div class="info"><span>وسيلة الشحن / النقل</span><strong>@Text(string.Join(" - ",new[]{Model.ShipmentMean,Model.TransportMean}.Where(x=>!string.IsNullOrWhiteSpace(x))))</strong></div><div class="info"><span>اسم الشركة المستوردة</span><strong>@Text(Model.ImportCompany)</strong></div><div class="info"><span>اسم المرسل إليه</span><strong>@Text(Model.ReceiverName)</strong></div><div class="info"><span>عنوان المرسل إليه</span><strong>@Text(Model.ImportCompanyAddress)</strong></div></div></section>
     <section class="section-card"><h3 class="section-title">مكان الفحص</h3><div class="info-grid"><div class="info"><span>منفذ / محطة الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div><div class="info"><span>المحافظة</span><strong>@Text(Model.ExaminationGovernorate)</strong></div><div class="info"><span>المركز</span><strong>@Text(Model.ExaminationCenter)</strong></div><div class="info full"><span>عنوان مكان الفحص</span><strong>@Text(Model.ExaminationAddress)</strong></div></div></section>
@@ -35,10 +36,14 @@
     <section class="section-card committee-section">
         <h3 class="section-title">تشكيل لجان الصادر</h3>
         <div class="committee-page-header">
-            <div><h3>تسجيل بيانات لجنة الصادر</h3><p>أدخل بيانات اللجنة ثم اختر أعضاء اللجنة وبيانات الرسالة.</p></div>
-            <div class="committee-outlet"><span>مكان الفحص</span><strong>@Text(Model.ExaminationPlace)</strong></div>
+            <div><h3>تسجيل بيانات لجنة الصادر</h3><p>@(Model.IsGenshiStageActive?"تشكيل لجنة الجشني على مكان الجشني فقط.":"تشكيل لجان الفحص والسحب والمعالجة على مكان الفحص فقط.")</p></div>
+            <div class="committee-outlet"><span>@(Model.IsGenshiStageActive?"مكان الجشني":"مكان الفحص")</span><strong>@Text(Model.IsGenshiStageActive?Model.GenshiPlace:Model.ExaminationPlace)</strong></div>
         </div>
-        @if(Model.StationEngineers.Count==0&&Model.GenshiEngineers.Count==0&&Model.OutletEngineers.Count==0)
+        @if(!Model.CanManageCurrentStage)
+        {
+            <div class="empty-section">تشكيل اللجنة غير متاح لك في المرحلة الحالية. يمكنك عرض بيانات الطلب واللجان السابقة فقط.</div>
+        }
+        else if(Model.StationEngineers.Count==0&&Model.GenshiEngineers.Count==0&&Model.OutletEngineers.Count==0)
         {
             <div class="empty-section">لا توجد حسابات موظفين فعالة يمكن تشكيل اللجنة منها.</div>
         }
@@ -54,7 +59,7 @@
                 <div class="committee-info-card committee-step-pane" data-pane="info">
                     <h4 class="committee-info-title">معلومات اللجنة</h4>
                     <div class="committee-fields">
-                        <div class="committee-field"><label for="committeeTypeId">نوع اللجنة</label><select id="committeeTypeId" name="committeeTypeId" class="form-control" required><option value="">--- اختر ---</option><option value="1">لجنة فحص</option><option value="2">لجنة الجشني</option><option value="3">لجنة سحب</option><option value="6">لجنة معالجة</option></select></div>
+                        <div class="committee-field"><label for="committeeTypeId">نوع اللجنة</label><select id="committeeTypeId" name="committeeTypeId" class="form-control" required><option value="">--- اختر ---</option>@if(Model.CanManageInspectionStage){<option value="1">لجنة فحص</option><option value="3">لجنة سحب</option><option value="6">لجنة معالجة</option>}@if(Model.IsGenshiStageActive&&Model.CanManageGenshiStage){<option value="2">لجنة الجشني</option>}</select></div>
                         <div class="committee-field"><label>رقم طلب الفحص</label><input type="text" class="form-control" value="@Model.RequestNumber" readonly /></div>
                         <div class="committee-field"><label>تاريخ تسجيل الطلب</label><input type="text" class="form-control" value="@(Model.CreationDate?.ToString("yyyy-MM-dd")??"—")" readonly /></div>
                         <div class="committee-field"><label for="delegationDate">تاريخ اللجنة</label><input id="delegationDate" name="delegationDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control" required /></div>
@@ -95,7 +100,7 @@
                     <div id="committeeWorkOptions">
                         <div class="sample-option-card">
                             <h5 class="employee-table-title">اختيار اللوطات</h5>
-                            <div class="table-responsive"><table class="table table-bordered table-striped sample-table"><thead><tr><th>الصنف</th><th>رقم اللوط</th><th>الوزن</th><th>اختيار</th></tr></thead><tbody>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<tr><td>@Text(item.ShortName)</td><td>@Text(lot.LotNumber)</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td><input type="checkbox" class="sample-lot-check" name="selectedLotIds" value="@lot.Id" /></td></tr>}}</tbody></table></div>
+                            <div class="table-responsive"><table class="table table-bordered table-striped sample-table"><thead><tr><th>الصنف</th><th>رقم اللوط</th><th>الوزن</th><th>موقف الجشني</th><th>اختيار</th></tr></thead><tbody>@foreach(var item in Model.Items){foreach(var lot in item.Lots){<tr class="committee-lot-row" data-transferred="@lot.IsTransferredToGenshi.ToString().ToLowerInvariant()"><td>@Text(item.ShortName)</td><td>@Text(lot.LotNumber)</td><td>@(lot.GrossWeight?.ToString("N3")??"—")</td><td>@(lot.IsTransferredToGenshi?"تم التحويل إلى الجشني":"في مرحلة الفحص")</td><td><input type="checkbox" class="sample-lot-check" name="selectedLotIds" value="@lot.Id" /></td></tr>}}</tbody></table></div>
                         </div>
                         <div class="sample-option-card" id="sampleLabsCard" style="display:none" aria-hidden="true">
                             <h5 class="employee-table-title">اختيار التحاليل والمعامل <small>(@Model.AnalysisLabs.Count معمل/تحليل متاح)</small></h5>
@@ -128,9 +133,9 @@
 document.addEventListener('DOMContentLoaded',function(){
     var detailsBody=document.querySelector('.details-body');
     var committeeSection=detailsBody&&detailsBody.querySelector(':scope>.committee-section');
-    var decisionSection=detailsBody&&detailsBody.querySelector(':scope>.decision-card');
+    var decisionSections=detailsBody?Array.from(detailsBody.querySelectorAll(':scope>.decision-card')):[];
     if(detailsBody&&committeeSection)detailsBody.appendChild(committeeSection);
-    if(detailsBody&&decisionSection)detailsBody.appendChild(decisionSection);
+    if(detailsBody)decisionSections.forEach(function(section){detailsBody.appendChild(section);});
     document.querySelectorAll('.load-delegate-image').forEach(function(button){button.addEventListener('click',function(){
         var host=button.parentElement.querySelector('.delegate-image-host');
         if(host.querySelector('img'))return;
@@ -206,9 +211,10 @@ $(function(){
         refreshRows();
     }
     function toggleCommitteeOptions(){
-        var sample=$('#committeeTypeId').val()==='3';
+        var type=$('#committeeTypeId').val(),sample=type==='3',genshi=type==='2';
         $('#sampleLabsCard').toggle(sample).attr('aria-hidden',sample?'false':'true');
         if(!sample)$('.sample-lab-check').prop('checked',false);
+        $('.committee-lot-row').each(function(){var row=$(this),allowed=(row.data('transferred')===true)===genshi;row.toggle(allowed);row.find('.sample-lot-check').prop('disabled',!allowed).prop('checked',false);});
     }
     function addSelected($source){
         var id=String($source.data('user')),name=String($source.data('name')||''),number=String($source.data('number')||'');

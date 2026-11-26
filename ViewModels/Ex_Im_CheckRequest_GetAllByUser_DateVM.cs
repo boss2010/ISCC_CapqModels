@@ -45,6 +45,7 @@ namespace ViewModels
             public bool HasPendingLabResult { get; set; }
             public string SampleBarcodes { get; set; } = string.Empty;
             public string PendingLabBarcodes { get; set; } = string.Empty;
+            public string ExportLotStatuses { get; set; } = string.Empty;
 
         }
 
